@@ -13,9 +13,9 @@ offending property element, not just the object.
 same three TARGET_* columns for the referenced object of a reference finding)
 onto a violations frame — both the SARIF and the sh:ValidationReport exports call
 it when given ``sources=``, and it is exposed as
-``violations.shacl.locate(sources=...)``. With ``source_root=``, a path source
-under that directory is reported relative to it (forward slashes); zip
-members and file-likes keep their own names.
+``violations.shacl.locate(sources=...)``. It stamps the source names as
+given. ``relative_sources`` is the one pass both report exports run for
+``source_root=``: every file name they write goes through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
@@ -47,7 +47,7 @@ _DEFINITION = re.compile(rb'rdf:(?:ID|about)="(?:' + "|".join(map(re.escape, ID_
                          + rb')?([^"]+)"')
 
 
-def locate(wanted, sources, source_root=None):
+def locate(wanted, sources):
     """Find the wanted objects in the source XML.
 
     Parameters
@@ -57,17 +57,14 @@ def locate(wanted, sources, source_root=None):
         own lines are worth pinpointing (may be empty).
     sources : str/Path to .xml/.rdf/.zip, file-like, or a list of those —
         the same shapes ``parse()``/``read_rdf`` accept.
-    source_root : str/Path, optional
-        A path source under this directory gets its "uri" relative to it,
-        with forward slashes (relative paths are read against the working
-        directory, as ``open`` reads them). Paths outside it, zip members and
-        file-likes keep their own names.
 
     Returns
     -------
     dict {ID: {"uri": str, "startLine": int, "snippet": str,
                "keyLines": {KEY: (line, snippet)}}}
-        IDs not present in the sources are absent from the result.
+        "uri" is the source name as given (the path, the zip member name, a
+        file-like's ``.name``). IDs not present in the sources are absent
+        from the result.
     """
     from ..parser.utils import find_all_xml
 
@@ -77,8 +74,6 @@ def locate(wanted, sources, source_root=None):
         if not remaining:
             break
         uri, text = _read(source)
-        if isinstance(source, str):                    # a path, not a zip member / file-like
-            uri = _relative(uri, source_root) or uri
         matches = list(_DEFINITION.finditer(text))
         line, previous = 1, 0
         for position, match in enumerate(matches):
@@ -97,7 +92,7 @@ def locate(wanted, sources, source_root=None):
     return located
 
 
-def locate_violations(violations, sources, source_root=None):
+def locate_violations(violations, sources):
     """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
 
     Per row (ID, KEY): the violated property element's own position when it
@@ -105,9 +100,8 @@ def locate_violations(violations, sources, source_root=None):
     rows whose object is not in the sources get nulls. The referenced object
     of a reference finding found in the data (TARGET_ID — context.enrich) is
     located in the same pass, at its definition, into the TARGET_* columns; a
-    frame without TARGET_ID gets nulls there.
-    *source_root*: SOURCE_URI / TARGET_URI of a path source under it is
-    relative to it (see locate).
+    frame without TARGET_ID gets nulls there. SOURCE_URI / TARGET_URI are the
+    source names as given.
     """
     import pandas
 
@@ -119,7 +113,7 @@ def locate_violations(violations, sources, source_root=None):
             wanted.setdefault(str(object_id), set()).add(None if pandas.isna(key) else str(key))
     for target in targets.dropna():
         wanted.setdefault(str(target), set())
-    located = locate(wanted, sources, source_root)
+    located = locate(wanted, sources)
 
     def position(object_id, key=None):
         entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
@@ -164,13 +158,49 @@ def _line_text(text, position):
     return text[line_start:line_end].decode("utf-8", "replace").strip()
 
 
-def _relative(path, source_root):
-    """*path* relative to *source_root* with forward slashes; None without a
-    root or for a path outside it."""
-    if source_root is None:
+def relative_name(name, root):
+    """*name* relative to *root* with forward slashes when *name* is an
+    absolute path of a file in *root* or a directory below it; else None.
+    *root* is an absolute path. A relative name — a zip member, a bare file
+    name — is never read against the working directory. Lexical: symlinks
+    are not resolved."""
+    if not os.path.isabs(name):
         return None
-    path, root = (pathlib.Path(os.path.abspath(item)) for item in (path, source_root))
-    return path.relative_to(root).as_posix() if path.is_relative_to(root) else None
+    path = pathlib.PurePath(os.path.normpath(name))
+    return path.relative_to(root).as_posix() if path.parent.is_relative_to(root) else None
+
+
+def relative_sources(violations, names, source_root):
+    """The file names a report export writes, relative to *source_root*.
+
+    One rule for every name (relative_name): an absolute path under the root
+    is written relative to it; any other name is written as given. Applied to
+    the SOURCE_URI, TARGET_URI and INSTANCE_LABEL columns of *violations*
+    (where present) and to each list of *names* ({key: [file name, ...]} — the
+    run metadata's source / references). Absolute names outside the root are
+    named in one warning. Returns (frame, names); the inputs are not changed, and
+    ``source_root=None`` returns them as they are.
+    """
+    if source_root is None:
+        return violations, names
+    root = os.path.abspath(source_root)
+    known = {}                              # name → relative name or None: each name is checked once
+
+    def relative(name):
+        if name not in known:
+            known[name] = relative_name(str(name), root)
+        return known[name] or name
+
+    columns = [column for column in ("SOURCE_URI", "TARGET_URI", "INSTANCE_LABEL")
+               if column in violations.columns]
+    frame = violations.assign(**{column: violations[column].map(relative, na_action="ignore")
+                                 for column in columns})
+    names = {key: [relative(name) for name in values] for key, values in names.items()}
+    outside = [str(name) for name, inside in known.items() if inside is None and os.path.isabs(str(name))]
+    if outside:
+        logger.warning("%d file name(s) outside source_root %s keep their names: %s",
+                       len(outside), root, ", ".join(outside))
+    return frame, names
 
 
 def _read(source):

@@ -8,6 +8,7 @@ Parity runs on the Svedala IGM model; the ``-m performance`` timing test runs on
 
 Shared helpers live in ``tests/_parity.py``.
 """
+import logging
 from pathlib import Path
 
 import pandas
@@ -43,10 +44,15 @@ def _frame_str(df):
     return "" if cf is None else cf.to_csv(index=False)
 
 
-def _canon_cimxml(outputs):
-    df = pandas.read_RDF(outputs)[["ID", "KEY", "VALUE"]]
+def _canon_triples(df):
+    """Triples without the parser's metadata objects, which get new IDs on every parse."""
+    df = df[["ID", "KEY", "VALUE"]]
     meta = set(df[(df["KEY"] == "Type") & (df["VALUE"].astype(str).isin(_META_TYPES))]["ID"])
     return _frame_str(df[~df["ID"].isin(meta)])
+
+
+def _canon_cimxml(outputs):
+    return _canon_triples(pandas.read_RDF(outputs))
 
 
 def _canon_nquads(bio):
@@ -181,6 +187,36 @@ def test_parity(svedala_pandas, fmt, variant):
     assert ref == out, f"{fmt}/{variant} output differs from {fmt}/{spec['ref']}"
 
 
+# ── the belongsToContainer row stays out of CIM XML, as label does ────────────
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+def test_cimxml_of_zipped_input_unchanged(tmp_path, engine):
+    """A model parsed from a zip (Distribution belongsToContainer row) exports byte-identical to
+    the same files parsed unzipped under the same names."""
+    import io
+    import zipfile
+    if not SVEDALA_DIR.exists():
+        pytest.skip(SKIP_REASON)
+    _require(FORMATS["cimxml"], engine)
+    archive = tmp_path / "Svedala.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        for path in SVEDALA_FILES:
+            bundle.write(path, Path(path).name)
+    members = []
+    for path in SVEDALA_FILES:
+        member = io.BytesIO(Path(path).read_bytes())
+        member.name = Path(path).name
+        members.append(member)
+
+    def exported(data):
+        files = export.export_to_cimxml(data, rdf_map=RDF_MAP, engine=engine, export_type="xml_per_instance",
+                                        export_to_memory=True)
+        return {file.name: file.getvalue() for file in files}
+
+    zipped = pandas.read_RDF([str(archive)])
+    assert set(zipped.loc[zipped["KEY"] == "belongsToContainer", "VALUE"]) == {"Svedala.zip"}
+    assert exported(zipped) == exported(pandas.read_RDF(members))
+
+
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────
 TIMING_PARAMS = [pytest.param(fmt, v, id=f"{fmt}-{v}")
                  for fmt, spec in FORMATS.items() for v in spec["variants"]]
@@ -252,6 +288,35 @@ def test_cimxml_parallel_dict_rdf_map_matches_sequential(svedala_pandas, engine,
     sequential = {f.name: f.getvalue() for f in export.export_to_cimxml(data, **kwargs)}
     parallel = {f.name: f.getvalue() for f in export.export_to_cimxml(data, max_workers=2, **kwargs)}
     assert parallel == sequential and len(sequential) == svedala_pandas["INSTANCE_ID"].nunique()
+
+
+# ── cimxml without a schema: every name is undefined, so all of it is written ──
+@pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
+def test_cimxml_without_schema_exports_everything(svedala_pandas, engine):
+    """No rdf_map: export_undefined False, True and the default write the same full model
+    under the undefined namespace, and it parses back to the input triples."""
+    _require(FORMATS["cimxml"], engine)
+    default, dropped, kept = (export.export_to_cimxml(svedala_pandas, engine=engine, export_type="xml_per_instance",
+                                                      export_to_memory=True, **flag)
+                              for flag in ({}, {"export_undefined": False}, {"export_undefined": True}))
+    contents = [{file.name: file.getvalue() for file in files} for files in (default, dropped, kept)]
+    assert contents[0] == contents[1] == contents[2]
+    assert len(contents[0]) == svedala_pandas["INSTANCE_ID"].nunique()
+    assert any(b"<triplets:IdentifiedObject.name>CL15</triplets:IdentifiedObject.name>" in xml
+               for xml in contents[0].values())
+    assert _canon_cimxml(dropped) == _canon_triples(svedala_pandas)
+
+
+def test_cimxml_without_schema_warns_once(svedala_pandas, caplog):
+    """One warning per export, not per instance; none when a schema is given."""
+    with caplog.at_level(logging.WARNING, logger="triplets.export"):
+        export.export_to_cimxml(svedala_pandas, export_to_memory=True)
+    assert [record.name for record in caplog.records] == ["triplets.export"]
+    assert "http://triplets#" in caplog.text
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="triplets.export"):
+        export.export_to_cimxml(svedala_pandas, rdf_map=RDF_MAP, export_to_memory=True)
+    assert not caplog.records
 
 
 def test_split_instances_skips_phantom_dictionary_groups(tmp_path):

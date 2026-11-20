@@ -14,9 +14,7 @@
 #include <unordered_map>
 
 #include "absl/strings/str_cat.h"
-#include "parser/NormalizedString.h"
 #include "parser/Tokenizer.h"
-#include "util/Exception.h"
 #include "util/ExceptionHandling.h"
 
 namespace {
@@ -72,8 +70,8 @@ TripleComponent plainLiteral(std::string_view value) {
   // containing e.g. a backslash-t sequence). Same convention as the typed
   // path: `literalAndDatatypeToTripleComponent` treats its input as
   // normalized content too.
-  return TripleComponent{TripleComponent::Literal::literalWithNormalizedContent(
-      asNormalizedStringViewUnsafe(value))};
+  return TripleComponent{
+      TripleComponent::Literal::literalWithNormalizedContent(value)};
 }
 
 }  // namespace
@@ -375,9 +373,7 @@ void ArrowTripleParser::convertRangeAndPush(const RowRange& range) {
 }
 
 // ____________________________________________________________________________
-bool ArrowTripleParser::getLineImpl(TurtleTriple*) { AD_FAIL(); }
-
-// ____________________________________________________________________________
-std::optional<std::vector<TurtleTriple>> ArrowTripleParser::getBatch() {
+std::optional<std::vector<TurtleTriple>> ArrowTripleParser::getBatch(
+    std::vector<TurtleTriple>) {
   return finishedBatchQueue_.pop();
 }

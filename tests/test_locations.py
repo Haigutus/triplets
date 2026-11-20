@@ -8,7 +8,7 @@ import pytest
 
 import triplets  # noqa: F401 — registers the shacl accessor namespace
 from triplets.validation import LOCATION_COLUMNS, locate_violations
-from triplets.validation.locations import locate
+from triplets.validation.locations import locate, relative_name, relative_sources
 
 XML = b"""<?xml version="1.0" encoding="UTF-8"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
@@ -92,29 +92,82 @@ def test_locate_violations_empty_frame(xml_path):
     assert frame.empty
 
 
-def test_source_root(tmp_path, monkeypatch):
-    """source_root: a path source under it → relative uri with forward slashes;
-    a path outside it and a zip member keep their names; a relative source path
-    is read against the working directory, as open() reads it."""
-    (tmp_path / "repo" / "data").mkdir(parents=True)
-    inside = tmp_path / "repo" / "data" / "grid.xml"
-    inside.write_bytes(XML)
-    outside = tmp_path / "other.xml"
-    outside.write_bytes(XML.replace(b"_aaaa", b"_cccc"))
-    archive = tmp_path / "repo" / "grid.zip"
-    with zipfile.ZipFile(archive, "w") as bundle:
+def test_names_are_stamped_as_given(tmp_path, monkeypatch):
+    """locate / locate_violations write the source name they were given: an
+    absolute path, a relative path, a file-like's name, a zip member name."""
+    (tmp_path / "models").mkdir()
+    absolute = tmp_path / "models" / "grid.xml"
+    absolute.write_bytes(XML)
+    (tmp_path / "models" / "other.xml").write_bytes(XML.replace(b"_aaaa", b"_cccc"))
+    with zipfile.ZipFile(tmp_path / "grid.zip", "w") as bundle:
         bundle.writestr("inner/grid.xml", XML.replace(b"_aaaa", b"_dddd"))
-    wanted = {"aaaa": set(), "cccc": set(), "dddd": set()}
+    handle = io.BytesIO(XML.replace(b"_aaaa", b"_eeee"))
+    handle.name = str(tmp_path / "memory.xml")
+    monkeypatch.chdir(tmp_path / "models")
 
-    located = locate(wanted, [str(inside), str(outside), str(archive)], source_root=tmp_path / "repo")
+    located = locate({"aaaa": set(), "cccc": set(), "dddd": set(), "eeee": set()},
+                     [str(absolute), "other.xml", "../grid.zip", handle])
     assert {object_id: entry["uri"] for object_id, entry in located.items()} \
-        == {"aaaa": "data/grid.xml", "cccc": str(outside), "dddd": "inner/grid.xml"}
+        == {"aaaa": str(absolute), "cccc": "other.xml", "dddd": "inner/grid.xml", "eeee": handle.name}
 
-    monkeypatch.chdir(tmp_path / "repo")
-    assert locate({"aaaa": set()}, ["data/grid.xml"], source_root=tmp_path / "repo")["aaaa"]["uri"] \
-        == "data/grid.xml"
-    assert locate({"aaaa": set()}, ["data/grid.xml"], source_root=".")["aaaa"]["uri"] == "data/grid.xml"
-    assert locate({"aaaa": set()}, [str(inside)])["aaaa"]["uri"] == str(inside)   # default: as given
+    violations = pandas.DataFrame([("cccc", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s")],
+                                  columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY",
+                                           "SOURCE_SHAPE"])
+    assert violations.shacl.locate(sources=["other.xml"]).loc[0, "SOURCE_URI"] == "other.xml"
+
+
+def test_relative_name(tmp_path, monkeypatch):
+    """An absolute path of a file in the root or below it → the name relative
+    to the root, forward slashes; anything else → None. Lexical: '..' is
+    collapsed, a relative name is never joined with the working directory."""
+    root = str(tmp_path / "repo")
+    monkeypatch.chdir(tmp_path)
+    assert relative_name(f"{root}/data/x.xml", root) == "data/x.xml"
+    assert relative_name(f"{root}/x.xml", f"{root}/") == "x.xml"
+    assert relative_name(f"{root}/data/../x.xml", root) == "x.xml"
+    assert relative_name("repo/x.xml", root) is None                     # relative, although cwd/repo/x.xml is inside
+    assert relative_name("x.xml", root) is None
+    assert relative_name(f"{root}-other/x.xml", root) is None            # sibling with the root as name prefix
+    assert relative_name(f"{root}/../other/x.xml", root) is None
+    assert relative_name(root, root) is None                             # the root itself is no file in it
+
+
+def test_relative_sources(tmp_path, monkeypatch, caplog):
+    """One rule for the SOURCE_URI and INSTANCE_LABEL columns and every list of
+    names: absolute under the root → relative; every other name as given.
+    One warning names the absolute names outside the root, each once, with
+    the root as an absolute path. The inputs are not changed."""
+    root = tmp_path / "repo"
+    (root / "work").mkdir(parents=True)
+    monkeypatch.chdir(root / "work")                   # a name joined with cwd would gain "work/"
+    inside, outside = str(root / "models" / "grid.xml"), str(tmp_path / "outside.xml")
+    given = [inside, outside, "models/grid.xml", "../models/grid.xml", "inner/grid.xml", "grid.xml", None]
+    written = ["models/grid.xml", outside, "models/grid.xml", "../models/grid.xml", "inner/grid.xml", "grid.xml",
+               None]
+    violations = pandas.DataFrame({"ID": range(len(given)), "SOURCE_URI": given, "INSTANCE_LABEL": given[::-1]})
+    violations.attrs["validation"] = {"source": [inside]}
+    names = {"source": [inside, outside, "grid.xml"], "references": (str(root / "shapes" / "shapes.ttl"),)}
+    before = violations.copy()
+
+    for source_root in (root, str(root), ".."):
+        caplog.clear()
+        with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+            frame, relative = relative_sources(violations, names, source_root)
+        assert [None if pandas.isna(name) else name for name in frame["SOURCE_URI"]] == written
+        assert [None if pandas.isna(name) else name for name in frame["INSTANCE_LABEL"]] == written[::-1]
+        assert relative == {"source": ["models/grid.xml", outside, "grid.xml"], "references": ["shapes/shapes.ttl"]}
+        assert [record.getMessage() for record in caplog.records] \
+            == [f"1 file name(s) outside source_root {root} keep their names: {outside}"]
+    pandas.testing.assert_frame_equal(violations, before)
+    assert names["source"][0] == inside
+    assert violations.attrs["validation"] == {"source": [inside]}
+
+    bare = violations[["ID"]]                          # no name columns: nothing to map
+    frame, relative = relative_sources(bare, {"source": ["grid.xml"]}, root)
+    assert list(frame.columns) == ["ID"] and relative == {"source": ["grid.xml"]}
+    same_frame, same_names = relative_sources(violations, names, None)
+    assert same_frame is violations and same_names is names          # default: the names as given
+    assert len(caplog.records) == 1                                    # relative names never warn
 
 
 def test_locate_violations_targets(xml_path, tmp_path):
@@ -127,16 +180,7 @@ def test_locate_violations_targets(xml_path, tmp_path):
         ("aaaa", "Line.Breaker", "zzzz", "triplets:missing", "m", "Violation", "s", None),
         ("aaaa", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s", None),
     ], columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "TARGET_ID"])
-    frame = locate_violations(violations, [xml_path, str(tmp_path / "absent.xml")], source_root=tmp_path)
+    frame = locate_violations(violations, [xml_path, str(tmp_path / "absent.xml")])
     assert frame[["TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]].values.tolist() == [
-        ["grid.xml", 7, '<cim:Breaker rdf:about="urn:uuid:bbbb">'], [None, None, None], [None, None, None]]
+        [xml_path, 7, '<cim:Breaker rdf:about="urn:uuid:bbbb">'], [None, None, None], [None, None, None]]
     assert frame["SOURCE_LINE"].tolist() == [3, 3, 5]
-
-
-def test_locate_violations_source_root(xml_path, tmp_path):
-    violations = pandas.DataFrame([("aaaa", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s")],
-                                  columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY",
-                                           "SOURCE_SHAPE"])
-    frame = violations.shacl.locate(sources=[xml_path], source_root=tmp_path)
-    assert frame.loc[0, "SOURCE_URI"] == "grid.xml"
-    pandas.testing.assert_frame_equal(frame, locate_violations(violations, [xml_path], source_root=str(tmp_path)))

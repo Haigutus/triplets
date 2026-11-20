@@ -417,14 +417,10 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
 
     os.makedirs(output_path, exist_ok=True)
 
-    if rdf_map is None:
-        logging.warning("No --rdf-map given: classes are written in the triplets namespace, not a CIM profile")
-
     # Export to CIM XML
     return export_to_cimxml(
         data,
         rdf_map=rdf_map,
-        export_undefined=rdf_map is None,
         export_type=export_type,
         export_base_path=output_path,
         debug=False

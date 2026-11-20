@@ -204,8 +204,8 @@ def test_store_shared_across_row_order(svedala):
 
 def test_invalid_query_error_carries_query_text(svedala):
     """No query fixing: a rejected query raises with oxigraph's message + the
-    query. (The ENTSO-E bare-HAVING shape that qlever rejects is *accepted*
-    by oxigraph — implicit grouping — so the probe here is a syntax error.)"""
+    query. (The ENTSO-E bare-HAVING shape is *accepted* by oxigraph —
+    implicit grouping — so the probe here is a syntax error.)"""
     bad = PREFIXES + "SELECT ?s WHERE { ?s rdf:type cim:Substation"
     with pytest.raises(ValueError, match="(?s)oxigraph rejected the query.*Substation"):
         triplets.sparql.query(svedala, bad, engine="oxigraph")
@@ -441,9 +441,9 @@ def test_benchmark_shacl_sparql_backend(benchmark, svedala, monkeypatch, sparql_
 def test_invalid_constraint_query_reported_not_fixed(no_qlever, svedala):
     """A shape oxigraph's strict parser rejects (ungrouped projection):
     results stay complete via the rdflib fallback, and the report carries a
-    triplets:invalidSparql Warning row. (The ENTSO-E bare-HAVING defect that
-    qlever rejects is accepted by oxigraph — implicit grouping — so the probe
-    here is an ungrouped projection.)"""
+    triplets:invalidSparql Warning row. (The ENTSO-E bare-HAVING defect is
+    accepted by oxigraph — implicit grouping — so the probe here is an
+    ungrouped projection.)"""
     pytest.importorskip("pyshacl")
     graph = shape_graph('SELECT $this ?value WHERE { $this $PATH ?value . '
                         'FILTER (str(?value) = "no-such-name") } GROUP BY $this')

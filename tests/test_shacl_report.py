@@ -213,26 +213,80 @@ def test_sources_add_location_message(tmp_path):
     assert any(message.startswith("[context_location] ") and "line 4" in message for message in messages)
 
 
-def test_sources_with_source_root(tmp_path):
-    """source_root writes the located file relative to it — no absolute path in the report."""
+def report_names(buffer):
+    """(data file names, dcterms:references) of a serialized report: the file of
+    each [context_location] message and dcterms:source."""
     import rdflib
-    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
-    (tmp_path / "models").mkdir()
-    xml = tmp_path / "models" / "grid.xml"
-    xml.write_text('<?xml version="1.0"?>\n'
-                   '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" '
-                   'xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
-                   '  <cim:ACLineSegment rdf:ID="_11111111-2222-3333-4444-555555555555">\n'
-                   '    <cim:Conductor.length>100</cim:Conductor.length>\n'
-                   '  </cim:ACLineSegment>\n'
-                   '</rdf:RDF>\n')
-
-    buffer = VIOLATIONS.head(1).shacl.to_shacl_report(sources=[str(xml)], source_root=tmp_path,
-                                                      export_to_memory=True)
-    assert str(tmp_path) not in buffer.getvalue().decode("utf-8")
     graph = rdflib.Graph().parse(data=buffer.getvalue(), format="turtle")
-    assert "[context_location] models/grid.xml line 4" in {str(message) for message
-                                                           in graph.objects(None, sh.resultMessage)}
+    located = {str(message).removeprefix("[context_location] ").rsplit(" line ", 1)[0]
+               for message in graph.objects(None, rdflib.URIRef("http://www.w3.org/ns/shacl#resultMessage"))
+               if str(message).startswith("[context_location] ")}
+    dcterms = rdflib.Namespace("http://purl.org/dc/terms/")
+    return (located, {str(name) for name in graph.objects(None, dcterms.source)},
+            {str(name) for name in graph.objects(None, dcterms.references)})
+
+
+def parsed_run(root, parse_path):
+    """repo layout under *root* (models/grid.xml, shapes/shapes.ttl) → the file
+    parsed by *parse_path* and validated."""
+    (root / "models").mkdir(parents=True)
+    (root / "shapes").mkdir()
+    (root / "models" / "grid.xml").write_text(
+        '<?xml version="1.0"?>\n'
+        '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
+        '  <cim:Breaker rdf:ID="_11111111-2222-3333-4444-555555555555"/>\n'
+        '</rdf:RDF>\n')
+    # own content: compiled shapes are cached by content and keep the first file name
+    (root / "shapes" / "shapes.ttl").write_text(SHAPE_TTL + "# source_root\n")
+    data = pandas.read_RDF([parse_path])
+    return data.shacl.validate_shacl(str(root / "shapes" / "shapes.ttl"), engine="pandas")
+
+
+def test_source_root_end_to_end(tmp_path):
+    """A file parsed by its absolute path, validated, exported with source_root:
+    the located file and dcterms:source are the same root-relative name —
+    located by sources= or before the export; without sources= the report
+    names the file in dcterms:source only. dcterms:references of a run is a
+    file name without directories and stays one; an explicit absolute
+    report_references= under the root is written relative."""
+    root = tmp_path / "repo"
+    model = str(root / "models" / "grid.xml")
+    violations = parsed_run(root, model)
+    assert len(violations) == 1 and violations.attrs["validation"]["source"] == [model]
+
+    reports = {
+        "sources": violations.shacl.to_shacl_report(sources=[model], source_root=root, export_to_memory=True),
+        "located": violations.shacl.locate(sources=[model]).shacl.to_shacl_report(source_root=root,
+                                                                                  export_to_memory=True),
+        "label": violations.shacl.to_shacl_report(source_root=root, export_to_memory=True),
+    }
+    for flow, buffer in reports.items():
+        assert str(root) not in buffer.getvalue().decode("utf-8"), flow
+        assert report_names(buffer) == (set() if flow == "label" else {"models/grid.xml"},
+                                        {"models/grid.xml"}, {"shapes.ttl"}), flow
+
+    explicit = violations.shacl.to_shacl_report(sources=[model], source_root=root, export_to_memory=True,
+                                                report_references=[str(root / "shapes" / "shapes.ttl"), "extra.ttl"])
+    assert report_names(explicit)[2] == {"shapes/shapes.ttl", "extra.ttl"}
+    assert report_names(violations.shacl.to_shacl_report(sources=[model], export_to_memory=True))[:2] \
+        == ({model}, {model})                                           # default: the names as given
+
+
+def test_source_root_relative_parse_path(tmp_path, monkeypatch):
+    """A file parsed by a relative path keeps that name in every place, also
+    with the working directory below the root."""
+    root = tmp_path / "repo"
+    (root / "work").mkdir(parents=True)
+    monkeypatch.chdir(root / "work")
+    violations = parsed_run(root, "../models/grid.xml")
+
+    for source_root in (root, ".."):
+        buffer = violations.shacl.to_shacl_report(sources=["../models/grid.xml"], source_root=source_root,
+                                                  export_to_memory=True)
+        assert report_names(buffer)[:2] == ({"../models/grid.xml"}, {"../models/grid.xml"})
+    located = violations.shacl.locate(sources=["../models/grid.xml"])
+    assert report_names(located.shacl.to_shacl_report(source_root=root, export_to_memory=True))[:2] \
+        == ({"../models/grid.xml"}, {"../models/grid.xml"})
 
 
 # ── validation-run metadata (violations.attrs["validation"]) ─────────────────

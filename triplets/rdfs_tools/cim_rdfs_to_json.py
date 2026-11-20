@@ -5,7 +5,7 @@ import pandas
 from triplets.tools import get_namespace_map
 from triplets.rdfs_tools import rdfs_tools
 from triplets.rdfs_tools.rdfs_tools import load_all_to_dataframe
-from triplets.iri import XSD_NS, split_iri
+from triplets.iri import XSD_NS, is_iri, prefixes, split_iri
 import logging
 
 logger = logging.getLogger(__name__)
@@ -68,6 +68,27 @@ def xsd_types_from_rdfs(profile_data):
     return {name: xsd for name in value_of if (xsd := resolve(name))}
 
 
+DATATYPE_STEREOTYPES = ("Primitive", "CIMDatatype", "Compound", "ConstrainedPrimitive", "Enumeration")
+"""A datatype entry's ``type``: the first of these among its stereotypes; the others (``eumd``, ``profcim``, …) stay in ``stereotype`` only."""
+
+
+def prefixed_name(iri, prefix_of):
+    """``http://www.w3.org/2000/01/rdf-schema#Class`` → ``rdfs:Class`` by *prefix_of* (namespace → prefix);
+    a namespace without a prefix keeps the IRI whole."""
+    namespace, name = split_iri(iri)
+    prefix = prefix_of.get(namespace)
+    return f"{prefix}:{name}" if prefix and name else iri
+
+
+def source_values(profile_data, key, form):
+    """object ID → the *form* of its *key* VALUEs, in row order, deduplicated."""
+    rows = profile_data[profile_data["KEY"] == key]
+    found = {}
+    for object_id, value in zip(rows["ID"], rows["VALUE"]):
+        found.setdefault(object_id, {})[form(value)] = None
+    return {object_id: list(values) for object_id, values in found.items()}
+
+
 cim_serializations = {
 "552_ED1": {
     "conformsTo":"urn:iso:std:iec:61970-552:2013",
@@ -116,6 +137,17 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
     profile = {}
     profile["ProfileNamespaceMap"] = namespace_map
     profile["ProfileXMLBase"] = xml_base
+
+    # get_object_data and the parameter pivot keep one VALUE per KEY; stereotype and rdf:type repeat
+    prefix_of = {}
+    for prefix, namespace in prefixes({"ProfileNamespaceMap": namespace_map}).items():
+        prefix_of.setdefault(namespace, prefix)
+    stereotypes = source_values(profile_data, "stereotype", lambda value: split_iri(value)[1] if is_iri(value) else value)
+    rdf_types = source_values(profile_data, "type", lambda value: prefixed_name(value, prefix_of))
+
+    def source_types(object_id):
+        found = {"stereotype": stereotypes.get(object_id), "rdf:type": rdf_types.get(object_id)}
+        return {field: values for field, values in found.items() if values}
 
     classes_defined_externally = profile_data.query(rdfs_tools.stereotype_query("Description")).ID.to_list()
 
@@ -172,11 +204,18 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 data_type_namespace, data_type_name = rdfs_tools.get_namespace_and_name(data_type)
 
                 data_type_meta = profile_data.get_object_data(data_type).to_dict()
+                data_type_types = source_types(data_type)
+                data_type_kind = next((kind for kind in DATATYPE_STEREOTYPES
+                                       if kind in data_type_types.get("stereotype", [])), "")
+                if not data_type_kind:
+                    logger.warning("Datatype %s has none of the stereotypes %s, type left empty",
+                                   data_type, ", ".join(DATATYPE_STEREOTYPES))
 
                 xsd = {"xsd:type": types.get(data_type_name, "")}
                 profile[data_type_name] = {
                     "description": data_type_meta.get("comment", ""),
-                    "type": data_type_meta.get("stereotype", ""),
+                    "type": data_type_kind,
+                    **data_type_types,
                     **xsd,
                     "namespace": data_type_namespace,
                 }
@@ -209,13 +248,15 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                     value_def = {
                         "description": value_meta.get("comment", ""),
                         "namespace": value_namespace,
-                        "type": "EnumerationValue"
+                        "type": "EnumerationValue",
+                        **source_types(value),
                     }
 
                     parameter_def["values"].append(value_name)
                     profile[value_name] = value_def
 
         # Add parameter definition
+        parameter_def.update(source_types(parameter))
         profile[parameter_name] = parameter_def
         return parameter_name
 
@@ -247,6 +288,7 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 "value_prefix": class_ID_prefix
             },
             "type": "Class",
+            **source_types(concrete_class),
             "inheritance": list(class_inheritance),
             "stereotyped": not class_is_local,
             "namespace": class_namespace,

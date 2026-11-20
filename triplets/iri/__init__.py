@@ -43,9 +43,7 @@ definition, the table is the contract.
 This module imports only the standard library: the parser imports it on
 every file.
 """
-import hashlib
 import json
-import os
 import re
 from urllib.parse import urljoin
 
@@ -208,15 +206,6 @@ def load_rdf_map(rdf_map):
         return json.load(file)
 
 
-def load_schema(rdf_map):
-    """dict or path → (schema dict, content digest, source name) — for compile caches keyed on content."""
-    if isinstance(rdf_map, dict):
-        return rdf_map, hashlib.sha256(json.dumps(rdf_map, sort_keys=True, default=str).encode()).hexdigest(), "rdf_map"
-    with open(rdf_map, "rb") as file:
-        content = file.read()
-    return json.loads(content), hashlib.sha256(content).hexdigest(), os.path.basename(str(rdf_map))
-
-
 _SCHEMA_METADATA = ("ProfileMetadata", "ProfileNamespaceMap")
 """A profile's own description and prefixes, in a section or at a flat schema's root:
 neither a profile section nor a schema name."""
@@ -256,8 +245,11 @@ def namespaces(rdf_map):
 
 
 def key_types(rdf_map):
-    """name → schema entry type (Class | Attribute | Association | Enumeration | EnumerationValue | …)."""
-    return {name: entry["type"] for name, entry in rdf_map_entries(rdf_map) if entry.get("type")}
+    """name → ``{"type": …, "stereotype": [...], "rdf:type": [...]}``: the entry type (Class | Attribute |
+    Association | Enumeration | EnumerationValue | Primitive | CIMDatatype | …) and whichever of the
+    RDFS source lists (``cims:stereotype``, ``rdf:type``) the entry carries."""
+    return {name: {field: entry[field] for field in ("type", "stereotype", "rdf:type") if field in entry}
+            for name, entry in rdf_map_entries(rdf_map) if entry.get("type")}
 
 
 def prefixes(rdf_map):

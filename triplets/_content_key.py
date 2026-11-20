@@ -8,19 +8,22 @@ dataset's state), mixed with the export schema and an engine/format-version
 salt. This module is engine-neutral so no engine imports another's package.
 
 ``data_unchanged=True`` lets the caller assert the data object has not been
-mutated since it was last hashed: the stored digest for that exact object is
-reused and the (potentially expensive) content_hash is skipped — pandas pays
-~0.26 s per 1M rows, so this is the difference between ~25 ms and sub-ms
-warm queries. Digests are remembered per object identity with a weakref
-eviction callback: when the object is garbage-collected its entry vanishes,
-so a new object reusing the same id() can never inherit a stale digest.
+mutated since it was last hashed, nor the rdf_map dict last passed with it:
+the stored digest for that exact object is reused and the (potentially
+expensive) content_hash is skipped — pandas pays ~0.26 s per 1M rows, so
+this is the difference between ~25 ms and sub-ms warm queries — and the
+stored schema serialization is reused when ``rdf_map`` is that same dict
+object (a path is read on every call). Digests are remembered per object
+identity with a weakref eviction callback: when the object is
+garbage-collected its entry (rdf_map reference included) vanishes, so a new
+object reusing the same id() can never inherit a stale digest.
 """
 import os
 import json
 import hashlib
 import weakref
 
-_HASHES = {}   # id(obj) → (weakref.ref with evict callback, content_hash digest)
+_HASHES = {}   # id(obj) → (weakref.ref with evict callback, content_hash digest[, rdf_map, its JSON bytes])
 
 
 def content_key(data, rdf_map, salt, data_unchanged=False):
@@ -30,7 +33,12 @@ def content_key(data, rdf_map, salt, data_unchanged=False):
         with open(rdf_map, "rb") as file:
             schema = file.read()
     else:
-        schema = json.dumps(rdf_map, sort_keys=True, default=str).encode() if rdf_map else b""
+        entry = _HASHES[id(data)]   # (re)set by _content_hash; a fresh entry has no schema yet
+        if data_unchanged and len(entry) == 4 and entry[2] is rdf_map:
+            schema = entry[3]
+        else:
+            schema = json.dumps(rdf_map, sort_keys=True, default=str).encode() if rdf_map else b""
+            _HASHES[id(data)] = (*entry[:2], rdf_map, schema)
     return hashlib.sha256(salt + content.encode() + schema).hexdigest()[:24]
 
 

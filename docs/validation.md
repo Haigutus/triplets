@@ -557,7 +557,7 @@ united, differing values kept as the list of distinct values):
 | `engine` | the engine that produced the report |
 | `creator` | tool + version |
 | `source` | data file names (from the data's Distribution label meta rows) |
-| `references` | shape file names (recorded at compile) |
+| `references` | shape file names (recorded at compile); the schema validations: the `rdf_map` file name, `"rdf_map"` for a dict |
 | `compiled_hash` | the shape files' content hash (`CompiledShapes.hash`, the same with any `deactivated_shapes`) |
 | `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran); the run's rule set is `compiled_hash` + `deactivated_shapes` — `concat_violations` counts shapes and constraints once per rule set |
 | `node_shapes` / `constraints` | count of NodeShapes not switched off / distinct constraints of the run's rule set (IR rows that differ only in lineage count once) |
@@ -832,8 +832,11 @@ violations = violations.shacl.enrich(data=data, shapes=compiled, rdf_map=rdf_map
 
 # SARIF 2.1.0 for GitHub / SonarQube / any SARIF viewer
 violations.shacl.to_sarif(path="report.sarif")
-# located lines, file paths relative to the repository checkout
-violations.shacl.to_sarif(path="report.sarif", sources=["models/grid.xml"], source_root=".")
+# located lines; absolute file names under the repository directory are
+# written relative to it: artifactLocation.uri "models/grid.xml"
+repository = "/srv/checkout/grid-models"
+violations.shacl.to_sarif(path="report.sarif", sources=[f"{repository}/models/grid.xml"],
+                          source_root=repository)
 
 # standard sh:ValidationReport for SHACL tooling (format from path suffix,
 # or format=); sources= adds an "[context_location] file line N" message per
@@ -854,7 +857,7 @@ violations.shacl.to_excel(path="report.xlsx")
 
 # the location pass standalone — LOCATION_COLUMNS (SOURCE_* for the finding, TARGET_*
 # for the referenced object of an enriched reference finding), reused by both report
-# exports (source_root= writes paths under it relative to it)
+# exports; SOURCE_URI / TARGET_URI are the source names as given
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
@@ -862,7 +865,7 @@ pyshacl pass-through options (`inference`, `advanced`, `store`) are forwarded
 as keyword arguments. Names the schema does not declare (every name without an
 `rdf_map`) are written under `undefined_namespace=` (default CIM100, so
 schema-less `cim:` shapes keep working; the same parameter on
-`validate_schema` / `validate_schema_references` / `to_shacl_report`); every
+`to_shacl_report`); every
 row is loaded. `abort_on_first=True` stops every engine at the first
 Violation (Warnings and `triplets:invalidSparql` never stop it), for a yes/no
 gate rather than a full report. Runnable end-to-end demos live in
@@ -912,7 +915,9 @@ enrichment pass first (an already-enriched frame is used as-is).
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
   rule's findings (the `PROFILE` column), distinct, first seen, at most 10
-  (GitHub keeps 10). GitHub code scanning filters alerts by tag.
+  (GitHub keeps 10). GitHub code scanning filters alerts by tag. SARIF
+  recommends taxonomies, not tags, for a classification (§3.8.2.1); tags are
+  used because GitHub code scanning filters by tag.
 - Severity maps `Violation/Warning/Info` → `error/warning/note`; rules carry
   the shape's `sh:description`, and the rule title names the constraint
   language: `SHACL <sh:name>`, `SHACL <attr> <violation type>` for unnamed
@@ -940,20 +945,35 @@ enrichment pass first (an already-enriched frame is used as-is).
   definition) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
   A frame already carrying `LOCATION_COLUMNS` (from
-  `violations.shacl.locate(sources=...)`) is used as-is. Without either,
+  `violations.shacl.locate(sources=...)`) is not located again. Without either,
   `artifactLocation.uri` falls back to the enrichment-traced file label,
   region-less. Positions are whole lines (1-based): RDF serializations put
   one statement per line, and a start-only region cannot be displayed by
   GitHub, so regions always carry `startLine` and `endLine`.
-- `source_root=` (a directory, explicit — never taken from the working
-  directory) applies when the locate pass runs, in `to_sarif` and
-  `to_shacl_report` alike: a `sources=` path under it is written relative
-  to it with forward slashes (relative paths in `sources=` are read against
-  the working directory, as `open` reads them) — in SARIF
-  `artifactLocation.uri` (GitHub reads a relative uri against the repository
-  root) and in the SHACL report's `[context_location]` message. Paths outside
-  `source_root`, zip members and file-likes keep their own names. Default
-  `None`: the paths as given.
+- `source_root=` (a directory) on `to_sarif` and `to_shacl_report`: a file
+  name that is an absolute path under the directory is written relative to
+  it, with forward slashes. Every other name is written as given: a relative
+  path, a path outside the directory, a zip member name. No name is joined
+  with the working directory. The rule covers every file name of the export:
+  - `SOURCE_URI` — SARIF `artifactLocation.uri` (GitHub reads a relative uri
+    against the repository root), the SHACL report's `[context_location]`
+    message — and `TARGET_URI`, the `artifactLocation.uri` of a SARIF related
+    location. It makes no difference whether `sources=` locates the frame in
+    the export or `violations.shacl.locate(sources=...)` did before;
+  - the `INSTANCE_LABEL` fallback location (SARIF);
+  - the run metadata's `source` — SARIF run `properties` and whole-file
+    fallback locations, SHACL `dcterms:source`;
+  - the run metadata's `references` — SARIF run `properties`, the rule
+    help's file and the whole-file location of a tool finding, SHACL
+    `dcterms:references`. A validation run records the shapes and schema
+    files as file names without directories, so these stay as they are. An
+    absolute `report_references=` under the directory is written relative.
+
+  Parse the files by absolute path to get root-relative names: the names in
+  the frame are the paths given to the parser. The comparison is lexical:
+  symlinks are not resolved, so give `source_root` the same way the files
+  are given. The export logs one warning naming the absolute names outside
+  the directory. Default `None`: the names as given.
 - The referenced object of a reference finding found in the data
   (`TARGET_ID`, enriched with `data=`) and located by the `sources=` pass
   (`TARGET_URI`) becomes a `relatedLocations` entry: `id`, the `TARGET` text

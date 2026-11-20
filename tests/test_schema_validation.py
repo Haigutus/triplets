@@ -5,12 +5,13 @@ rdfs:/xsd:/schema: types, not fake SHACL.
 
 Semantics under test: every instance is validated on its own against the
 profiles the caller scopes, merged into one; nothing reads instance headers."""
+import json
 import re
 
 import pandas
 import pytest
 
-from triplets.validation import compile_schema, enrich, has_violation, validate_schema
+from triplets.validation import compile_schema, enrich, has_violation, validate_schema, validate_shacl
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -274,6 +275,22 @@ def test_run_metadata(engine):
     assert meta["language"] == "rdfs" and meta["engine"] == engine
     assert meta["profiles"] == ["EQ"]
     assert meta["references"] == ["rdf_map"] and meta["source_shapes"] == {}
+
+
+def test_schema_file_name_is_the_callers(tmp_path):
+    """references names the file this call was given, never the one that filled
+    the compile cache — through validate_schema and through a direct compile."""
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    for path in (first, second):
+        path.write_text(json.dumps(SCHEMA))
+    data = frame(breaker("b1", *OK))
+    for rdf_map, name in ((first, "first.json"), (SCHEMA, "rdf_map"), (str(second), "second.json")):
+        meta = validate_schema(data, rdf_map, rdf_map_scope="EQ", engine="pandas").attrs["validation"]
+        assert meta["references"] == [name]
+        assert meta["compiled_hash"] == compile_schema(SCHEMA, "EQ").hash   # one loaded dict, one compile
+    for rdf_map, name in ((second, "second.json"), (first, "first.json"), (SCHEMA, "rdf_map")):
+        meta = validate_shacl(data, compile_schema(rdf_map, "EQ"), engine="pandas").attrs["validation"]
+        assert meta["references"] == [name]
 
 
 def test_reports_carry_rdfs_tags_and_profile(engine):

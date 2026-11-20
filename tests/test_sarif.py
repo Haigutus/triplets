@@ -4,6 +4,7 @@ import json
 import zipfile
 
 from pathlib import Path
+from urllib.parse import quote
 
 import pandas
 import pytest
@@ -440,70 +441,106 @@ def test_skipped_entries_as_configuration_notifications():
     assert "invocations" not in build_sarif(bare([None], skipped_shapes=[], skipped_components=[]))["runs"][0]
 
 
-def located(tmp_path):
-    """Violations of objects a (repo/sub/grid EQ.xml, under the root), c (other.xml,
-    outside it), d (zip member inner/grid.xml of repo/grid.zip) and e (a file-like)."""
-    (tmp_path / "repo" / "sub").mkdir(parents=True)
-    inside = tmp_path / "repo" / "sub" / "grid EQ.xml"
-    inside.write_text(XML, encoding="utf-8")
-    outside = tmp_path / "other.xml"
-    outside.write_text(XML.replace("_aaaaaaaa", "_cccccccc"), encoding="utf-8")
-    archive = tmp_path / "repo" / "grid.zip"
-    with zipfile.ZipFile(archive, "w") as bundle:
-        bundle.writestr("inner/grid.xml", XML.replace("_aaaaaaaa", "_dddddddd"))
-    memory = io.BytesIO(XML.replace("_aaaaaaaa", "_eeeeeeee").encode("utf-8"))
-    memory.name = "memory.xml"
-    violations = pandas.DataFrame(
-        [[f"{letter * 8}-2222-3333-4444-555555555555", "IdentifiedObject.name", None, "sh:minCount", "m",
-          "Violation", f"urn:shape{letter}"] for letter in "acde"],
-        columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"])
-    return violations, [str(inside), str(outside), str(archive), memory]
+def test_profile_cells_as_tags_and_text():
+    """A PROFILE cell is a list, tuple, numpy array or text; nulls and empty
+    strings name no profile."""
+    import numpy
+    from triplets.validation.shacl_report import profile_text
+
+    tags = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    assert tags(bare([numpy.array(["EQ"], dtype=object), ["OP", None, ""], ("SC",), "SSH", ""])) \
+        == ["shacl", "sh:minCount", "EQ", "OP", "SC", "SSH"]
+    assert profile_text(numpy.array(["EQ", "OP"], dtype=object)) == "EQ, OP"
+    assert profile_text(numpy.array([], dtype=object)) is None
+    assert profile_text(["EQ", None]) == "EQ"
+    assert profile_text(["EQ", "OP"]) == profile_text(("EQ", "OP")) == profile_text("EQ, OP") == "EQ, OP"
+    assert profile_text(None) is profile_text(float("nan")) is profile_text([]) is profile_text("") is None
 
 
-def test_source_root_relative_locations(tmp_path):
-    """source_root: a source under it is written relative (forward slashes) —
-    no absolute root in the log; a path outside it, a zip member and a
-    file-like keep their names."""
-    expected = {"a": "sub/grid%20EQ.xml", "c": quote_path(str(tmp_path / "other.xml")),
-                "d": "inner/grid.xml", "e": "memory.xml"}
-    violations, sources = located(tmp_path)
-    document = build_sarif(violations, sources=sources, source_root=tmp_path / "repo")
-    assert {result["properties"]["sampleIDs"][0][0]:
-            result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
-            for result in document["runs"][0]["results"]} == expected
-    assert str(tmp_path / "repo") not in json.dumps(document)
-
-    violations, sources = located(tmp_path / "rows")
-    rows = build_sarif(violations, group=False, sources=sources, source_root=tmp_path / "rows" / "repo")
-    assert {result["properties"]["id"][0]: result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]
-            for result in rows["runs"][0]["results"]} \
-        == {**expected, "c": quote_path(str(tmp_path / "rows" / "other.xml"))}
-
-    violations, sources = located(tmp_path / "default")
-    without = build_sarif(violations, sources=sources)["runs"][0]           # default: as given
-    assert without["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] \
-        == {"uri": quote_path(sources[0])}
-
-    violations, sources = located(tmp_path / "accessor")
-    via_accessor = json.loads(violations.shacl.to_sarif(sources=sources, source_root=tmp_path / "accessor" / "repo",
-                                                        export_to_memory=True).read())
-    assert via_accessor["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] \
-        == {"uri": "sub/grid%20EQ.xml"}
+def file_names(document):
+    """Every data file name of a SARIF log: the result locations and the run's source list."""
+    run = document["runs"][0]
+    return {location["physicalLocation"]["artifactLocation"]["uri"]
+            for result in run["results"] for location in result["locations"]} | set(run["properties"]["source"])
 
 
-def test_source_root_applies_to_the_locate_pass_only(tmp_path):
-    """A frame already carrying the location columns is used as-is."""
-    violations, sources = located(tmp_path)
-    stamped = triplets.validation.locate_violations(violations, sources)
-    violations, sources = located(tmp_path / "again")                      # fresh file-like
-    run = build_sarif(stamped, sources=sources, source_root=tmp_path / "repo")["runs"][0]
-    assert run["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"] \
-        == {"uri": quote_path(str(tmp_path / "repo" / "sub" / "grid EQ.xml"))}
+def parsed_run(root, parse_path):
+    """repo layout under *root* (models/grid.xml, shapes/shapes.ttl) → the file
+    parsed by *parse_path* and validated: (data, violations)."""
+    (root / "models").mkdir(parents=True)
+    (root / "shapes").mkdir()
+    (root / "models" / "grid.xml").write_text(XML, encoding="utf-8")
+    # own content: compiled shapes are cached by content and keep the first file name
+    (root / "shapes" / "shapes.ttl").write_text(SHAPE + "# source_root\n", encoding="utf-8")
+    data = pandas.read_RDF([parse_path])
+    return data, data.shacl.validate_shacl(str(root / "shapes" / "shapes.ttl"), engine="pandas")
 
 
-def quote_path(path):
-    from urllib.parse import quote
-    return quote(path, safe="/")
+@pytest.mark.parametrize("group", [True, False])
+def test_source_root_end_to_end(tmp_path, group):
+    """A file parsed by its absolute path, validated, exported with source_root:
+    every data file name of the log is the same root-relative name — located
+    by sources=, located before the export, or from the label alone. The
+    shapes file of a run is a file name without directories and stays one."""
+    root = tmp_path / "repo"
+    model = str(root / "models" / "grid.xml")
+    data, violations = parsed_run(root, model)
+    enriched = violations.shacl.enrich(data=data)
+    assert violations.attrs["validation"]["source"] == [model]
+    assert set(enriched["INSTANCE_LABEL"]) == {model}
+
+    documents = {
+        "sources": build_sarif(enriched, group=group, sources=[model], source_root=root),
+        "located": build_sarif(enriched.shacl.locate(sources=[model]), group=group, source_root=root),
+        "label": build_sarif(enriched, group=group, source_root=root),
+        "accessor": json.loads(violations.shacl.to_sarif(data=data, group=group, sources=[model], source_root=root,
+                                                         export_to_memory=True).read()),
+    }
+    for flow, document in documents.items():
+        assert file_names(document) == {"models/grid.xml"}, flow
+        assert str(root) not in json.dumps(document), flow
+        run = document["runs"][0]
+        assert run["properties"]["references"] == ["shapes.ttl"], flow
+        assert "File: shapes.ttl" in run["tool"]["driver"]["rules"][0]["help"]["text"], flow
+        regions = {location["physicalLocation"]["region"]["startLine"]
+                   for result in run["results"] for location in result["locations"]}
+        assert regions == ({1} if flow == "label" else {4, 7}), flow
+    assert build_sarif(enriched, group=group, sources=[model])["runs"][0]["properties"]["source"] == [model]
+
+
+def test_source_root_relative_parse_path(tmp_path, monkeypatch, caplog):
+    """A file parsed by a relative path keeps that name in every place, also
+    with the working directory below the root: no name is joined with it."""
+    root = tmp_path / "repo"
+    (root / "work").mkdir(parents=True)
+    monkeypatch.chdir(root / "work")
+    data, violations = parsed_run(root, "../models/grid.xml")
+    enriched = violations.shacl.enrich(data=data)
+
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        documents = [build_sarif(enriched, sources=["../models/grid.xml"], source_root=source_root)
+                     for source_root in (root, "..")]
+        documents.append(build_sarif(enriched.shacl.locate(sources=["../models/grid.xml"]), source_root=root))
+        documents.append(build_sarif(enriched, source_root=root))
+    for document in documents:
+        assert file_names(document) == {"../models/grid.xml"}
+    assert not caplog.records                                          # a relative name is not "outside"
+
+
+def test_source_root_outside_names_one_warning(tmp_path, caplog):
+    """A file outside the root keeps its absolute name in every place; one
+    warning per export names it once, the same text from both exporters."""
+    model = str(tmp_path / "repo" / "models" / "grid.xml")
+    data, violations = parsed_run(tmp_path / "repo", model)
+    enriched = violations.shacl.enrich(data=data)
+    root = tmp_path / "elsewhere"
+
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        document = build_sarif(enriched, sources=[model], source_root=root)
+        enriched.shacl.to_shacl_report(sources=[model], source_root=root, export_to_memory=True)
+    assert file_names(document) == {model}
+    assert [record.getMessage() for record in caplog.records] \
+        == [f"1 file name(s) outside source_root {root} keep their names: {model}"] * 2
 
 
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -605,7 +642,7 @@ def test_related_location_per_row(tmp_path):
     assert results["b2"]["relatedLocations"] == [
         {"id": 1, "message": {"text": 'referenced object sub1 found — Substation "Main Sub"'},
          "logicalLocations": logical("sub1"),
-         "physicalLocation": {"artifactLocation": {"uri": quote_path(xml)},
+         "physicalLocation": {"artifactLocation": {"uri": quote(xml, safe="/")},
                               "region": {"startLine": 4, "endLine": 4,
                                          "snippet": {"text": '<cim:Substation rdf:ID="_sub1">'}}}}]
     assert context_message(results["b2"]) == '[context_message] referenced object [sub1](1) found — Substation "Main Sub"'

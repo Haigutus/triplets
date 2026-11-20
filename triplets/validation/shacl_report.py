@@ -11,8 +11,10 @@ import logging
 import os
 from datetime import datetime, timezone
 
+import numpy
 import pandas
 
+from .locations import LOCATION_COLUMNS, locate_violations, relative_sources
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
                    XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
                    namespaces, split_iri)
@@ -156,7 +158,7 @@ _COMPONENT_URI = {short: f"{SH_NS}{suffix}" for suffix, short in _COMPONENT_MAP.
 
 
 def violations_to_report_graph(violations, report_source=None, report_references=None,
-                               rdf_map=None, undefined_namespace=CIM_NS):
+                               rdf_map=None, undefined_namespace=CIM_NS, source_root=None):
     r"""Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
     report_to_violations; KEYs expand through the export schema namespaces —
     ``rdf_map`` — ``undefined_namespace`` for names it lacks, unless already URIs).
@@ -174,7 +176,10 @@ def violations_to_report_graph(violations, report_source=None, report_references
 
     Defaults come from ``violations.attrs["validation"]`` — the metadata
     the validation functions stamp on the frame (timestamp of the validation run, tool
-    version, data/shape file names). Explicit arguments override it.
+    version, data/shape file names). Explicit arguments override it. With
+    ``source_root``, a file name that is an absolute path under it is written
+    relative to it — SOURCE_URI, ``dcterms:source``, ``dcterms:references``
+    (locations.relative_sources).
     """
     import rdflib
     import triplets
@@ -215,9 +220,11 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.add((report, prov.generatedAtTime,
                rdflib.Literal(generated_at, datatype=rdflib.URIRef(f"{XSD_NS}dateTime"))))
     graph.add((report, dcterms.creator, rdflib.Literal(creator)))
-    for value in _as_list(report_source):
+    violations, names = relative_sources(violations, {"source": _as_list(report_source),
+                                                      "references": _as_list(report_references)}, source_root)
+    for value in names["source"]:
         graph.add((report, dcterms.source, rdflib.Literal(value)))
-    for value in _as_list(report_references):
+    for value in names["references"]:
         graph.add((report, dcterms.references, rdflib.Literal(value)))
 
     for row in violations.itertuples(index=False):
@@ -360,7 +367,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     sources : optional
         The original CIM/XML files — runs the locate_violations pass so each
         result carries a "Source: file line N" message (a frame
-        already carrying LOCATION_COLUMNS is used as-is).
+        already carrying LOCATION_COLUMNS is not located again).
     path : str or Path, optional
         Output file. Default ``report.<ext>`` from the resolved format.
         Suffix selects format when ``format`` is None (``.xml``/``.rdf`` →
@@ -384,20 +391,25 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
     undefined_namespace : str, default CIM100
         Namespace for KEYs the schema does not declare (every KEY without one).
     source_root : str or Path, optional
-        Applies when the locate pass runs: a source path under this directory
-        is written relative to it (forward slashes) in the "[context_location]"
-        message; paths outside it, zip members and file-likes keep their names.
+        A file name that is an absolute path under this directory is
+        written relative to it (forward slashes); every other name is
+        written as given. One rule for every name in the report: SOURCE_URI
+        (the "[context_location]" message; located by *sources* here or
+        already on the frame), ``dcterms:source`` and ``dcterms:references``.
+        ``references`` of a validation run are file names without
+        directories, so they stay as they are. Absolute names outside the
+        directory are named in one logged warning (see
+        locations.relative_sources).
     """
-    if sources is not None:
-        from .locations import LOCATION_COLUMNS, locate_violations
-        if not set(LOCATION_COLUMNS) <= set(violations.columns):
-            violations = locate_violations(violations, sources, source_root)
+    if sources is not None and not set(LOCATION_COLUMNS) <= set(violations.columns):
+        violations = locate_violations(violations, sources)
     fmt = _resolve_format(path, format)
     path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,
                                           report_references=report_references,
                                           rdf_map=load_rdf_map(rdf_map),
-                                          undefined_namespace=undefined_namespace)
+                                          undefined_namespace=undefined_namespace,
+                                          source_root=source_root)
                .serialize(format=fmt).encode("utf-8"))
     if export_to_memory:
         buffer = io.BytesIO(payload)
@@ -427,11 +439,16 @@ def _buffer(name, payload):
     return buffer
 
 
+def profile_names(value):
+    """The profiles of a PROFILE cell — a list, tuple or numpy array of
+    section keys, or one key as text; nulls and empty strings dropped."""
+    values = value if isinstance(value, (list, tuple, numpy.ndarray)) else (value,)
+    return [str(name) for name in values if not pandas.isna(name) and str(name)]
+
+
 def profile_text(value):
     """A PROFILE cell as text: the scoped section keys joined with ", " (display only)."""
-    if isinstance(value, (list, tuple)):
-        return ", ".join(map(str, value)) or None
-    return None if value is None or pandas.isna(value) else str(value)
+    return ", ".join(profile_names(value)) or None
 
 
 def _with_profile_text(violations):

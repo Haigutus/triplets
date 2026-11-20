@@ -21,8 +21,8 @@ from urllib.parse import quote
 import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
-from .locations import LOCATION_COLUMNS, locate_violations
-from .shacl_report import _expand, message_prefix, profile_text
+from .locations import LOCATION_COLUMNS, locate_violations, relative_sources
+from .shacl_report import _expand, message_prefix, profile_names, profile_text
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -80,10 +80,15 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     export_to_memory : bool, default False
         Return a BytesIO (with .name) instead of writing to disk.
     source_root : str or Path, optional
-        Applies when the locate pass runs (*sources* given, frame without
-        LOCATION_COLUMNS): a source path under this directory is written
-        relative to it (forward slashes) in ``artifactLocation.uri``. Paths
-        outside it, zip members and file-likes keep their names.
+        A file name that is an absolute path under this directory is
+        written relative to it (forward slashes); every other name is
+        written as given. One rule for every name in the log: SOURCE_URI
+        and TARGET_URI (located by *sources* here or already on the frame), the
+        INSTANCE_LABEL fallback, the run metadata's ``source`` and
+        ``references``. ``references`` of a validation run are file names
+        without directories, so they stay as they are. Absolute names
+        outside the directory are named in one logged warning (see
+        locations.relative_sources).
     """
     if any(source is not None for source in (data, shapes, rdf_map)) \
             and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
@@ -106,15 +111,20 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
 def build_sarif(violations, group=True, sources=None, source_root=None):
     """Violations frame → SARIF document dict (I/O only when *sources* is
     given — the locate_violations pass reads just the source files; a frame
-    already carrying LOCATION_COLUMNS is used as-is)."""
+    already carrying LOCATION_COLUMNS is not located again). *source_root*:
+    absolute file names under it are written relative to it (see
+    export_to_sarif)."""
     frame = violations.copy()
     if sources is not None and not set(LOCATION_COLUMNS) <= set(frame.columns):
-        frame = locate_violations(frame, sources, source_root)
+        frame = locate_violations(frame, sources)
     for column in (*ENRICHMENT_COLUMNS, *LOCATION_COLUMNS):   # tolerate bare frames
         if column not in frame.columns:
             frame[column] = pandas.NA
 
     meta = violations.attrs.get("validation", {})
+    frame, names = relative_sources(frame, {key: meta[key] for key in ("source", "references")
+                                            if meta.get(key)}, source_root)
+    meta = {**meta, **names}
     language = meta.get("language", "shacl")
     groups = [(key, rows.to_dict("records")) for key, rows
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
@@ -200,13 +210,6 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _profile_names(value):
-    """The profiles of a PROFILE cell: a list's items, a text cell as one name."""
-    if isinstance(value, (list, tuple)):
-        return [str(name) for name in value]
-    return [] if value is None or pandas.isna(value) else [str(value)]
-
-
 def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl", references=None):
     identifier = f"{split_iri(str(shape))[1]}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
@@ -225,7 +228,7 @@ def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shac
         name = f"{name} ({occurrences}×)"
     uri = str(shape) if not pandas.isna(shape) and str(shape).startswith("http") else None
     # GitHub filters alerts by tag: language, constraint, the rule's profiles
-    profiles = (profile for record in records for profile in _profile_names(record.get("PROFILE")))
+    profiles = (profile for record in records for profile in profile_names(record.get("PROFILE")))
     tags = list(dict.fromkeys(filter(None, (language, _value(constraint), *profiles))))[:_TAGS]
     return _prune({
         "id": identifier,

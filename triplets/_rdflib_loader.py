@@ -34,7 +34,9 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory", undef
         loaded graph. Optional (schema-optional principle): works without it.
     data_unchanged : bool, default False
         Assert the data object is unmutated since last hashed — reuses the
-        stored content digest for this exact object (see _content_key).
+        stored content digest for this exact object (see _content_key) — and
+        so is an rdf_map dict passed again with it (same object → stored
+        schema serialization reused).
     store : str, default "memory"
         rdflib store backend: "memory" (default rdflib Memory store),
         "oxigraph" (the SPARQL engine's cached in-memory pyoxigraph store

@@ -142,7 +142,8 @@ files = data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1, engine
 # class / enum / key its own namespace (triplets.iri.namespaces). Names the schema
 # does not declare — every name without one — are kept (export_undefined=True)
 # under undefined_namespace, http://triplets# by default; both are parameters,
-# the same pair export_to_cimxml has (where export_undefined defaults to False).
+# the same pair export_to_cimxml has (where export_undefined defaults to False,
+# and is treated as True when no rdf_map is given, with a warning).
 # N-Quads output is serialization-edition-independent — references are always
 # emitted as absolute urn:uuid: IRIs, so ED1 and ED2 produce identical, valid
 # input for any SPARQL engine (the ED1 "#uuid" fragment-reference pitfall is a

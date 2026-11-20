@@ -123,6 +123,20 @@ def test_cim_diff_exit_codes(monkeypatch, capsys):
     assert cim_diff(monkeypatch, capsys, EQ, "missing.xml")[0] == 2
 
 
+def test_cim_diff_zip_container_is_metadata(tmp_path, monkeypatch, capsys):
+    """The Distribution belongsToContainer row (the zip name) is left out with Distribution: the same
+    model in two zips of different names diffs equal; --keep-metadata shows the zip change."""
+    import zipfile
+    zips = [str(tmp_path / name) for name in ("first.zip", "second.zip")]
+    for path in zips:
+        with zipfile.ZipFile(path, "w") as bundle:
+            bundle.write(EQ, Path(EQ).name)
+    code, out = cim_diff(monkeypatch, capsys, *zips)
+    assert code == 0 and "belongsToContainer" not in out
+    code, out = cim_diff(monkeypatch, capsys, *zips, "--keep-metadata")
+    assert code == 1 and "belongsToContainer -> first.zip" in out and "belongsToContainer -> second.zip" in out
+
+
 def test_cim_diff_report_options(monkeypatch, capsys):
     """--stat prints only the counts; --include narrows the types; --context adds unchanged values."""
     _, full = cim_diff(monkeypatch, capsys, EQ, SSH)
@@ -156,8 +170,9 @@ def test_to_cim_without_rdf_map(source, caplog):
     """No schema: a warning, and every class written in the triplets namespace."""
     cim_spreadsheet.cim_to_spreadsheet(source, "model.xlsx")
     cim_spreadsheet.spreadsheet_to_cim("model.xlsx", "out", zip_output=False)
-    assert "--rdf-map" in caplog.text
-    assert len(list(Path("out").glob("*.xml"))) == 1
+    assert "No rdf_map given" in caplog.text
+    [written] = Path("out").glob("*.xml")
+    assert "<triplets:IdentifiedObject.name>" in written.read_text()
 
 
 def test_round_trip_with_metadata_writes_to_label(source, reference):
