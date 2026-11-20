@@ -184,3 +184,18 @@ def test_locate_violations_targets(xml_path, tmp_path):
     assert frame[["TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]].values.tolist() == [
         [xml_path, 7, '<cim:Breaker rdf:about="urn:uuid:bbbb">'], [None, None, None], [None, None, None]]
     assert frame["SOURCE_LINE"].tolist() == [3, 3, 5]
+
+
+def test_located_lines_stay_integers(xml_path):
+    """A line column mixing located and not located rows holds int and None,
+    not floats: csv and Excel write 7, not 7.0."""
+    violations = pandas.DataFrame([
+        ("aaaa", "Line.Breaker", "bbbb", "sh:class", "m", "Violation", "s", "bbbb"),
+        ("zzzz", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s", None),
+    ], columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "TARGET_ID"])
+    frame = locate_violations(violations, [xml_path])
+    for column, line in (("SOURCE_LINE", 3), ("TARGET_LINE", 7)):
+        assert frame[column].dtype == object
+        assert frame[column].tolist() == [line, None] and type(frame[column].iloc[0]) is int
+    assert frame[["SOURCE_LINE", "TARGET_LINE"]].to_csv(index=False).splitlines() \
+        == ["SOURCE_LINE,TARGET_LINE", "3,7", ","]

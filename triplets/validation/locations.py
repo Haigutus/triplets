@@ -126,12 +126,8 @@ def locate_violations(violations, sources):
     frame = violations.copy()
     positions = [position(object_id, key) + position(target)
                  for object_id, key, target in zip(frame["ID"], frame["KEY"], targets)]
-    if positions:
-        stamped = pandas.DataFrame(positions, columns=LOCATION_COLUMNS,
-                                   index=frame.index).astype(object)
-        frame[LOCATION_COLUMNS] = stamped.where(stamped.notna(), None)
-    else:
-        frame[LOCATION_COLUMNS] = None
+    # object columns: a line stays an int next to the None of a row not located
+    frame[LOCATION_COLUMNS] = pandas.DataFrame(positions, columns=LOCATION_COLUMNS, index=frame.index, dtype=object)
     return frame
 
 
