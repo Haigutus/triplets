@@ -252,6 +252,16 @@ def test_located_frame_is_not_read_for_referenced_objects(tmp_path):
     with pytest.raises(FileNotFoundError):             # the SARIF export does locate them
         located.shacl.to_sarif(sources=absent, export_to_memory=True)
 
+    # a frame not located: the pass looks for b1 only and stops after grid.xml — sub1,
+    # in the data but not in that file, does not make it open the missing source
+    other = tmp_path / "other.xml"
+    other.write_text(xml.read_text().replace('  <cim:Substation rdf:ID="_sub1"/>\n', ""))
+    enriched = triplets.validation.enrich(violations, data=data)
+    report = enriched.shacl.to_shacl_report(sources=[str(other), *absent], export_to_memory=True)
+    assert f"[context_location] {other} line 4" in report.getvalue().decode()
+    with pytest.raises(FileNotFoundError):
+        enriched.shacl.to_sarif(sources=[str(other), *absent], export_to_memory=True)
+
 
 def report_names(buffer):
     """(data file names, dcterms:references) of a serialized report: the file of

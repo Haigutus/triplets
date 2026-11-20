@@ -110,7 +110,7 @@ def locate(wanted, sources):
     return located
 
 
-def locate_violations(violations, sources):
+def locate_violations(violations, sources, targets=True):
     """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
 
     Per row (ID, KEY): the violated property element's own position when it
@@ -121,11 +121,12 @@ def locate_violations(violations, sources):
     frame without TARGET_ID gets nulls there. A definition is the first
     rdf:ID / rdf:about element with the id, in read order (see locate).
     SOURCE_URI / TARGET_URI are the source names as given, a zip member
-    ``<zip file name>/<member name>`` (see locate).
+    ``<zip file name>/<member name>`` (see locate). ``targets=False`` does
+    not search the referenced objects: the TARGET_* columns get nulls.
     """
     import pandas
 
-    targets = (violations["TARGET_ID"] if "TARGET_ID" in violations.columns
+    targets = (violations["TARGET_ID"] if targets and "TARGET_ID" in violations.columns
                else pandas.Series(None, index=violations.index, dtype=object))
     wanted = {}
     for object_id, key in zip(violations["ID"], violations["KEY"]):
@@ -162,7 +163,8 @@ def locate_missing(violations, sources, targets=True):
     referenced objects are in none of the sources read before; else the
     TARGET_* columns on the frame are kept. ``targets=False`` — an export
     that writes no referenced-object location — leaves that half out: the
-    sources are read for the SOURCE_* columns only. With neither half to
+    sources are read for the SOURCE_* columns only, and the referenced objects
+    are not searched in them. With neither half to
     locate, the sources are not read and the frame is returned as it is.
 
     Both tests are on the frame, not per row: a frame located in part (rows
@@ -175,7 +177,7 @@ def locate_missing(violations, sources, targets=True):
               and not ("TARGET_URI" in present and violations["TARGET_URI"].notna().any()))
     if not (source or target):
         return violations
-    frame = locate_violations(violations, sources)
+    frame = locate_violations(violations, sources, targets=targets)
     kept = [column for column, lacking in zip(LOCATION_COLUMNS, [source] * 3 + [target] * 3)
             if not lacking and column in present]
     frame[kept] = violations[kept]
