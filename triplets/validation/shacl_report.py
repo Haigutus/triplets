@@ -366,8 +366,9 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         ``sh:resultMessage``\ s (Description/Schema/Source).
     sources : optional
         The original CIM/XML files — runs the locate pass so each result
-        carries a "Source: file line N" message (location columns already
-        on the frame are kept, see locations.locate_missing).
+        carries a "Source: file line N" message. The sources are read only
+        when the frame lacks one of the three SOURCE_* columns; all three on
+        the frame are kept (see locations.locate_missing).
     path : str or Path, optional
         Output file. Default ``report.<ext>`` from the resolved format.
         Suffix selects format when ``format`` is None (``.xml``/``.rdf`` →
@@ -402,7 +403,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         locations.relative_sources).
     """
     if sources is not None:
-        violations = locate_missing(violations, sources)
+        violations = locate_missing(violations, sources, targets=False)
     fmt = _resolve_format(path, format)
     path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,

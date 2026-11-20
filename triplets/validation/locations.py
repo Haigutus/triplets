@@ -15,7 +15,8 @@ onto a violations frame, and it is exposed as
 ``violations.shacl.locate(sources=...)``. It stamps the source names as
 given. Both the SARIF and the sh:ValidationReport exports, given ``sources=``,
 run it through ``locate_missing``: only the columns the frame lacks are
-stamped. ``relative_sources`` is the one pass both report exports run for
+stamped, and the sh:ValidationReport export, which writes no referenced-object
+location, asks for the SOURCE_* columns only. ``relative_sources`` is the one pass both report exports run for
 ``source_root=``: every file name they write goes through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
@@ -132,7 +133,7 @@ def locate_violations(violations, sources):
     return frame
 
 
-def locate_missing(violations, sources):
+def locate_missing(violations, sources, targets=True):
     """locate_violations for a report export: stamp only what the frame lacks.
 
     The SOURCE_* columns are located unless the frame carries all three;
@@ -141,12 +142,18 @@ def locate_missing(violations, sources):
     (TARGET_ID) and none of them located (no TARGET_URI value) — it was
     located before context.enrich filled TARGET_ID, or never, or its
     referenced objects are in none of the sources read before; else the
-    TARGET_* columns on the frame are kept. With neither half to locate,
-    the sources are not read and the frame is returned as it is.
+    TARGET_* columns on the frame are kept. ``targets=False`` — an export
+    that writes no referenced-object location — leaves that half out: the
+    sources are read for the SOURCE_* columns only. With neither half to
+    locate, the sources are not read and the frame is returned as it is.
+
+    Both tests are on the frame, not per row: a frame located in part (rows
+    of a located and of a not located frame concatenated) counts as located,
+    and its rows without a position stay without one.
     """
     present = set(violations.columns)
     source = not set(LOCATION_COLUMNS[:3]) <= present
-    target = ("TARGET_ID" in present and violations["TARGET_ID"].notna().any()
+    target = (targets and "TARGET_ID" in present and violations["TARGET_ID"].notna().any()
               and not ("TARGET_URI" in present and violations["TARGET_URI"].notna().any()))
     if not (source or target):
         return violations

@@ -534,9 +534,11 @@ exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.
 (`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
 pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS` onto the frame;
 both exports run it automatically when given `sources=` and stamp only what the frame
-lacks: `SOURCE_*` columns already present are kept as they are, and the `TARGET_*`
-columns are located whenever the frame has a `TARGET_ID` and no located referenced
-object, so with `sources=` on the export `locate` may run before or after `enrich`:
+lacks: the three `SOURCE_*` columns, when all are on the frame, are kept as they are. The
+SARIF export also locates the `TARGET_*` columns whenever the frame has a `TARGET_ID` and
+no located referenced object, so with `sources=` on that export `locate` may run before or
+after `enrich`. The SHACL report writes no referenced-object location: it reads the
+sources only when the `SOURCE_*` columns are missing. The columns:
 
 | Columns | Content |
 |---------|---------|
