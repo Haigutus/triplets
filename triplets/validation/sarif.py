@@ -21,7 +21,7 @@ from urllib.parse import quote
 import pandas
 
 from .context import ENRICHMENT_COLUMNS, enrich
-from .locations import LOCATION_COLUMNS, locate_violations, relative_sources
+from .locations import LOCATION_COLUMNS, locate_missing, relative_sources
 from .shacl_report import _expand, message_prefix, profile_names, profile_text
 from ..iri import split_iri
 
@@ -110,13 +110,14 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
 
 def build_sarif(violations, group=True, sources=None, source_root=None):
     """Violations frame → SARIF document dict (I/O only when *sources* is
-    given — the locate_violations pass reads just the source files; a frame
-    already carrying LOCATION_COLUMNS is not located again). *source_root*:
+    given — the locate pass reads just the source files and stamps only the
+    location columns the frame lacks, see locations.locate_missing).
+    *source_root*:
     absolute file names under it are written relative to it (see
     export_to_sarif)."""
     frame = violations.copy()
-    if sources is not None and not set(LOCATION_COLUMNS) <= set(frame.columns):
-        frame = locate_violations(frame, sources)
+    if sources is not None:
+        frame = locate_missing(frame, sources)
     for column in (*ENRICHMENT_COLUMNS, *LOCATION_COLUMNS):   # tolerate bare frames
         if column not in frame.columns:
             frame[column] = pandas.NA

@@ -718,6 +718,45 @@ def test_related_location_through_the_exporter(tmp_path):
     assert context_message(by_id(document)["b2"]).startswith("[context_message] referenced object [sub1](1) found")
 
 
+def test_related_location_when_located_before_enriched(tmp_path):
+    """A frame located before enrich filled TARGET_ID carries null TARGET_*
+    columns: the export locates the referenced objects, and the log is the one
+    of a frame enriched first."""
+    violations, data, xml = reference_run(tmp_path)
+    expected = build_sarif(triplets.validation.enrich(violations, data=data, rdf_map=REFERENCE_SCHEMA),
+                           group=False, sources=[xml])
+    assert by_id(expected)["b2"]["relatedLocations"][0]["physicalLocation"]["region"]["startLine"] == 4
+
+    located = triplets.validation.locate_violations(violations, [xml])
+    assert located["TARGET_URI"].isna().all()
+    enriched = triplets.validation.enrich(located, data=data, rdf_map=REFERENCE_SCHEMA)
+    assert build_sarif(enriched, group=False, sources=[xml]) == expected
+
+    through_exporter = violations.shacl.locate(sources=[xml]).shacl.to_sarif(
+        data=data, rdf_map=REFERENCE_SCHEMA, group=False, sources=[xml], export_to_memory=True)
+    assert json.loads(through_exporter.read()) == expected
+
+
+def test_locate_pass_keeps_source_columns_on_the_frame(tmp_path):
+    """SOURCE_* columns on the frame are not located again by sources= — hand-stamped
+    ones stay, a row stamped as not located keeps its whole-file fallback (b4 is
+    on line 16) — while the referenced objects, not located yet, are."""
+    violations, xml = references(tmp_path)
+    stamped = violations.assign(SOURCE_URI=["custom.xml", "custom.xml", "custom.xml", None],
+                                SOURCE_LINE=[99, 99, 99, None], SOURCE_SNIPPET="by hand")
+    for frame in (stamped, stamped.assign(TARGET_URI=None, TARGET_LINE=None, TARGET_SNIPPET=None)):
+        results = by_id(build_sarif(frame, group=False, sources=[xml]))
+        assert results["b2"]["locations"][0]["physicalLocation"] == {
+            "artifactLocation": {"uri": "custom.xml"},
+            "region": {"startLine": 99, "endLine": 99, "snippet": {"text": "by hand"}}}
+        assert results["b4"]["locations"][0]["physicalLocation"]["region"] == {"startLine": 1, "endLine": 1}
+        assert results["b2"]["relatedLocations"][0]["physicalLocation"]["region"]["startLine"] == 4
+
+    located = triplets.validation.locate_violations(violations, [xml])     # nothing lacks: the sources are not read
+    assert build_sarif(located, group=False, sources=[str(tmp_path / "absent.xml")]) \
+        == build_sarif(located, group=False)
+
+
 def test_related_location_id_with_brackets_is_not_linked(tmp_path):
     """An id holding "[", "]" or "\\" would need escaped link text, which GitHub code
     scanning does not read: the related location is written, the line stays the TARGET."""

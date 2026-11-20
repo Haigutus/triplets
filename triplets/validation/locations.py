@@ -11,10 +11,11 @@ offending property element, not just the object.
 ``locate_violations`` is the public pass: it stamps ``LOCATION_COLUMNS``
 (SOURCE_URI, SOURCE_LINE, SOURCE_SNIPPET — the located line's text — and the
 same three TARGET_* columns for the referenced object of a reference finding)
-onto a violations frame — both the SARIF and the sh:ValidationReport exports call
-it when given ``sources=``, and it is exposed as
+onto a violations frame, and it is exposed as
 ``violations.shacl.locate(sources=...)``. It stamps the source names as
-given. ``relative_sources`` is the one pass both report exports run for
+given. Both the SARIF and the sh:ValidationReport exports, given ``sources=``,
+run it through ``locate_missing``: only the columns the frame lacks are
+stamped. ``relative_sources`` is the one pass both report exports run for
 ``source_root=``: every file name they write goes through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
@@ -128,6 +129,30 @@ def locate_violations(violations, sources):
                  for object_id, key, target in zip(frame["ID"], frame["KEY"], targets)]
     # object columns: a line stays an int next to the None of a row not located
     frame[LOCATION_COLUMNS] = pandas.DataFrame(positions, columns=LOCATION_COLUMNS, index=frame.index, dtype=object)
+    return frame
+
+
+def locate_missing(violations, sources):
+    """locate_violations for a report export: stamp only what the frame lacks.
+
+    The SOURCE_* columns are located when the frame does not carry them. The
+    TARGET_* columns are located when the frame has referenced objects
+    (TARGET_ID) and none of them located — it was located before
+    context.enrich filled TARGET_ID, or never. Location columns the frame
+    carries otherwise are kept as they are, hand-stamped ones too. With
+    nothing to locate, the sources are not read and the frame is returned
+    as it is.
+    """
+    present = set(violations.columns)
+    source = not set(LOCATION_COLUMNS[:3]) <= present
+    target = ("TARGET_ID" in present and violations["TARGET_ID"].notna().any()
+              and not ("TARGET_URI" in present and violations["TARGET_URI"].notna().any()))
+    if not (source or target):
+        return violations
+    frame = locate_violations(violations, sources)
+    kept = [column for column, lacking in zip(LOCATION_COLUMNS, [source] * 3 + [target] * 3)
+            if not lacking and column in present]
+    frame[kept] = violations[kept]
     return frame
 
 

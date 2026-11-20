@@ -532,8 +532,10 @@ as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` —
 exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.1.0
 (`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
 pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS` onto the frame;
-both exports run it automatically when given `sources=`, or reuse the columns when
-already present (locate after `enrich`, so the referenced objects are located too):
+both exports run it automatically when given `sources=` and stamp only what the frame
+lacks: `SOURCE_*` columns already present are kept as they are, and the `TARGET_*`
+columns are located whenever the frame has a `TARGET_ID` and no located referenced
+object, so with `sources=` on the export `locate` may run before or after `enrich`:
 
 | Columns | Content |
 |---------|---------|
@@ -944,8 +946,10 @@ enrichment pass first (an already-enriched frame is used as-is).
   on the violated property element's line (or the object
   definition) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
-  A frame already carrying `LOCATION_COLUMNS` (from
-  `violations.shacl.locate(sources=...)`) is not located again. Without either,
+  Location columns already on the frame (from
+  `violations.shacl.locate(sources=...)`) are kept; the pass stamps only
+  what the frame lacks and does not read the sources when nothing is
+  lacking. Without either,
   `artifactLocation.uri` falls back to the enrichment-traced file label,
   region-less. Positions are whole lines (1-based): RDF serializations put
   one statement per line, and a start-only region cannot be displayed by
