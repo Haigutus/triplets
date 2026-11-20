@@ -19,7 +19,7 @@ namespace + local name of any IRI      ``split_iri``                   —
 One split, :func:`split_iri`, underlies every name. Two policies sit on top: a
 *name* (KEY, class, enum value) always drops its namespace — the schema restores it;
 a *node* (ID, reference) drops only what a convention restores (:func:`local_id`:
-``urn:uuid:``, ``#_``, ``_``) and otherwise stays whole. The local form is for people
+``urn:uuid:``, ``#_``, ``#``, ``_``) and otherwise stays whole. The local form is for people
 working on imported data; where local names collide (``type`` is both
 ``rdf:type`` and ``dcterms:type``), only the absolute form is exact.
 
@@ -66,7 +66,7 @@ DESCRIPTION_TYPE = "Description"
 exported as ``rdf:Description`` in CIM XML and as no ``rdf:type`` in N-Quads."""
 
 UUID_PREFIX = "urn:uuid:"
-ID_PREFIXES = ("urn:uuid:", "#_", "_")           # longest first; exactly one is stripped
+ID_PREFIXES = ("urn:uuid:", "#_", "#", "_")      # longest first; exactly one is stripped ("#x" references rdf:ID="x")
 URI_PREFIXES = ("http://", "https://", "urn:")
 
 # Flavors consume ``.pattern`` — keep case and anchors inside the pattern text,
@@ -96,7 +96,7 @@ IRI_ESCAPE_RE = re.compile("|".join(IRI_ESCAPES.values()))
 # ── local (schema-free) ──────────────────────────────────────────────────────
 
 def local_id(text):
-    """``urn:uuid:x`` / ``#_x`` / ``_x`` → ``x``. One prefix, longest first. None → None."""
+    """``urn:uuid:x`` / ``#_x`` / ``#x`` / ``_x`` → ``x``. One prefix, longest first. None → None."""
     if text is None:
         return None
     text = str(text)

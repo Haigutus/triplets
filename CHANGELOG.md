@@ -233,6 +233,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`rdf:resource="#x"` references `rdf:ID="x"`** — `iri.local_id` strips one of
+  `urn:uuid:`, `#_`, `#`, `_` (longest first), where a bare `#` stayed: a file whose IDs
+  have no underscore (`rdf:ID="SS1"`, `rdf:resource="#SS1"`) parsed to the ID `SS1` and
+  the reference VALUE `#SS1`, which matched nothing and was exported as `#_#SS1`. All
+  parser engines, `read_nquads` and the pandas / polars / DuckDB `local_id` follow
+  `iri.ID_PREFIXES`. An `rdf:about="#Name"` ID parses to `Name` too: RDFS vocabularies,
+  whose IDs are `#Name`, keep their IRIs with `local_resources=False`, as `rdfs_tools`
+  parses them.
 - **`export_to_cimxml` raises `ValueError` for an unsupported `export_type`**, before any
   work; it logged "Not supported option" and returned an empty list.
 - **`iri.key_types(rdf_map)` returns name → dict**: `{"type": …}` plus `stereotype` /

@@ -171,7 +171,7 @@ in `tests/test_iri.py`).
 
 | column | shape | rule (`triplets.iri`) |
 |---|---|---|
-| `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `_` (longest first) |
+| `ID` | bare UUID / bare name | `local_id`: strip exactly **one** of `urn:uuid:`, `#_`, `#`, `_` (longest first; `rdf:resource="#x"` references `rdf:ID="x"`) |
 | `KEY` | `Class.attr` or `Type` | element tag local name (N-Quads / SPARQL: `local_key`, the `split_iri` local name — `dcterms:issued` → `issued`) |
 | `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_value(…, "class")`) |
 | `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then an `http(s)` IRI with `#` → its `split_iri` local name (`…#c/d` → `d`); without `#`, or a namespace IRI ending in `#` / `/`, it stays whole |
@@ -244,7 +244,7 @@ Deviations between the importers and exporters that are known and not planned:
 - **`http(s)` IRIs as CIM XML IDs do not join.** `rdf:about="http://x#L1"` keeps the
   whole IRI as `ID`, `rdf:resource="http://x#L1"` shortens to `L1` (the parser sees
   one file at a time, not every subject). `read_nquads` and CONSTRUCT keep such
-  references whole. CIM IDs are `urn:uuid:` / `#_` / `_` forms.
+  references whole. CIM IDs are `urn:uuid:` / `#_` / `#` / `_` forms.
 - **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
   as `<urn:uuid:b0>`, a named node. With `local_resources=False`, `rdf:nodeID`
   labels stay as written.

@@ -72,7 +72,7 @@ function for the column:
 One split, `split_iri` (last `#` or `/`, else a URN's last `:`; lossless), and two
 policies on top: a **name** (KEY, class, enum value) always drops its namespace —
 the schema restores it; a **node** (ID, reference) drops only what a convention
-restores (`local_id`: `urn:uuid:`, `#_`, `_`) and otherwise stays whole. Without
+restores (`local_id`: `urn:uuid:`, `#_`, `#`, `_`) and otherwise stays whole. Without
 a schema `local_value` guesses: an `http(s)` IRI with `#` is a name, anything else
 a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
 `iri.value_types`. SHACL terms use the rule of the column they land on: paths →
