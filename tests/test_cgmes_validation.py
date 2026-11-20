@@ -124,6 +124,18 @@ def test_references_against_the_other_loaded_instances(engine):
     assert set(zip(v["ID"], v["VIOLATION_TYPE"], v["VALUE"])) == {("b2", "rdfs:range", "b1")}
 
 
+def test_references_name_the_schema_file(tmp_path):
+    """The run metadata names the schema file validate_by_header was given ("rdf_map" for
+    a dict), for the schema and the reference runs, also when no instance resolves."""
+    path = tmp_path / "schema.json"
+    path.write_text(json.dumps(SCHEMA))
+    rows = [("h1", "keyword", "EQ", "eq")] + breaker("b1", *OK)
+    for rdf_map, name in ((path, "schema.json"), (str(path), "schema.json"), (SCHEMA, "rdf_map")):
+        for data in (rows, breaker("b1", *OK)):               # header, no header
+            v = cgmes_tools.validate_by_header(frame(data), rdf_map, references=True, engine="pandas")
+            assert v.attrs["validation"]["references"] == [name]
+
+
 def test_severity_reaches_both_runs(engine):
     rows = [("h1", "keyword", "EQ", "eq")] + breaker("b1", ("IdentifiedObject.mRID", "b1"),
                                                      ("Equipment.EquipmentContainer", "ghost"))

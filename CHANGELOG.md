@@ -504,6 +504,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   root element and the `rdf:` attributes take the prefix the map binds to the RDF
   namespace, where the root was always written as `rdf:RDF`; a map without the RDF
   namespace gets `xmlns:rdf` declared, where the `rdf:` prefix was left undeclared.
+- **`cgmes_tools.validate_by_header` reports the schema file name.** The run metadata
+  `references` held `"rdf_map"` for a schema given as a path; they hold the file name, as
+  with `validate_schema`, and `"rdf_map"` for a dict. A run where no instance resolves a
+  profile has `references` too.
 - **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
   list column after a polars → pandas conversion) is read as its profiles — before, an
   array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as
