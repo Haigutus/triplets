@@ -509,7 +509,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **An open file handle in `sources=` is read from its start by every locate pass**
   (`locate`, `to_sarif`, `to_shacl_report`) — a seekable handle is rewound before it is
   read. Before, the second pass over one handle read nothing: a second export had no line
-  positions, without an error.
+  positions, without an error. A file-like source that gives no bytes (a stream that cannot
+  be rewound, in its second pass) is named in a logged warning.
 - **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
   list column after a polars → pandas conversion) is read as its profiles — before, an
   array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as

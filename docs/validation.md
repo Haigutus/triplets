@@ -951,7 +951,9 @@ enrichment pass first (an already-enriched frame is used as-is).
 - RDF objects carry no text coordinates through the triplets frame:
   results always point at the model via `logicalLocations` (`Type/ID` +
   object name). Passing `sources=` (the original CIM/XML files — paths,
-  zips or file-likes) runs the shared `locate_violations` pass
+  zips or file-likes; an open file handle is read from its start by every
+  pass, a stream that cannot be rewound serves one pass and the next one
+  logs a warning for it) runs the shared `locate_violations` pass
   (`validation/locations.py`) and adds a fully bounded
   whole-line `physicalLocation.region` (`startLine` == `endLine`)
   on the violated property element's line (or the object

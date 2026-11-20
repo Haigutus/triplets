@@ -53,6 +53,28 @@ def test_first_definition_wins(tmp_path, xml_path):
     assert located["aaaa"]["uri"] == xml_path
 
 
+def test_file_like_without_seekable_and_spent_stream(xml_path, caplog):
+    """A source with only read() and a name is read as it is. A stream that
+    cannot be rewound serves one pass: the second finds nothing and one
+    warning names the source."""
+    class Reader:
+        name = "reader.xml"
+
+        def __init__(self):
+            self.stream = io.BytesIO(XML)
+
+        def read(self):
+            return self.stream.read()
+
+    reader = Reader()
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        assert locate({"aaaa": set()}, [reader])["aaaa"]["startLine"] == 3
+        assert not caplog.records
+        assert locate({"aaaa": set()}, [reader]) == {}
+    assert [record.getMessage() for record in caplog.records] \
+        == ["Nothing to read from source reader.xml: no object is located in it"]
+
+
 def test_zip_member(tmp_path):
     archive = tmp_path / "grid.zip"
     with zipfile.ZipFile(archive, "w") as bundle:

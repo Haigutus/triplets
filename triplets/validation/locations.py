@@ -248,12 +248,16 @@ def _read(source):
     A zip member is named ``<zip file name>/<member name>`` (its
     ``.container``): a relative name that no file on disk has. A seekable
     file-like is read from its start, so one open handle serves every pass it
-    is given to."""
+    is given to; a file-like that gives no bytes (a stream that cannot be
+    rewound, read before) is named in a warning."""
     if hasattr(source, "read"):
-        if source.seekable():
+        if getattr(source, "seekable", lambda: False)():
             source.seek(0)
         name = str(getattr(source, "name", "<memory>"))
         container = getattr(source, "container", None)
-        return (f"{container}/{name}" if container else name), source.read()
+        uri, text = (f"{container}/{name}" if container else name), source.read()
+        if not text:
+            logger.warning("Nothing to read from source %s: no object is located in it", uri)
+        return uri, text
     with open(source, "rb") as file:
         return str(source), file.read()
