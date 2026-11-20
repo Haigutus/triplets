@@ -109,9 +109,11 @@ def generate_xml(instance_data,
             Column key used to identify object class/type in the triplet data.
         export_undefined : bool, default False
             If True, also export classes and attributes without a schema definition
-            (internal structures like Distribution/NamespaceMap) under the
-            http://triplets# namespace. Off by default — normal exports carry
+            (internal structures like Distribution/NamespaceMap) under
+            ``undefined_namespace``. Off by default — normal exports carry
             only schema-defined content.
+        undefined_namespace : str, default "http://triplets#"
+            Namespace for the undefined names ``export_undefined`` writes.
         comment : str, optional
             Optional comment to insert at the top of the XML output (as XML comment).
         datatypes : bool, default False
