@@ -779,6 +779,18 @@ def test_locate_pass_keeps_source_columns_on_the_frame(tmp_path):
         == build_sarif(located, group=False)
 
 
+def test_related_location_without_target_text_has_no_message(tmp_path):
+    """A frame carrying TARGET_ID and TARGET_URI but no TARGET text (not what enrich
+    writes): the related location has no message."""
+    violations, xml = references(tmp_path)
+    result = by_id(build_sarif(violations.assign(TARGET=None), group=False, sources=[xml]))["b2"]
+    assert result["relatedLocations"] == [
+        {"id": 1, "logicalLocations": logical("sub1"),
+         "physicalLocation": {"artifactLocation": {"uri": quote(xml, safe="/")},
+                              "region": {"startLine": 4, "endLine": 4,
+                                         "snippet": {"text": '<cim:Substation rdf:ID="_sub1">'}}}}]
+
+
 def test_related_location_id_with_brackets_is_not_linked(tmp_path):
     """An id holding "[", "]" or "\\" would need escaped link text, which GitHub code
     scanning does not read: the related location is written, the line stays the TARGET."""

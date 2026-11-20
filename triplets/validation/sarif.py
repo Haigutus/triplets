@@ -466,15 +466,16 @@ def _location(record, columns=_FOCUS):
 def _related(records):
     """{TARGET_ID: related location} for the reference findings among *records*
     whose referenced object the locate pass found (TARGET_URI set) — one per
-    distinct object, ids 1..n in order, the TARGET text as its message. GitHub
-    code scanning rejects an upload with a related location that has no
-    physicalLocation, so a referenced object not located gets none."""
+    distinct object, ids 1..n in order, the TARGET text (when the row has one)
+    as its message. GitHub code scanning rejects an upload with a related
+    location that has no physicalLocation, so a referenced object not located
+    gets none."""
     related = {}
     for record in records:
         target = _value(record["TARGET_ID"])
         if target is not None and target not in related and not pandas.isna(record["TARGET_URI"]):
-            related[target] = {"id": len(related) + 1, "message": {"text": str(record["TARGET"])},
-                               **_location(record, _TARGET)}
+            related[target] = _prune({"id": len(related) + 1, "message": _text(record["TARGET"]),
+                                      **_location(record, _TARGET)})
     return related
 
 
