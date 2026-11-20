@@ -495,6 +495,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`cython_pugixml` CIM XML export: a schema namespace the file's namespace map does not
+  bind.** Elements of that namespace were written without a prefix, so in no namespace —
+  e.g. every `cim:` class and key of a file binding `cim:` to CIM16 exported against a
+  CIM100 schema, or one `entsoe:` key in a file that does not declare the prefix. The
+  engine now writes them under a generated prefix (`ns0`, `ns1`, …) declared on the
+  `rdf:RDF` root, only when used; the names equal those of the `python_lxml` engine. The
+  root element and the `rdf:` attributes take the prefix the map binds to the RDF
+  namespace, where the root was always written as `rdf:RDF`; a map without the RDF
+  namespace gets `xmlns:rdf` declared, where the `rdf:` prefix was left undeclared.
 - **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
   list column after a polars → pandas conversion) is read as its profiles — before, an
   array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as

@@ -17,7 +17,7 @@ import pytest
 import triplets  # noqa: F401
 from triplets import export
 from triplets.export_schema import schemas
-from triplets.iri import load_rdf_map
+from triplets.iri import RDF_NS, load_rdf_map
 
 from _parity import (
     REALGRID_SKIP_REASON, REALGRID_ZIP, SKIP_REASON, SVEDALA_DIR, SVEDALA_FILES,
@@ -215,6 +215,46 @@ def test_cimxml_of_zipped_input_unchanged(tmp_path, engine):
     zipped = pandas.read_RDF([str(archive)])
     assert set(zipped.loc[zipped["KEY"] == "belongsToContainer", "VALUE"]) == {"Svedala.zip"}
     assert exported(zipped) == exported(pandas.read_RDF(members))
+
+
+# ── a schema namespace the file does not bind ─────────────────────────────────
+def test_cimxml_schema_namespace_unbound_in_the_file():
+    """minimal_cim.xml binds cim: to CIM16; exported against the CIM100 schema, both engines
+    write the same expanded names — no element or attribute loses its namespace."""
+    from lxml import etree
+    _require(FORMATS["cimxml"], "python_lxml", "cython_pugixml")
+    data = pandas.read_RDF([str(Path(__file__).parent / "data" / "minimal_cim.xml")])
+
+    def expanded(engine):
+        file, = export.export_to_cimxml(data, rdf_map=RDF_MAP, engine=engine, export_type="xml_per_instance",
+                                        export_to_memory=True)
+        return [(element.tag, sorted(element.attrib.items()), (element.text or "").strip())
+                for element in etree.fromstring(file.getvalue()).iter()]
+
+    names = expanded("cython_pugixml")
+    assert names == expanded("python_lxml")
+    assert ("{http://iec.ch/TC57/CIM100#}Substation", [(f"{{{RDF_NS}}}ID", "_SS1")], "") in names
+    assert all(name.startswith("{") for tag, attributes, _ in names for name in (tag, *dict(attributes)))
+
+
+def test_cimxml_namespace_map_without_rdf():
+    """A namespace map that leaves out the RDF namespace: both engines declare it."""
+    from lxml import etree
+    _require(FORMATS["cimxml"], "python_lxml", "cython_pugixml")
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.name", "B1", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+    def expanded(engine):
+        file, = export.export_to_cimxml(data, namespace_map={"cim": "http://iec.ch/TC57/CIM100#"},
+                                        undefined_namespace="http://iec.ch/TC57/CIM100#", engine=engine,
+                                        export_type="xml_per_instance", export_to_memory=True)
+        return [(element.tag, sorted(element.attrib.items()), (element.text or "").strip())
+                for element in etree.fromstring(file.getvalue()).iter()]
+
+    assert expanded("cython_pugixml") == expanded("python_lxml") == [
+        (f"{{{RDF_NS}}}RDF", [], ""),
+        ("{http://iec.ch/TC57/CIM100#}Breaker", [(f"{{{RDF_NS}}}about", "urn:uuid:b1")], ""),
+        ("{http://iec.ch/TC57/CIM100#}IdentifiedObject.name", [], "B1")]
 
 
 # ── Test 2: timing on RealGrid (opt-in via -m performance) ────────────────────

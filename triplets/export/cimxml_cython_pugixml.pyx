@@ -8,6 +8,8 @@ dictionary-encoded), builds the XML tree via pugixml C++ DOM, then
 serializes. String data flows from Arrow buffers through C++ string_views
 into pugixml nodes.
 """
+from itertools import chain, count
+
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.memory cimport shared_ptr
@@ -97,6 +99,7 @@ cdef extern from *:
         std::string language;    // xml:lang tag of a literal, or ""
         bool is_ref;             // true if has attrib (resource/ID)
         bool needs_enum_lookup;  // true if value_prefix was empty on a ref
+        int generated_prefix;    // index of the generated prefix of the tag, or -1
     };
 
     // Class definition resolved at setup time
@@ -104,6 +107,7 @@ cdef extern from *:
         std::string tag;         // "cim:ACLineSegment"
         std::string id_attr;     // "rdf:ID"
         std::string id_prefix;   // "_"
+        int generated_prefix;    // index of the generated prefix of the tag, or -1
     };
     """
     cdef cppclass string_writer(xml_writer):
@@ -124,11 +128,13 @@ cdef extern from *:
         string language
         cbool is_ref
         cbool needs_enum_lookup
+        int generated_prefix
 
     cdef cppclass ClassDef:
         string tag
         string id_attr
         string id_prefix
+        int generated_prefix
 
 
 # std::string_view (minimal — declared by hand, not via a Cython stdlib pxd)
@@ -175,6 +181,9 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         columns, optionally dictionary-encoded (any index width)
     rdf_map : dict
     namespace_map : dict
+        prefix → namespace, declared on the root. A namespace of the schema that it
+        leaves unbound is written under a generated prefix (rdf for the RDF
+        namespace, else ns0, ns1, …), declared on the root when used.
     instance_rdf_map : dict
     file_name : str
     class_KEY : str
@@ -221,26 +230,42 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     for prefix, uri in namespace_map.items():
         uri_to_prefix[uri] = prefix
 
-    def _make_prefixed(ns, local_name):
-        if ns is None:
-            return local_name
-        p = uri_to_prefix.get(ns)
+    # A namespace the map leaves unbound gets a generated prefix (rdf for the RDF namespace,
+    # else ns0, ns1, …), declared on the root when an element or attribute is written with it.
+    RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    cdef list generated = []           # (prefix, namespace)
+    cdef set generated_used = set()    # indexes in *generated*
+
+    def _prefix_index(ns):
+        """Index in *generated* of the prefix of *ns*; -1 when the map binds it or there is none."""
+        if not ns or ns in uri_to_prefix:
+            return -1
+        for index, (_, uri) in enumerate(generated):
+            if uri == ns:
+                return index
+        taken = {*namespace_map, *(prefix for prefix, _ in generated)}
+        names = chain(("rdf",) if ns == RDF_NS else (), map("ns{}".format, count()))
+        generated.append((next(name for name in names if name not in taken), ns))
+        return len(generated) - 1
+
+    def _make_prefixed(ns, local_name, used=False):
+        """``prefix:local_name``; *used*: the name is written, so a generated prefix is declared."""
+        index = _prefix_index(ns)
+        if index >= 0 and used:
+            generated_used.add(index)
+        p = generated[index][0] if index >= 0 else uri_to_prefix.get(ns)
         return f"{p}:{local_name}" if p else local_name
 
-    # rdf:about / rdf:Description by the prefix the map binds to the RDF namespace
-    rdf_prefix = uri_to_prefix.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#") or "rdf"
-    cdef string rdf_about_attr = f"{rdf_prefix}:about".encode('utf-8')
-    cdef string rdf_datatype_attr = f"{rdf_prefix}:datatype".encode('utf-8')
+    # rdf:RDF / rdf:about / rdf:datatype / rdf:Description by the prefix of the RDF namespace
+    cdef string rdf_about_attr = _make_prefixed(RDF_NS, "about", used=True).encode('utf-8')
+    cdef string rdf_datatype_attr = _make_prefixed(RDF_NS, "datatype", used=True).encode('utf-8')
     key_datatypes = key_datatypes or {}
     key_languages = key_languages or {}
 
     def _parse_attrib(full_attrib):
         if full_attrib.startswith("{"):
             ns_end = full_attrib.index("}")
-            ns = full_attrib[1:ns_end]
-            local = full_attrib[ns_end + 1:]
-            p = uri_to_prefix.get(ns)
-            return f"{p}:{local}" if p else local
+            return _make_prefixed(full_attrib[1:ns_end], full_attrib[ns_end + 1:], used=True)
         return full_attrib
 
     # Pre-build C++ ClassDef and TagDef lookup maps
@@ -259,12 +284,14 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             continue
         if defn.get("type") == "Class":
             cd.tag = _make_prefixed(defn["namespace"], key).encode('utf-8')
+            cd.generated_prefix = _prefix_index(defn["namespace"])
             cd.id_attr = _parse_attrib(defn["attrib"]["attribute"]).encode('utf-8')
             cd.id_prefix = defn["attrib"]["value_prefix"].encode('utf-8')
             class_defs_idx[key] = class_defs_vec.size()
             class_defs_vec.push_back(cd)
         elif defn.get("namespace"):
             td.tag = _make_prefixed(defn["namespace"], key).encode('utf-8')
+            td.generated_prefix = _prefix_index(defn["namespace"])
             attrib = defn.get("attrib")
             td.text_prefix = defn.get("text", "").encode('utf-8')
             td.datatype = (key_datatypes.get(key) or "").encode('utf-8')
@@ -297,7 +324,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         comment_bytes = comment.encode('utf-8')
         doc.append_child(node_comment).set_value(<const char*>comment_bytes)
 
-    rdf_root = doc.append_child(b"rdf:RDF")
+    cdef bytes root_tag = _make_prefixed(RDF_NS, "RDF", used=True).encode('utf-8')
+    rdf_root = doc.append_child(<const char*>root_tag)
     for prefix, uri in namespace_map.items():
         ns_attr_name = f"xmlns:{prefix}".encode('utf-8')
         uri_bytes = uri.encode('utf-8')
@@ -336,6 +364,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         if py_cd_idx is not None:
             cd_idx = <int>py_cd_idx
             obj_node = rdf_root.append_child(class_defs_vec[cd_idx].tag.c_str())
+            if class_defs_vec[cd_idx].generated_prefix >= 0:
+                generated_used.add(class_defs_vec[cd_idx].generated_prefix)
             # Build id value: prefix + id
             s_combined = class_defs_vec[cd_idx].id_prefix
             s_combined.append(s_id)
@@ -343,8 +373,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         elif export_undefined:
             # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
             py_class = s_value.decode('utf-8')      # "Description": mirror of triplets.iri.DESCRIPTION_TYPE
-            s_tag = (f"{rdf_prefix}:Description" if py_class == "Description"
-                     else _make_prefixed(undefined_namespace, py_class)).encode('utf-8')
+            s_tag = (_make_prefixed(RDF_NS, "Description", used=True) if py_class == "Description"
+                     else _make_prefixed(undefined_namespace, py_class, used=True)).encode('utf-8')
             obj_node = rdf_root.append_child(s_tag.c_str())
             s_combined.assign(b"urn:uuid:")
             s_combined.append(s_id)
@@ -400,6 +430,8 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             s_combined.append(s_value)
 
             attr_node = store.append_child_to(<int>py_store_idx, tag_defs_vec[td_idx].tag.c_str())
+            if tag_defs_vec[td_idx].generated_prefix >= 0:
+                generated_used.add(tag_defs_vec[td_idx].generated_prefix)
             if tag_defs_vec[td_idx].is_ref:
                 attr_node.append_attribute(tag_defs_vec[td_idx].attr_name.c_str()).set_value(s_combined.c_str())
             else:
@@ -409,7 +441,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                 if not tag_defs_vec[td_idx].language.empty():
                     attr_node.append_attribute(b"xml:lang").set_value(tag_defs_vec[td_idx].language.c_str())
         elif export_undefined:
-            s_tag = _make_prefixed(undefined_namespace, py_key).encode('utf-8')
+            s_tag = _make_prefixed(undefined_namespace, py_key, used=True).encode('utf-8')
             attr_node = store.append_child_to(<int>py_store_idx, s_tag.c_str())
             attr_node.append_child(node_pcdata).set_value(s_value.c_str())
             # key_datatypes / key_languages span all schema profiles: an undefined KEY of this instance can still be annotated
@@ -421,6 +453,12 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             if py_language:
                 language_bytes = py_language.encode('utf-8')
                 attr_node.append_attribute(b"xml:lang").set_value(<const char*>language_bytes)
+
+    for index in sorted(generated_used):
+        prefix, uri = generated[index]
+        ns_attr_name = f"xmlns:{prefix}".encode('utf-8')
+        uri_bytes = uri.encode('utf-8')
+        rdf_root.append_attribute(<const char*>ns_attr_name).set_value(<const char*>uri_bytes)
 
     # Serialize
     cdef string_writer writer
