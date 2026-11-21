@@ -383,10 +383,12 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                 class_defs_vec[cd_idx].tag = s_tag + class_defs_vec[cd_idx].tag
                 class_defs_vec[cd_idx].unbound = -1
             obj_node = rdf_root.append_child(class_defs_vec[cd_idx].tag.c_str())
-            # Build id value: prefix + id
-            s_combined = class_defs_vec[cd_idx].id_prefix
-            s_combined.append(s_id)
-            obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
+            if is_iri(s_id):                              # an absolute IRI is the ID itself: rdf:about, no prefix
+                obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_id.c_str())
+            else:                                         # the schema's attribute: prefix + id
+                s_combined = class_defs_vec[cd_idx].id_prefix
+                s_combined.append(s_id)
+                obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
         elif export_undefined:
             # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
             py_class = s_value.decode('utf-8')      # "Description": mirror of triplets.iri.DESCRIPTION_TYPE
@@ -395,7 +397,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             s_tag = (rdf_description if py_class == "Description"
                      else f"{undefined_prefix}:{py_class}" if undefined_prefix else py_class).encode('utf-8')
             obj_node = rdf_root.append_child(s_tag.c_str())
-            s_combined.assign(b"urn:uuid:")
+            s_combined.assign(b"" if is_iri(s_id) else b"urn:uuid:")
             s_combined.append(s_id)
             obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_combined.c_str())
         else:

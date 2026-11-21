@@ -509,7 +509,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `export_to_nquads` writes it. For a reference key with an empty `value_prefix` the VALUE
   was only looked up as an enumeration name, so `rdf:resource="http://www.w3.org/ns/dcat#Dataset"`
   was dropped, or written as `http://triplets#http://…` with `export_undefined=True`; under
-  a `value_prefix` the prefix was put before the IRI. Both engines.
+  a `value_prefix` the prefix was put before the IRI. An object ID that is an absolute
+  IRI is written as `rdf:about="<IRI>"`, where it took the class's ID attribute and
+  prefix (`rdf:about="urn:uuid:http://…"`). Both engines.
 - **`python_lxml` CIM XML export: a `Type` VALUE that names a schema entry which is not a
   `Class`** raised `KeyError: 'attrib'`; it is an undefined class, as in `cython_pugixml`.
   A KEY that names a `Class` entry is an undefined key.

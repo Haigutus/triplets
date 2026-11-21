@@ -356,6 +356,33 @@ def test_cimxml_reference_holding_an_absolute_iri(cimxml_engine):
     assert _flat_export(rows, cimxml_engine, export_undefined=True) == [*written[:3], undefined, *written[3:]]
 
 
+def test_cimxml_object_id_holding_an_absolute_iri(cimxml_engine):
+    """An ID that is an absolute IRI is written as rdf:about without the class's value prefix,
+    for a defined and an undefined class; a bare ID keeps the prefix."""
+    about, skos = f"{{{RDF_NS}}}about", "{http://www.w3.org/2004/02/skos/core#}"
+    rows = [("http://example.org/c1", "Type", "Concept"), ("c2", "Type", "Concept"),
+            ("urn:uuid:c3", "Type", "Concept"), ("http://example.org/o1", "Type", "Other")]
+    written = [(skos + "Concept", [(about, "http://example.org/c1")], ""), (skos + "Concept", [(about, "urn:uuid:c2")], ""),
+               (skos + "Concept", [(about, "urn:uuid:c3")], "")]
+    assert _flat_export(rows, cimxml_engine) == written
+    assert _flat_export(rows, cimxml_engine, export_undefined=True) == [
+        *written, ("{http://triplets#}Other", [(about, "http://example.org/o1")], "")]
+
+
+def test_cimxml_object_id_iri_replaces_rdf_id():
+    """A class the schema writes with rdf:ID takes rdf:about for an ID that is an absolute IRI."""
+    _require(FORMATS["cimxml"], "python_lxml", "cython_pugixml")
+    rows = [("h", "Model.profile", "http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0", "i1"),
+            ("http://example.org/s1", "Type", "Substation", "i1"), ("s2", "Type", "Substation", "i1")]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    expected = [(f"{{{CIM100}}}Substation", [(f"{{{RDF_NS}}}about", "http://example.org/s1")], ""),
+                (f"{{{CIM100}}}Substation", [(f"{{{RDF_NS}}}ID", "_s2")], "")]
+    for engine in ("python_lxml", "cython_pugixml"):
+        file, = export.export_to_cimxml(data, rdf_map=RDF_MAP, namespace_map={"rdf": RDF_NS, "cim": CIM100}, engine=engine,
+                                        export_type="xml_per_instance", export_to_memory=True)
+        assert _expanded(file)[1:] == expected
+
+
 def test_cimxml_type_naming_an_entry_that_is_no_class(cimxml_engine):
     """A Type VALUE naming a schema entry that is not a Class is an undefined class, and a KEY
     naming a Class entry an undefined key."""

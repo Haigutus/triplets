@@ -228,6 +228,9 @@ def generate_xml(instance_data,
                 logger.debug(f"{class_name} not Exported")
                 continue
 
+        if iri.is_iri(ID):                                   # an absolute IRI is the ID itself
+            id_name, id_value_prefix = f"{{{RDF_NS}}}about", ""
+
         # Create class element
         # logger.debug(class_namespace, class_name) # DEBUG
         rdf_object = E(_get_qname(class_namespace, class_name))
