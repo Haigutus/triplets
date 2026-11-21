@@ -105,17 +105,21 @@ def export_to_arrow(data):
     return _to_arrow(data, columns=list(REQUIRED_COLUMNS))
 
 
-def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
+def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None,
+                  string_to_number=False):
     """Export triplet DataFrame to CSV files.
 
     Auto-detects engine: polars if input is polars DataFrame, else pandas.
+    *string_to_number*: False writes every VALUE as its text, True the columns that
+    hold only numbers in the number's form.
     """
     if _flavor(data) not in ("pandas", "polars"):
         data = _to_pandas(data)          # arrow-backed dtypes — near zero-copy for arrow input
     engine = "polars" if _flavor(data) == "polars" else "pandas"
     logger.debug("format=csv, engine=%s (input flavor)", engine)
     _fn = _CSV.get(engine)[1].export_to_csv
-    return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory, single_file=single_file, base_filename=base_filename)
+    return _fn(data, path=path, multivalue=multivalue, export_to_memory=export_to_memory, single_file=single_file, base_filename=base_filename,
+               string_to_number=string_to_number)
 
 
 def export_to_nquads(data, path=None, rdf_map=None, engine="auto", export_to_memory=False,

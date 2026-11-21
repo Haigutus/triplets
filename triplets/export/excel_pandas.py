@@ -15,8 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 def _write_sheets(output, tableviews, apply_formatting):
-    """One sheet per tableview into *output*. Every value is a text cell: openpyxl
-    writes a text that starts with ``=`` as a formula, which reads back as no value."""
+    """One sheet per tableview into *output*. A text that starts with ``=`` stays a
+    text cell: openpyxl writes it as a formula, which reads back as no value."""
     from openpyxl.utils import get_column_letter
 
     with pandas.ExcelWriter(output, engine='openpyxl') as writer:
@@ -33,7 +33,8 @@ def _write_sheets(output, tableviews, apply_formatting):
                 sheet.freeze_panes = 'B2'
 
 
-def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True):
+def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True,
+                    string_to_number=False):
     """Export triplet data to Excel file(s), with each type on a separate sheet.
 
     Parameters
@@ -52,6 +53,11 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         Filename to use when single_file=True. If None, uses 'export.xlsx'.
     apply_formatting : bool, default True
         If True, apply column width and freeze panes formatting.
+    string_to_number : bool, default False
+        False writes every VALUE as a text cell with its text (``1.0`` stays ``1.0``
+        and reads back unchanged). True writes the columns that hold only numbers as
+        number cells, for sums and charts in Excel: the text form is not kept
+        (``1.0`` → ``1``, ``007`` → ``7``).
 
     Returns
     -------
@@ -62,7 +68,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         if filename is None:
             filename = 'export.xlsx'
 
-        tableviews = triplets_to_tableviews(data, string_to_number=False, multivalue=multivalue)
+        tableviews = triplets_to_tableviews(data, string_to_number=string_to_number, multivalue=multivalue)
         output = BytesIO()
         output.name = filename
 
@@ -88,7 +94,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
 
         for _, label in labels.iterrows():
             instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplets_to_tableviews(instance_data, string_to_number=False, multivalue=multivalue)
+            tableviews = triplets_to_tableviews(instance_data, string_to_number=string_to_number, multivalue=multivalue)
             file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
             output = BytesIO()
             output.name = file_name

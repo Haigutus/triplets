@@ -7,6 +7,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`string_to_number=` on `export_to_excel` and `export_to_csv`** (default `False`: every
+  VALUE is written as its text). `True` writes the columns that hold only numbers as
+  numbers — number cells in Excel, for sums and charts — and does not keep the text form
+  (`1.0` → `1`, `007` → `7`).
 - **One SARIF log for several validation runs** — `export_to_sarif` and `build_sarif` take
   a list of violations frames and write one run per frame, in order, each with the tool
   name, rules and run metadata of its own frame:
@@ -257,7 +261,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `522000000.0` as `522000000`, `0.10` as `0.1`, `007` as `7` (716 values of the emtiop
   IEEE39 case through `.xlsx`). Number cells in the Excel file are now text cells. The
   polars CSV export already wrote the text. `triplets_to_tableviews` (pandas, polars)
-  takes `string_to_number=` like the DuckDB one; its default stays `True`.
+  takes `string_to_number=` like the DuckDB one; its default stays `True`. It is a keyword
+  on all three, after `multivalue` (DuckDB had `string_to_number, multivalue` by position).
 - **`SOURCE_SHAPE` and the SARIF ruleId of schema findings, against 0.2.0.** `SOURCE_SHAPE`
   carries the scope in its namespace: `urn:triplets:schema:EMTIOP#ACLineSegment.ACLineSegment.r`
   (0.2.0: `urn:triplets:schema#EMTIOP:ACLineSegment.ACLineSegment.r`), every profile of a

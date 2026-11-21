@@ -13,7 +13,8 @@ from triplets.tools import triplets_to_tableviews
 logger = logging.getLogger(__name__)
 
 
-def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
+def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None,
+                  string_to_number=False):
     """Export triplet data to CSV files, with each type as a separate file.
 
     Parameters
@@ -30,11 +31,15 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
         If True, export all data using a single base filename.
     base_filename : str, optional
         Base filename when single_file=True. If None, uses 'export'.
+    string_to_number : bool, default False
+        False writes every VALUE as its text. True converts the columns that hold
+        only numbers to numbers first, so they are written in the number's form
+        (``007`` → ``7``).
     """
     if single_file:
         if base_filename is None:
             base_filename = 'export'
-        tableviews = triplets_to_tableviews(data, string_to_number=False, multivalue=multivalue)
+        tableviews = triplets_to_tableviews(data, string_to_number=string_to_number, multivalue=multivalue)
         exported_files = []
         for class_type, class_data in tableviews.items():
             file_name = '{}_{}.csv'.format(base_filename, class_type)
@@ -48,7 +53,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
         exported_files = []
         for _, label in labels.iterrows():
             instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplets_to_tableviews(instance_data, string_to_number=False, multivalue=multivalue)
+            tableviews = triplets_to_tableviews(instance_data, string_to_number=string_to_number, multivalue=multivalue)
             base_name = label.VALUE.split(".")[0]
             for class_type, class_data in tableviews.items():
                 file_name = '{}_{}.csv'.format(base_name, class_type)
