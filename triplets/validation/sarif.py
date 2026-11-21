@@ -11,6 +11,7 @@ RDF objects have no text coordinates, so results point at the model through
 ``artifactLocation`` when the enrichment pass can trace it. Passing
 data/shapes/rdf_map runs that pass automatically (see context.enrich).
 """
+import hashlib
 import io
 import os
 import json
@@ -156,9 +157,9 @@ def _run(violations, group, sources, source_root):
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
 
     rules, results = [], []
-    seen_ids = {}
+    shared = _shared_names(frame["SOURCE_SHAPE"], meta.get("shared_shape_names"))
     for (shape, constraint), records in groups:
-        rule = _rule(shape, constraint, records, seen_ids, occurrences=len(records) if group else None,
+        rule = _rule(shape, constraint, records, shared, occurrences=len(records) if group else None,
                      language=language, references=meta.get("references"))
         rule_index = len(rules)
         rules.append(rule)
@@ -234,22 +235,31 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _shape_name(shape):
-    """The shape part of a ruleId: the local name of a shape IRI; a schema shape keeps its
-    scope, so one class and key checked under two scopes are two rules
-    (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` → ``EQ:OP:Breaker.Switch.open``)."""
+def _shape_name(shape, shared=()):
+    """The shape part of a ruleId, from the shape IRI alone: its local name; a schema
+    shape keeps its scope, so one class and key checked under two scopes are two rules
+    (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` → ``EQ:OP:Breaker.Switch.open``).
+    A local name in *shared* — one that several shapes have — gets eight hex digits of
+    the IRI's SHA-1 (``AllowedClasses-property-1f0c9a2e``)."""
     if shape.startswith(SCHEMA_SHAPES):
         return shape.removeprefix(SCHEMA_SHAPES).replace("#", ":").lstrip(":")
-    return split_iri(shape)[1]
+    name = split_iri(shape)[1]
+    return f"{name}-{hashlib.sha1(shape.encode('utf-8')).hexdigest()[:8]}" if name in shared else name
 
 
-def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl", references=None):
-    identifier = f"{_shape_name(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
-    if identifier in seen_ids:                       # distinct shapes, same local name
-        seen_ids[identifier] += 1
-        identifier = f"{identifier}-{seen_ids[identifier]}"
-    else:
-        seen_ids[identifier] = 1
+def _shared_names(shapes, declared=None):
+    """The shape local names several shapes have: the *declared* ones of the run's
+    rule set (run metadata ``shared_shape_names`` — whether their findings are in the
+    frame or not) and those of two shapes in the frame (joined runs, frames without
+    metadata)."""
+    names = {}
+    for shape in shapes.dropna().astype(str).unique():
+        names.setdefault(_shape_name(shape), set()).add(shape)
+    return {*(declared or ()), *(name for name, found in names.items() if len(found) > 1)}
+
+
+def _rule(shape, constraint, records, shared=(), occurrences=None, language="shacl", references=None):
+    identifier = f"{_shape_name(str(shape), shared)}/{constraint}" if not pandas.isna(shape) else str(constraint)
 
     first = records[0]
     # the rule title — what GitHub shows as the alert name — names the

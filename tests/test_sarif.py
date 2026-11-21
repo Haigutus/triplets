@@ -942,3 +942,47 @@ def test_related_locations_schema_conformance(tmp_path):
         document = build_sarif(violations, group=group, sources=[xml])
         assert "relatedLocations" in json.dumps(document)
         jsonschema.validate(document, schema)
+
+
+# ── ruleIds of shapes that share a local name ─────────────────────────────────
+SAME_NAME = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix eq: <http://example.org/eq#> .
+@prefix ssh: <http://example.org/ssh#> .
+eq:Named-node a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:property eq:Named-property .
+eq:Named-property a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+ssh:Named-node a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:property ssh:Named-property .
+ssh:Named-property a sh:PropertyShape ; sh:path cim:IdentifiedObject.description ; sh:minCount 1 .
+cim:Long-node a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:property cim:Long-property .
+cim:Long-property a sh:PropertyShape ; sh:path cim:Conductor.length ; sh:minCount 1 .
+"""
+
+
+def rule_ids(violations):
+    """{SOURCE_SHAPE: ruleId} of a one-run log."""
+    return {rule["properties"]["sourceShape"]: rule["id"] for rule in build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"]}
+
+
+def test_rule_ids_of_shapes_sharing_a_name_do_not_depend_on_the_findings():
+    """A shape's ruleId comes from its IRI and the run's rule set: a name several shapes
+    have is told apart by a hash of the IRI, in any row order and whether the other
+    shape has findings or not; a name of one shape stays as it is."""
+    import hashlib
+    import rdflib
+    compiled = triplets.validation.compile(rdflib.Graph().parse(data=SAME_NAME, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(2), compiled, engine="pandas")
+    eq, ssh = "http://example.org/eq#Named-property", "http://example.org/ssh#Named-property"
+    expected = {shape: f"Named-property-{hashlib.sha1(shape.encode()).hexdigest()[:8]}/sh:minCount" for shape in (eq, ssh)}
+    expected["http://iec.ch/TC57/CIM100#Long-property"] = "Long-property/sh:minCount"
+    assert violations.attrs["validation"]["shared_shape_names"] == ["Named-property"]
+    assert rule_ids(violations) == expected
+    assert rule_ids(violations.iloc[::-1]) == expected
+    only_ssh = violations[violations["SOURCE_SHAPE"] != eq]              # the eq findings are fixed
+    assert rule_ids(only_ssh) == {shape: rule for shape, rule in expected.items() if shape != eq}
+    # joined runs and frames without metadata: shapes of one name in the frame are told apart
+    bare = pandas.DataFrame(violations)
+    bare.attrs = {}
+    assert rule_ids(bare) == expected
+    document = build_sarif(violations)
+    assert "shared_shape_names" not in document["runs"][0]["properties"]

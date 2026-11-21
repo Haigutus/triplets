@@ -556,6 +556,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **SARIF ruleIds of shapes that share a local name no longer depend on the findings.**
+  Shapes of one local name in different namespaces (`AllowedClasses-property` of each
+  profile) got a counter in order of appearance (`AllowedClasses-property/sh:in-11`), so
+  a fixed alert handed its ruleId to the next shape. Such a shape's ruleId now carries
+  eight hex digits of the SHA-1 of its IRI (`AllowedClasses-property-1f0c9a2e/sh:in`),
+  the same in every run of the shape files, in any row order, with or without findings
+  of the other shapes (`attrs["validation"]["shared_shape_names"]` lists the names of the
+  compiled shapes). The ruleIds of all other shapes are unchanged; the alerts of the
+  shapes that had a counter, and of the first shape of each such name, close and re-open
+  once. Schema ruleIds hold the scope and never needed the counter.
 - **Every `sh:sparql` solution is a finding, with its `sh:message` filled in.**
   Solutions that differed only in a variable other than `?value` were reported once,
   and `{?name}` / `{$name}` in the message stayed as written (APL `ClassCount`: 9

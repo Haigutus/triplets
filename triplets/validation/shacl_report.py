@@ -476,9 +476,10 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
 # ── tabular exports (csv / excel) — same metadata as the RDF/SARIF reports ───
 
 # run metadata the SARIF run properties and the csv / excel sidecars leave out:
-# the violated shapes' triples (the SHACL report embeds them) and the per-rule-set
-# counts concat_violations keeps (the totals are node_shapes / constraints)
-UNEXPORTED = ("source_shapes", "rule_sets")
+# the violated shapes' triples (the SHACL report embeds them), the per-rule-set
+# counts concat_violations keeps (the totals are node_shapes / constraints) and
+# the shape names the SARIF ruleIds tell apart
+UNEXPORTED = ("source_shapes", "rule_sets", "shared_shape_names")
 
 
 def _meta_rows(meta):

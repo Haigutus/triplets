@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
@@ -54,7 +55,7 @@ import pandas
 
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, load_rdf_map
+from ..iri import CIM_NS, load_rdf_map, split_iri
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_ir import MESSAGE_VARIABLE, _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
@@ -536,10 +537,20 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "skipped_shapes": skipped_shapes,
         "relaxed_constraints": list(notes["relaxed_constraints"]),
         "skipped_components": skipped_components,
+        "shared_shape_names": _shared_shape_names(compiled),
         # the violated shapes' definitions as N-Triples — the SHACL report embeds
         # them; SARIF properties and the csv/excel sidecars skip this key
         "source_shapes": _source_shapes(violations, compiled),
     }
+
+
+def _shared_shape_names(compiled):
+    """The local names that several shape IRIs of the compiled shapes have, sorted —
+    of every shape, switched off for this run or not, so the SARIF ruleId of a shape
+    (sarif._shape_name) is the same in every run of the shape files."""
+    shapes = (compiled.base or compiled).ir["shape_id"].dropna().unique()
+    names = Counter(split_iri(shape)[1] for shape in shapes)
+    return sorted(name for name, count in names.items() if count > 1)
 
 
 def _iso(moment):
