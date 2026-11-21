@@ -13,10 +13,13 @@ offending property element, not just the object.
 same three TARGET_* columns for the referenced object of a reference finding)
 onto a violations frame, and it is exposed as
 ``violations.shacl.locate(sources=...)``. It stamps the source names as
-given. Both the SARIF and the sh:ValidationReport exports, given ``sources=``,
-run it through ``locate_missing``: only the columns the frame lacks are
-stamped. ``relative_sources`` is the one pass both report exports run for
-``source_root=``: every file name they write goes through ``relative_name``.
+given, a zip member as ``<zip file name>/<member name>``. Both the SARIF and
+the sh:ValidationReport exports, given ``sources=``, run it through
+``locate_missing``: only the columns the frame lacks are stamped, and the
+sh:ValidationReport export, which writes no referenced-object location, asks
+for the SOURCE_* columns only. ``relative_sources`` is the one pass both
+report exports run for ``source_root=``: every file name they write goes
+through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
@@ -48,6 +51,14 @@ _DEFINITION = re.compile(rb'rdf:(?:ID|about)="(?:' + "|".join(map(re.escape, ID_
                          + rb')?([^"]+)"')
 
 
+def member_name(container, name):
+    """The name of a file read from a zip: ``<zip file name>/<member name>`` —
+    a relative name that is not the path of a file on disk. *container* is the
+    zip's file name without directories (``.container`` of a zip member, the
+    ``belongsToContainer`` row of a parsed file); without one, *name* as it is."""
+    return f"{container}/{name}" if container else name
+
+
 def locate(wanted, sources):
     """Find the wanted objects in the source XML.
 
@@ -63,9 +74,15 @@ def locate(wanted, sources):
     -------
     dict {ID: {"uri": str, "startLine": int, "snippet": str,
                "keyLines": {KEY: (line, snippet)}}}
-        "uri" is the source name as given (the path, the zip member name, a
-        file-like's ``.name``). IDs not present in the sources are absent
-        from the result.
+        "uri" is the source name as given (the path, a file-like's
+        ``.name``); a zip member is ``<zip file name>/<member name>``, the
+        zip's name without directories. The position is that of the first
+        rdf:ID / rdf:about element with the ID in read order — the plain
+        files as given, then the members of the zips: an rdf:about element
+        in a file read earlier wins over the rdf:ID element in a later one.
+        IDs not present in the sources are absent from the result. The
+        sources are read in that order until every wanted ID is found; an
+        ID in none of them makes the pass read them all.
     """
     from ..parser.utils import find_all_xml
 
@@ -93,7 +110,7 @@ def locate(wanted, sources):
     return located
 
 
-def locate_violations(violations, sources):
+def locate_violations(violations, sources, targets=True):
     """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
 
     Per row (ID, KEY): the violated property element's own position when it
@@ -101,12 +118,15 @@ def locate_violations(violations, sources):
     rows whose object is not in the sources get nulls. The referenced object
     of a reference finding found in the data (TARGET_ID — context.enrich) is
     located in the same pass, at its definition, into the TARGET_* columns; a
-    frame without TARGET_ID gets nulls there. SOURCE_URI / TARGET_URI are the
-    source names as given.
+    frame without TARGET_ID gets nulls there. A definition is the first
+    rdf:ID / rdf:about element with the id, in read order (see locate).
+    SOURCE_URI / TARGET_URI are the source names as given, a zip member
+    ``<zip file name>/<member name>`` (see locate). ``targets=False`` does
+    not search the referenced objects: the TARGET_* columns get nulls.
     """
     import pandas
 
-    targets = (violations["TARGET_ID"] if "TARGET_ID" in violations.columns
+    targets = (violations["TARGET_ID"] if targets and "TARGET_ID" in violations.columns
                else pandas.Series(None, index=violations.index, dtype=object))
     wanted = {}
     for object_id, key in zip(violations["ID"], violations["KEY"]):
@@ -132,7 +152,7 @@ def locate_violations(violations, sources):
     return frame
 
 
-def locate_missing(violations, sources):
+def locate_missing(violations, sources, targets=True):
     """locate_violations for a report export: stamp only what the frame lacks.
 
     The SOURCE_* columns are located unless the frame carries all three;
@@ -141,16 +161,23 @@ def locate_missing(violations, sources):
     (TARGET_ID) and none of them located (no TARGET_URI value) — it was
     located before context.enrich filled TARGET_ID, or never, or its
     referenced objects are in none of the sources read before; else the
-    TARGET_* columns on the frame are kept. With neither half to locate,
-    the sources are not read and the frame is returned as it is.
+    TARGET_* columns on the frame are kept. ``targets=False`` — an export
+    that writes no referenced-object location — leaves that half out: the
+    sources are read for the SOURCE_* columns only, and the referenced objects
+    are not searched in them. With neither half to
+    locate, the sources are not read and the frame is returned as it is.
+
+    Both tests are on the frame, not per row: a frame located in part (rows
+    of a located and of a not located frame concatenated) counts as located,
+    and its rows without a position stay without one.
     """
     present = set(violations.columns)
     source = not set(LOCATION_COLUMNS[:3]) <= present
-    target = ("TARGET_ID" in present and violations["TARGET_ID"].notna().any()
+    target = (targets and "TARGET_ID" in present and violations["TARGET_ID"].notna().any()
               and not ("TARGET_URI" in present and violations["TARGET_URI"].notna().any()))
     if not (source or target):
         return violations
-    frame = locate_violations(violations, sources)
+    frame = locate_violations(violations, sources, targets=targets)
     kept = [column for column, lacking in zip(LOCATION_COLUMNS, [source] * 3 + [target] * 3)
             if not lacking and column in present]
     frame[kept] = violations[kept]
@@ -183,29 +210,40 @@ def _line_text(text, position):
 def relative_name(name, root):
     """*name* relative to *root* with forward slashes when *name* is an
     absolute path of a file in *root* or a directory below it; else None.
-    *root* is an absolute path. A relative name — a zip member, a bare file
-    name — is never read against the working directory. Lexical: symlinks
-    are not resolved."""
+    *root* is an absolute path with its symlinks resolved (os.path.realpath),
+    and the symlinks of *name* are resolved the same way, so a path through a
+    symlink and the real path compare equal. A relative name — a zip member,
+    a bare file name — is never read against the working directory."""
     if not os.path.isabs(name):
         return None
-    path = pathlib.PurePath(os.path.normpath(name))
+    path = pathlib.PurePath(os.path.realpath(name))
     return path.relative_to(root).as_posix() if path.parent.is_relative_to(root) else None
+
+
+def check_source_root(source_root):
+    """ValueError for a *source_root* that is not a directory (None passes) — what an
+    export checks first, before it reads any data or source."""
+    if source_root is not None and not os.path.isdir(source_root):
+        raise ValueError(f"source_root is not a directory: {source_root}")
 
 
 def relative_sources(violations, names, source_root):
     """The file names a report export writes, relative to *source_root*.
 
     One rule for every name (relative_name): an absolute path under the root
-    is written relative to it; any other name is written as given. Applied to
+    is written relative to it; any other name is written as given. Symlinks
+    are resolved in the root and in the names before they compare. Applied to
     the SOURCE_URI, TARGET_URI and INSTANCE_LABEL columns of *violations*
     (where present) and to each list of *names* ({key: [file name, ...]} — the
     run metadata's source / references). Absolute names outside the root are
     named in one warning. Returns (frame, names); the inputs are not changed, and
-    ``source_root=None`` returns them as they are.
+    ``source_root=None`` returns them as they are. A *source_root* that is not
+    a directory raises ValueError.
     """
+    check_source_root(source_root)
     if source_root is None:
         return violations, names
-    root = os.path.abspath(source_root)
+    root = os.path.realpath(source_root)
     known = {}                              # name → relative name or None: each name is checked once
 
     def relative(name):
@@ -226,8 +264,19 @@ def relative_sources(violations, names, source_root):
 
 
 def _read(source):
-    """(uri, bytes) for a path or a file-like (zip members from find_all_xml)."""
+    """(uri, bytes) for a path or a file-like (zip members from find_all_xml).
+    A zip member is named ``<zip file name>/<member name>`` (its
+    ``.container``, see member_name). A seekable
+    file-like is read from its start, so one open handle serves every pass it
+    is given to; a file-like that gives no bytes (a stream that cannot be
+    rewound, read before) is named in a warning."""
     if hasattr(source, "read"):
-        return str(getattr(source, "name", "<memory>")), source.read()
+        if getattr(source, "seekable", lambda: False)():
+            source.seek(0)
+        uri = member_name(getattr(source, "container", None), str(getattr(source, "name", "<memory>")))
+        text = source.read()
+        if not text:
+            logger.warning("Nothing to read from source %s: no object is located in it", uri)
+        return uri, text
     with open(source, "rb") as file:
         return str(source), file.read()

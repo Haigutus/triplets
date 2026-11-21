@@ -219,6 +219,50 @@ def test_sources_add_location_message(tmp_path):
                                                        in graph.objects(None, sh.resultMessage)}
 
 
+def test_located_frame_is_not_read_for_referenced_objects(tmp_path):
+    """The SHACL report writes no referenced-object location: a frame located
+    before enrich filled TARGET_ID (SOURCE_* on the frame, no located referenced
+    object) is exported without reading the sources — the missing file is never
+    opened — and the result messages are the ones without sources=."""
+    xml = tmp_path / "grid.xml"
+    xml.write_text('<?xml version="1.0"?>\n'
+                   '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" '
+                   'xmlns:cim="http://iec.ch/TC57/CIM100#">\n'
+                   '  <cim:Breaker rdf:ID="_b1">\n'
+                   '    <cim:Equipment.EquipmentContainer rdf:resource="#_sub1"/>\n'
+                   '  </cim:Breaker>\n'
+                   '  <cim:Substation rdf:ID="_sub1"/>\n'
+                   '</rdf:RDF>\n')
+    data = pandas.read_RDF([str(xml)])
+    violations = pandas.DataFrame(
+        [["b1", "Equipment.EquipmentContainer", "sub1", "sh:class", "m", "Violation", "urn:shape"]],
+        columns=VIOLATION_COLUMNS)
+    located = triplets.validation.enrich(violations.shacl.locate(sources=[str(xml)]), data=data)
+    assert located["TARGET_ID"].tolist() == ["sub1"] and located["TARGET_URI"].isna().all()
+    assert located["SOURCE_LINE"].tolist() == [4]
+
+    import rdflib
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    absent = [str(tmp_path / "absent.xml")]
+    messages = [{str(message) for message
+                 in rdflib.Graph().parse(data=buffer.getvalue(), format="turtle").objects(None, sh.resultMessage)}
+                for buffer in (located.shacl.to_shacl_report(sources=absent, export_to_memory=True),
+                               located.shacl.to_shacl_report(export_to_memory=True))]
+    assert messages[0] == messages[1] and f"[context_location] {xml} line 4" in messages[0]
+    with pytest.raises(FileNotFoundError):             # the SARIF export does locate them
+        located.shacl.to_sarif(sources=absent, export_to_memory=True)
+
+    # a frame not located: the pass looks for b1 only and stops after grid.xml — sub1,
+    # in the data but not in that file, does not make it open the missing source
+    other = tmp_path / "other.xml"
+    other.write_text(xml.read_text().replace('  <cim:Substation rdf:ID="_sub1"/>\n', ""))
+    enriched = triplets.validation.enrich(violations, data=data)
+    report = enriched.shacl.to_shacl_report(sources=[str(other), *absent], export_to_memory=True)
+    assert f"[context_location] {other} line 4" in report.getvalue().decode()
+    with pytest.raises(FileNotFoundError):
+        enriched.shacl.to_sarif(sources=[str(other), *absent], export_to_memory=True)
+
+
 def report_names(buffer):
     """(data file names, dcterms:references) of a serialized report: the file of
     each [context_location] message and dcterms:source."""

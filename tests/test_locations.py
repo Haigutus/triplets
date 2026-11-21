@@ -1,6 +1,7 @@
 """Direct tests for the source-location pass (validation/locations.py) —
 previously covered only indirectly through the SARIF export."""
 import io
+import os
 import zipfile
 
 import pandas
@@ -53,13 +54,54 @@ def test_first_definition_wins(tmp_path, xml_path):
     assert located["aaaa"]["uri"] == xml_path
 
 
+def test_file_like_without_seekable_and_spent_stream(xml_path, caplog):
+    """A source with only read() and a name is read as it is. A stream that
+    cannot be rewound serves one pass: the second finds nothing and one
+    warning names the source."""
+    class Reader:
+        name = "reader.xml"
+
+        def __init__(self):
+            self.stream = io.BytesIO(XML)
+
+        def read(self):
+            return self.stream.read()
+
+    reader = Reader()
+    with caplog.at_level("WARNING", logger="triplets.validation.locations"):
+        assert locate({"aaaa": set()}, [reader])["aaaa"]["startLine"] == 3
+        assert not caplog.records
+        assert locate({"aaaa": set()}, [reader]) == {}
+    assert [record.getMessage() for record in caplog.records] \
+        == ["Nothing to read from source reader.xml: no object is located in it"]
+
+
 def test_zip_member(tmp_path):
     archive = tmp_path / "grid.zip"
     with zipfile.ZipFile(archive, "w") as bundle:
         bundle.writestr("inner/grid.xml", XML)
     located = locate({"aaaa": set()}, [str(archive)])
     assert located["aaaa"]["startLine"] == 3
-    assert located["aaaa"]["uri"].endswith("grid.xml")
+    assert located["aaaa"]["uri"] == "grid.zip/inner/grid.xml"
+
+
+def test_zip_member_name_is_no_file_under_the_root(tmp_path):
+    """A zip member is named <zip file name>/<member name>, also from a zip in a
+    zip: under source_root the name stays as it is, and it is not the name of
+    the file on disk that has the member's own name."""
+    root = tmp_path / "repo"
+    (root / "models").mkdir(parents=True)
+    (root / "models" / "grid.xml").write_bytes(XML.replace(b"_aaaa", b"_cccc"))
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w") as bundle:
+        bundle.writestr("deep.xml", XML.replace(b"_aaaa", b"_dddd"))
+    with zipfile.ZipFile(root / "models" / "grid.zip", "w") as bundle:
+        bundle.writestr("models/grid.xml", XML)
+        bundle.writestr("nested.zip", inner.getvalue())
+    violations = pandas.DataFrame({"ID": ["aaaa", "cccc", "dddd"], "KEY": None})
+    located = locate_violations(violations, [str(root / "models" / "grid.xml"), str(root / "models" / "grid.zip")])
+    frame, _ = relative_sources(located, {}, root)
+    assert frame["SOURCE_URI"].tolist() == ["grid.zip/models/grid.xml", "models/grid.xml", "nested.zip/deep.xml"]
 
 
 def test_locate_violations_columns(xml_path):
@@ -94,7 +136,8 @@ def test_locate_violations_empty_frame(xml_path):
 
 def test_names_are_stamped_as_given(tmp_path, monkeypatch):
     """locate / locate_violations write the source name they were given: an
-    absolute path, a relative path, a file-like's name, a zip member name."""
+    absolute path, a relative path, a file-like's name; a zip member after
+    the file name of its zip."""
     (tmp_path / "models").mkdir()
     absolute = tmp_path / "models" / "grid.xml"
     absolute.write_bytes(XML)
@@ -108,7 +151,7 @@ def test_names_are_stamped_as_given(tmp_path, monkeypatch):
     located = locate({"aaaa": set(), "cccc": set(), "dddd": set(), "eeee": set()},
                      [str(absolute), "other.xml", "../grid.zip", handle])
     assert {object_id: entry["uri"] for object_id, entry in located.items()} \
-        == {"aaaa": str(absolute), "cccc": "other.xml", "dddd": "inner/grid.xml", "eeee": handle.name}
+        == {"aaaa": str(absolute), "cccc": "other.xml", "dddd": "grid.zip/inner/grid.xml", "eeee": handle.name}
 
     violations = pandas.DataFrame([("cccc", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s")],
                                   columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY",
@@ -118,9 +161,9 @@ def test_names_are_stamped_as_given(tmp_path, monkeypatch):
 
 def test_relative_name(tmp_path, monkeypatch):
     """An absolute path of a file in the root or below it → the name relative
-    to the root, forward slashes; anything else → None. Lexical: '..' is
-    collapsed, a relative name is never joined with the working directory."""
-    root = str(tmp_path / "repo")
+    to the root, forward slashes; anything else → None. '..' is collapsed,
+    a relative name is never joined with the working directory."""
+    root = os.path.realpath(tmp_path / "repo")          # the contract: a resolved root
     monkeypatch.chdir(tmp_path)
     assert relative_name(f"{root}/data/x.xml", root) == "data/x.xml"
     assert relative_name(f"{root}/x.xml", f"{root}/") == "x.xml"
@@ -130,6 +173,25 @@ def test_relative_name(tmp_path, monkeypatch):
     assert relative_name(f"{root}-other/x.xml", root) is None            # sibling with the root as name prefix
     assert relative_name(f"{root}/../other/x.xml", root) is None
     assert relative_name(root, root) is None                             # the root itself is no file in it
+
+
+def test_source_root_resolves_symlinks(tmp_path):
+    """Symlinks are resolved in the root and in the names: a root given through
+    a symlink matches files given by their real path, and the other way round.
+    A symlink in the root to a file outside it is a name outside."""
+    real, link = tmp_path / "repo", tmp_path / "link"
+    (real / "models").mkdir(parents=True)
+    (real / "models" / "grid.xml").write_bytes(XML)
+    (tmp_path / "outside.xml").write_bytes(XML)
+    link.symlink_to(real, target_is_directory=True)
+    (real / "models" / "alias.xml").symlink_to(tmp_path / "outside.xml")
+    names = {"source": [str(real / "models" / "grid.xml"), str(link / "models" / "grid.xml"),
+                        str(real / "models" / "alias.xml")]}
+    violations = pandas.DataFrame({"ID": ["aaaa"], "SOURCE_URI": [str(link / "models" / "grid.xml")]})
+    for source_root in (real, link):
+        frame, relative = relative_sources(violations, names, source_root)
+        assert frame["SOURCE_URI"].tolist() == ["models/grid.xml"]
+        assert relative == {"source": ["models/grid.xml", "models/grid.xml", str(real / "models" / "alias.xml")]}
 
 
 def test_relative_sources(tmp_path, monkeypatch, caplog):

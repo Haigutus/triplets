@@ -534,14 +534,25 @@ exact inverse of the pyshacl report mapping in `shacl_report.py`) or as SARIF 2.
 (`violations.shacl.to_sarif(...)`, see below). Source positions come from one shared
 pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS` onto the frame;
 both exports run it automatically when given `sources=` and stamp only what the frame
-lacks: `SOURCE_*` columns already present are kept as they are, and the `TARGET_*`
-columns are located whenever the frame has a `TARGET_ID` and no located referenced
-object, so with `sources=` on the export `locate` may run before or after `enrich`:
+lacks: the three `SOURCE_*` columns, when all are on the frame, are kept as they are. The
+SARIF export also locates the `TARGET_*` columns whenever the frame has a `TARGET_ID` and
+no located referenced object, so with `sources=` on that export `locate` may run before or
+after `enrich`. The SHACL report writes no referenced-object location: it reads the
+sources only when the `SOURCE_*` columns are missing. The columns:
 
 | Columns | Content |
 |---------|---------|
-| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`) |
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`). The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
+
+The name of a file in a zip holds the zip's file name only: two zips with the same
+file name in different directories and the same member give one name, and a zip in a
+zip gives the inner zip's name.
+
+An object's definition is the first `rdf:ID` or `rdf:about` element with its id, in the
+order the sources are read (the plain files as given, then the members of the zips): for
+an object written in several files (an `rdf:about` element in the SSH, the `rdf:ID`
+element in the EQ) the file read first gives the position.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
@@ -559,7 +570,7 @@ united, differing values kept as the list of distinct values):
 | `started_at` / `generated_at` / `duration_seconds` | validation start/end (UTC, Zulu form) and wall-clock duration of the run — `validate_shacl` excludes the shapes compilation (cache-independent); the schema validations include `compile_schema` / `compile_references` |
 | `engine` | the engine that produced the report |
 | `creator` | tool + version |
-| `source` | data file names (from the data's Distribution label meta rows) |
+| `source` | data file names (from the data's Distribution `label` meta rows; a file read from a zip is `<zip file name>/<label>`) |
 | `references` | the shape file names given to the run, sorted, each name once (`[]` for a Graph; a compile is cached per content and names); the schema validations: the `rdf_map` file name, `"rdf_map"` for a dict |
 | `compiled_hash` | the shape files' content hash (`CompiledShapes.hash`, the same with any `deactivated_shapes`); a schema compile: the schema content, profiles and options — the same under any file name |
 | `deactivated_shapes` | the shape ids the run switched off, sorted (`[]` = every shape ran); the run's rule set is `compiled_hash` + `deactivated_shapes` — `concat_violations` counts shapes and constraints once per rule set |
@@ -860,7 +871,8 @@ violations.shacl.to_excel(path="report.xlsx")
 
 # the location pass standalone — LOCATION_COLUMNS (SOURCE_* for the finding, TARGET_*
 # for the referenced object of an enriched reference finding), reused by both report
-# exports; SOURCE_URI / TARGET_URI are the source names as given
+# exports; SOURCE_URI / TARGET_URI are the source names as given (a file in a zip:
+# <zip file name>/<member name>)
 violations = violations.shacl.locate(sources=["grid.zip"])
 ```
 
@@ -889,7 +901,8 @@ saw:
 |---------|--------|---------|
 | `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding. A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
 | `TARGET_ID` | data (+ shapes, rdf_map) | the id (the `VALUE`) of a reference finding's referenced object when it is in the data; null for a dangling reference and every other row |
-| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows) |
+| `TARGET_TYPE` | data (+ shapes, rdf_map) | the Type of that referenced object; null where `TARGET_ID` is |
+| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
 | `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the profiles the violation was checked against — the `PROFILE` column, else `rdf_map_scope` (one scope, or `{INSTANCE_ID: scope}`), else the run's `attrs["validation"]["profiles"]` — merged like the run (the multiplicity that was checked). Rows without profiles read the root entries; a name the profiles lack stays empty |
@@ -917,8 +930,11 @@ enrichment pass first (an already-enriched frame is used as-is).
   GitHub code scanning filters alerts by tool.
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
-  rule's findings (the `PROFILE` column), distinct, first seen, at most 10
-  (GitHub keeps 10). GitHub code scanning filters alerts by tag. SARIF
+  rule's findings (the `PROFILE` column — a list of section keys, or the
+  text a csv / Excel export writes, `EQ, OP`: the keys between commas), distinct, first seen, at most 10
+  (GitHub keeps 10). A rule whose findings name more than 8 profiles has no
+  tag for the later ones, so a filter on one of those does not show it.
+  GitHub code scanning filters alerts by tag. SARIF
   recommends taxonomies, not tags, for a classification (§3.8.2.1); tags are
   used because GitHub code scanning filters by tag.
 - Severity maps `Violation/Warning/Info` → `error/warning/note`; rules carry
@@ -941,11 +957,14 @@ enrichment pass first (an already-enriched frame is used as-is).
 - RDF objects carry no text coordinates through the triplets frame:
   results always point at the model via `logicalLocations` (`Type/ID` +
   object name). Passing `sources=` (the original CIM/XML files — paths,
-  zips or file-likes) runs the shared `locate_violations` pass
+  zips or file-likes; an open file handle is read from its start by every
+  pass, a stream that cannot be rewound serves one pass and the next one
+  logs a warning for it) runs the shared `locate_violations` pass
   (`validation/locations.py`) and adds a fully bounded
   whole-line `physicalLocation.region` (`startLine` == `endLine`)
   on the violated property element's line (or the object
-  definition) — what GitHub code scanning needs to annotate lines. One
+  definition, the first `rdf:ID` / `rdf:about` element with its id in read
+  order) — what GitHub code scanning needs to annotate lines. One
   grep-style pass per file; the parse/validate hot paths are untouched.
   The pass stamps only what the frame lacks: the three `SOURCE_*` columns
   already on the frame (from `violations.shacl.locate(sources=...)`) are
@@ -960,7 +979,9 @@ enrichment pass first (an already-enriched frame is used as-is).
 - `source_root=` (a directory) on `to_sarif` and `to_shacl_report`: a file
   name that is an absolute path under the directory is written relative to
   it, with forward slashes. Every other name is written as given: a relative
-  path, a path outside the directory, a zip member name. No name is joined
+  path, a path outside the directory, a file in a zip
+  (`grid.zip/models/grid.xml`, not the path of a file in the directory). No
+  name is joined
   with the working directory. The rule covers every file name of the export:
   - `SOURCE_URI` — SARIF `artifactLocation.uri` (GitHub reads a relative uri
     against the repository root), the SHACL report's `[context_location]`
@@ -977,26 +998,34 @@ enrichment pass first (an already-enriched frame is used as-is).
     absolute `report_references=` under the directory is written relative.
 
   Parse the files by absolute path to get root-relative names: the names in
-  the frame are the paths given to the parser. The comparison is lexical:
-  symlinks are not resolved, so give `source_root` the same way the files
-  are given. The export logs one warning naming the absolute names outside
-  the directory. Default `None`: the names as given.
+  the frame are the paths given to the parser. Symlinks are resolved in
+  `source_root` and in the names before they compare, so a root given
+  through a symlink matches files given by their real path, and the other
+  way round; the relative name is the one below the resolved directory, and
+  a symlink in the directory to a file outside it is a name outside. The
+  export logs one warning naming the absolute names outside
+  the directory. A `source_root` that is not a directory raises `ValueError`.
+  Default `None`: the names as given.
 - The referenced object of a reference finding found in the data
   (`TARGET_ID`, enriched with `data=`) and located (`TARGET_URI` —
   `sources=` on the export, or `locate` after `enrich`) becomes a `relatedLocations` entry: `id`, the `TARGET` text
-  as its `message` (Type and name), a `logicalLocations` entry with the id
-  (kind `object`) and a `physicalLocation` on its definition line
-  (`source_root=` applies). A referenced object that is not located — no
+  as its `message` (Type and name), a `logicalLocations` entry `Type/id`
+  (`TARGET_TYPE`; the id alone on a frame without it; kind `object`) and a `physicalLocation` on its definition line — the first
+  `rdf:ID` / `rdf:about` element with its id in read order (`source_root=`
+  applies). A referenced object that is not located — no
   locate pass, or the object in none of the sources — has none: GitHub code scanning rejects an upload with a related
   location that has no `physicalLocation`. The `[context_message]` line links
   it with SARIF's embedded-link form (§3.11.6), the leading id of the `TARGET`
   text: `referenced object [<id>](1) found — Substation "Main Sub"`; GitHub
   links a related location only when the message embeds it. An id holding
   `[`, `]` or `\` stays unlinked (GitHub does not read escaped link text). A
-  per-row result carries at most one (id 1); a grouped result one per distinct
-  referenced object of its samples, ids 1..n, each `TARGET` text its
-  `[context_message]` line shows (three at most) linked to its own. A
-  dangling reference has none. The `TARGET` column, the csv / Excel exports
+  per-row result carries at most one (id 1); a grouped result one per
+  referenced object its `[context_message]` line shows (the first three
+  distinct `TARGET` texts of its samples), ids 1..n, each text linked to its
+  own, so every related location is linked. A dangling reference has none. A
+  `triplets:missing` finding gets one when the enrichment reads more data
+  than the run did; `data_scope=` on `to_sarif` (the run's own scope, as for
+  `enrich`) keeps the enrichment to what the run saw. The `TARGET` column, the csv / Excel exports
   and the SHACL report keep the plain text.
 - What the run did not evaluate becomes
   `invocations[0].toolConfigurationNotifications` (the shapes graph or schema
@@ -1004,7 +1033,9 @@ enrichment pass first (an already-enriched frame is used as-is).
   notification per `skipped_shapes` entry (`descriptor.id`
   `triplets/skippedShape`) and per `skipped_components` entry
   (`triplets/skippedComponent`), the reason or component name as
-  `message.text`; the run `properties` bag keeps both lists. GitHub code
+  `message.text`; `tool.driver.notifications` declares each kind the run has
+  (`id`, `shortDescription`: "Shape not evaluated" / "Constraint component not
+  evaluated"); the run `properties` bag keeps both lists. GitHub code
   scanning does not display invocation notifications; SARIF viewers do
   (§3.20.22: viewers MAY present them). `relaxed_constraints` were evaluated, more
   loosely, and stay in the property bag only.

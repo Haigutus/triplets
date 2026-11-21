@@ -63,6 +63,7 @@ from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — publ
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
+from .context import file_names as _file_names
 from .locations import LOCATION_COLUMNS, locate_violations  # noqa: F401 — public API
 from .sarif import export_to_sarif  # noqa: F401 — public API
 from .value_space import pair_operands, range_bound
@@ -535,16 +536,6 @@ def _iso(moment):
 
 
 def _source_labels(data, table_name="triplets"):
-    """File names from the data's Distribution meta rows (``KEY="label"``, the
-    parser convention — the same lookup context.enrich uses), any input flavor."""
-    kind = flavor(data)
-    if kind == "duckdb":
-        rows = data.execute(f"SELECT VALUE FROM {table_name} WHERE KEY = 'label'").fetchall()
-        labels = (value for (value,) in rows)
-    elif kind == "polars":
-        labels = data.filter(data["KEY"] == "label")["VALUE"]
-    else:   # pandas — and pyarrow through its arrow-backed pandas view
-        if kind == "pyarrow":
-            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
-        labels = data.loc[data["KEY"] == "label", "VALUE"]
-    return [label for label in dict.fromkeys(labels) if label]
+    """The distinct file names of the data's instances, any input flavor — the
+    names context.enrich writes as INSTANCE_LABEL (context.file_names)."""
+    return list(dict.fromkeys(_file_names(data, table_name).values()))

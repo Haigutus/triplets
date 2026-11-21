@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 import numpy
 import pandas
 
-from .locations import locate_missing, relative_sources
+from .locations import check_source_root, locate_missing, relative_sources
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
                    XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
                    namespaces, split_iri)
@@ -366,8 +366,9 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         ``sh:resultMessage``\ s (Description/Schema/Source).
     sources : optional
         The original CIM/XML files — runs the locate pass so each result
-        carries a "Source: file line N" message (location columns already
-        on the frame are kept, see locations.locate_missing).
+        carries a "Source: file line N" message. The sources are read only
+        when the frame lacks one of the three SOURCE_* columns; all three on
+        the frame are kept (see locations.locate_missing).
     path : str or Path, optional
         Output file. Default ``report.<ext>`` from the resolved format.
         Suffix selects format when ``format`` is None (``.xml``/``.rdf`` →
@@ -401,8 +402,9 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         directory are named in one logged warning (see
         locations.relative_sources).
     """
+    check_source_root(source_root)
     if sources is not None:
-        violations = locate_missing(violations, sources)
+        violations = locate_missing(violations, sources, targets=False)
     fmt = _resolve_format(path, format)
     path = _default_path(fmt) if path is None else os.fspath(path)
     payload = (violations_to_report_graph(violations, report_source=report_source,
@@ -441,8 +443,11 @@ def _buffer(name, payload):
 
 def profile_names(value):
     """The profiles of a PROFILE cell — a list, tuple or numpy array of
-    section keys, or one key as text; nulls and empty strings dropped."""
-    values = value if isinstance(value, (list, tuple, numpy.ndarray)) else (value,)
+    section keys, or text: the keys separated by commas, spaces around a key
+    left out (a cell read back from a csv / Excel export, where profile_text
+    wrote it); nulls and empty strings dropped."""
+    values = (value if isinstance(value, (list, tuple, numpy.ndarray))
+              else [name.strip() for name in value.split(",")] if isinstance(value, str) else (value,))
     return [str(name) for name in values if not pandas.isna(name) and str(name)]
 
 
