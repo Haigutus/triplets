@@ -189,6 +189,13 @@ def test_by_header_frames_join_again(engine):
     both = validation.concat_violations([by_header, schema_run]).attrs["validation"]
     assert (both["constraints"], both["rule_sets"]) == (meta["constraints"], meta["rule_sets"])
     assert both["profiles"] == meta["profiles"] == ["EQ", "SSH"]
+    # no instance resolved: a frame without a run joins too
+    unresolved = cgmes_tools.validate_by_header(frame(breaker("b1")), SCHEMA, engine=engine)
+    again = validation.concat_violations([unresolved, by_header]).attrs["validation"]
+    assert again["constraints"] == meta["constraints"] and again["started_at"] == meta["started_at"]
+    assert any("no schema profile matched" in entry for entry in again["skipped_shapes"])
+    assert validation.concat_violations([unresolved]).attrs["validation"]["skipped_shapes"] \
+        == unresolved.attrs["validation"]["skipped_shapes"]
 
 
 def test_duckdb_connection_with_configured_table():

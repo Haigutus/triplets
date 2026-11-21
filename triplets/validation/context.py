@@ -120,12 +120,14 @@ def concat_violations(frames):
         for key, value in meta.items():
             if key not in _DERIVED:
                 merged[key] = _united(merged[key], value) if key in merged else _united(value, None)
-    merged["started_at"] = min(meta["started_at"] for meta in metas)
-    merged["generated_at"] = max(meta["generated_at"] for meta in metas)
-    merged["duration_seconds"] = round((_moment(merged["generated_at"]) - _moment(merged["started_at"]))
-                                       .total_seconds(), 3)
+    timed = [meta for meta in metas if meta.get("started_at")]   # validate_by_header with no instance resolved: no run
+    if timed:
+        merged["started_at"] = min(meta["started_at"] for meta in timed)
+        merged["generated_at"] = max(meta["generated_at"] for meta in timed)
+        merged["duration_seconds"] = round((_moment(merged["generated_at"]) - _moment(merged["started_at"]))
+                                           .total_seconds(), 3)
     rule_sets = {(rule_set["compiled_hash"], *rule_set["deactivated_shapes"]): rule_set
-                 for meta in metas for rule_set in _rule_sets(meta)}
+                 for meta in timed for rule_set in _rule_sets(meta)}
     merged["rule_sets"] = list(rule_sets.values())
     for count in _COUNTS:
         merged[count] = sum(rule_set[count] for rule_set in rule_sets.values())
