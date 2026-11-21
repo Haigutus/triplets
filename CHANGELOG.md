@@ -514,7 +514,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Export-schema `xsd:type` comes from the RDFS.** `cim_rdfs_to_json`
   follows each CIMDatatype `.value` to an XSD `rdfs:range` (IEC 61970-501 Ed2)
   or to a Primitive (`Area.value` → `Float`); `cgmes_data_types_map` now lists
-  only Primitives. All bundles regenerated and checked against the published
+  only Primitives (17 names, was 38): a consumer that looked up a CIMDatatype in it
+  (`Voltage`, `Susceptance`, `PU`, …) gets no type and no error, so its schema entries
+  lose `xsd:type` and their datatype checks without a message. All bundles regenerated and checked against the published
   SHACL `sh:datatype`; changed types:
   - `Decimal`, `Money` → `xsd:decimal` (was `xsd:float`)
   - `MonthDay` → `xsd:gMonthDay` (was `xsd:integer`)
