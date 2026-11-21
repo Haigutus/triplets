@@ -83,6 +83,20 @@ def test_missing_targets(engine):
     assert len(quiet) == 0
 
 
+@pytest.mark.parametrize("storage", ["python", "pyarrow"])
+def test_pandas_string_storage(storage):
+    """The pandas engine finds the same with either storage of the ``str`` dtype, and with objects."""
+    if storage == "pyarrow":
+        pytest.importorskip("pyarrow")
+    rows = breaker("b1", "bay1") + breaker("b2", "sub1") + breaker("b3", "ghost") + CONTAINERS
+    with pandas.option_context("mode.string_storage", storage):
+        data = frame(rows)
+        for typed in (data, data.astype(object)):
+            v = validate_schema_references(typed, SCHEMA, ["eq"], ["EQ"], engine="pandas")
+            assert violating(v, "rdfs:range") == {("b2", "sub1")}
+            assert violating(v, "triplets:missing") == {("b3", "ghost")}
+
+
 def test_targets_are_looked_up_in_the_target_instances(engine):
     """An SV voltage references a TP node: the node's class comes from the TP
     profile, the node itself from the TP instance."""

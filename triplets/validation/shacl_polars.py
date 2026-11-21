@@ -55,6 +55,8 @@ class _Context:
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID").unique()
         # the objects' own Type rows — what a ( assoc rdf:type ) path yields
         self.types = type_rows.rename({"VALUE": "CLASS"}).lazy()
+        # every ID with a Type row — the objects a reference can resolve to
+        self.typed_ids = type_rows["ID"].unique().implode()
         # class membership: Type rows plus each ancestor class (schema inheritance)
         if ancestors:
             pairs = polars.DataFrame(ancestors, schema={"VALUE": polars.String, "ANCESTOR": polars.String}, orient="row")
@@ -282,17 +284,15 @@ def _schema_range(context, rule):
     (issue #100); a target without a Type row is left to triplets:missing."""
     allowed = polars.concat([polars.Series(context.class_ids(cls)) for cls in rule.params],
                             rechunk=True).implode()
-    typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
     plan = (context.path_rows(rule)
-            .filter(polars.col("PATH_VALUE").is_in(typed)
+            .filter(polars.col("PATH_VALUE").is_in(context.typed_ids)
                     & ~polars.col("PATH_VALUE").is_in(allowed)))
     return _emit(plan, rule, f"reference target is not one of {rule.params}")
 
 
 def _schema_missing(context, rule):
     """triplets:missing — the referenced object has no Type row in the validated data."""
-    typed = context.types.select(polars.col("ID")).unique().collect()["ID"].implode()
-    plan = context.path_rows(rule).filter(~polars.col("PATH_VALUE").is_in(typed))
+    plan = context.path_rows(rule).filter(~polars.col("PATH_VALUE").is_in(context.typed_ids))
     return _emit(plan, rule, "referenced object not found in the data")
 
 

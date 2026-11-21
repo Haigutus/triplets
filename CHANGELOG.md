@@ -527,6 +527,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`validate_schema_references` on the pandas engine no longer costs by the number of typed
+  objects in every rule.** `Series.isin` on the pandas 3 `str` dtype converts every member
+  of the ID list one by one at each call (about 40 ms for 15 000 IDs), and the reference
+  rules made that call once or twice each with the ID of every typed object. The pandas
+  engine now compares IDs as objects in every membership test (focus, `sh:class`,
+  `sh:node`, `sh:closed`, `sh:nodeKind`, `rdfs:range`, `triplets:missing`), with or
+  without pyarrow, and the pandas and polars engines build the typed-ID list once per
+  run. 78 786 rows, 14 900 objects, 238 rules: pandas 5.0 s → 0.4 s, polars
+  0.72 s → 0.26 s; findings unchanged.
 - **CIM XML export: a reference VALUE that is an absolute IRI is written as it is**, as
   `export_to_nquads` writes it. For a reference key with an empty `value_prefix` the VALUE
   was only looked up as an enumeration name, so `rdf:resource="http://www.w3.org/ns/dcat#Dataset"`

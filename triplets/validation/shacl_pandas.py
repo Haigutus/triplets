@@ -62,6 +62,12 @@ logger = logging.getLogger(__name__)
 _NO_IDS = numpy.array([], dtype=object)
 
 
+def _isin(values, ids):
+    """``values.isin(ids)`` for an ID list of any size, compared as objects: ``Series.isin``
+    on the ``str`` dtype converts every member of *ids* one by one, at each call."""
+    return values.astype(object).isin(ids)
+
+
 class _Context:
     """Shared per-validation state: data and memoized lookups.
 
@@ -81,6 +87,7 @@ class _Context:
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
+        self._typed_ids = None
         self._dataset = None
         self._dataset_lock = threading.Lock()   # sh:sparql threads share one rdflib fallback load
         # The data and rdf_map cannot change between the constraint queries
@@ -111,7 +118,7 @@ class _Context:
     def class_ids(self, class_name):
         """IDs of all instances of *class_name*, subclasses included (``ancestors``)."""
         if self._class_ids is None:
-            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype({"VALUE": object})
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype(object)
             if self.ancestors:
                 pairs = pandas.DataFrame(self.ancestors, columns=["VALUE", "ANCESTOR"], dtype=object)
                 wider = types.merge(pairs, on="VALUE")[["ID", "ANCESTOR"]].rename(columns={"ANCESTOR": "VALUE"})
@@ -126,6 +133,13 @@ class _Context:
         if self._all_ids is None:
             self._all_ids = set(self.data["ID"].unique())
         return self._all_ids
+
+    @property
+    def typed_ids(self):
+        """Every ID with a Type row — the objects a reference can resolve to."""
+        if self._typed_ids is None:
+            self._typed_ids = self.key_rows(TYPE_KEY)["ID"].astype(object).unique()
+        return self._typed_ids
 
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
@@ -160,11 +174,11 @@ class _Context:
         ids = self.focus(rule)
         rows = self.key_rows(rule.path)
         if rule.inverse:
-            rows = rows[rows["VALUE"].isin(ids)]
+            rows = rows[_isin(rows["VALUE"], ids)]
             frame = pandas.DataFrame({"FOCUS": rows["VALUE"].to_numpy(),
                                       "PATH_VALUE": rows["ID"].to_numpy()})
         else:
-            rows = rows[rows["ID"].isin(ids)]
+            rows = rows[_isin(rows["ID"], ids)]
             frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
                                       "PATH_VALUE": rows["VALUE"].to_numpy()})
         if getattr(rule, "via_type", False):
@@ -328,7 +342,7 @@ def _has_value(context, rule):
 def _class(context, rule):
     rows = context.path_rows(rule)
     of_class = context.class_ids(rule.params)
-    bad = ~rows["PATH_VALUE"].isin(of_class)
+    bad = ~_isin(rows["PATH_VALUE"], of_class)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"referenced object is not of class {rule.params}")
 
@@ -338,10 +352,8 @@ def _schema_range(context, rule):
     is in the allowed set (RDF types are cumulative, issue #100); a target
     without a Type row is left to triplets:missing."""
     rows = context.path_rows(rule)
-    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
-    allowed = pandas.Index([]).append([pandas.Index(context.class_ids(cls))
-                                       for cls in rule.params])
-    bad = rows["PATH_VALUE"].isin(typed) & ~rows["PATH_VALUE"].isin(allowed)
+    allowed = numpy.concatenate([_NO_IDS, *(context.class_ids(cls) for cls in rule.params)])
+    bad = _isin(rows["PATH_VALUE"], context.typed_ids) & ~_isin(rows["PATH_VALUE"], allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"reference target is not one of {rule.params}")
 
@@ -349,8 +361,7 @@ def _schema_range(context, rule):
 def _schema_missing(context, rule):
     """triplets:missing — the referenced object has no Type row in the validated data."""
     rows = context.path_rows(rule)
-    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
-    bad = ~rows["PATH_VALUE"].isin(typed)
+    bad = ~_isin(rows["PATH_VALUE"], context.typed_ids)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   "referenced object not found in the data")
 
@@ -371,7 +382,7 @@ def _node_kind(context, rule):
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
         values = rows["PATH_VALUE"].astype(str)
-        is_iri = values.str.fullmatch(REFERENCE_LIKE) | values.isin(context.all_ids)
+        is_iri = values.str.fullmatch(REFERENCE_LIKE) | _isin(values, context.all_ids)
     bad = ~is_iri if rule.params == "IRI" else is_iri
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not of node kind sh:{rule.params}")
@@ -441,7 +452,7 @@ def _closed(context, rule):
     """
     allowed = set(rule.params) | {TYPE_KEY}
     ids = context.focus(rule)
-    rows = context.data[context.data["ID"].isin(ids) & ~context.data["KEY"].isin(allowed)]
+    rows = context.data[_isin(context.data["ID"], ids) & ~context.data["KEY"].isin(allowed)]
     frame = _frame(rule, rows["ID"], rows["VALUE"], "property is not allowed on a closed shape")
     frame["KEY"] = rows["KEY"].to_numpy()
     return frame
@@ -767,7 +778,7 @@ def _node(context, rule):
     if not len(referenced):
         return _empty()
     non_conforming = set(_run_nested(context, rule.params["rows"], referenced)["ID"])
-    bad = rows[rows["PATH_VALUE"].isin(non_conforming)]
+    bad = rows[_isin(rows["PATH_VALUE"], non_conforming)]
     return _frame(rule, bad["FOCUS"], bad["PATH_VALUE"],
                   f"value does not conform to shape {rule.params['shape']}")
 
