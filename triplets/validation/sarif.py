@@ -160,13 +160,15 @@ def _run(violations, group, sources, source_root):
                                             if meta.get(key)}, source_root)
     meta = {**meta, **names}
     language = run_language(violations)
-    groups = [(key, rows.to_dict("records")) for key, rows
-              in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
+    # one rule per ruleId: the schema shapes of one scope given in two orders are one rule
+    shared = _shared_names(frame["SOURCE_SHAPE"], meta.get("shared_shape_names"))
+    groups = {}
+    for (shape, constraint), rows in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False):
+        groups.setdefault(_rule_id(shape, constraint, shared), []).extend(rows.to_dict("records"))
 
     rules, results = [], []
-    shared = _shared_names(frame["SOURCE_SHAPE"], meta.get("shared_shape_names"))
-    for (shape, constraint), records in groups:
-        rule = _rule(shape, constraint, records, shared, occurrences=len(records) if group else None,
+    for identifier, records in groups.items():
+        rule = _rule(identifier, records, occurrences=len(records) if group else None,
                      language=language, references=meta.get("references"))
         rule_index = len(rules)
         rules.append(rule)
@@ -267,10 +269,14 @@ def _shared_names(shapes, declared=None):
     return {*(declared or ()), *(name for name, found in names.items() if len(found) > 1)}
 
 
-def _rule(shape, constraint, records, shared=(), occurrences=None, language="shacl", references=None):
-    identifier = f"{_shape_name(str(shape), shared)}/{constraint}" if not pandas.isna(shape) else str(constraint)
+def _rule_id(shape, constraint, shared=()):
+    """``<shape name>/<constraint>`` (:func:`_shape_name`); the constraint alone for a row without a shape."""
+    return f"{_shape_name(str(shape), shared)}/{constraint}" if not pandas.isna(shape) else str(constraint)
 
+
+def _rule(identifier, records, occurrences=None, language="shacl", references=None):
     first = records[0]
+    shape, constraint = first["SOURCE_SHAPE"], first["VIOLATION_TYPE"]
     # the rule title — what GitHub shows as the alert name — names the
     # constraint language; grouped runs add the occurrence count (the ruleId
     # stays stable, so alerts still match)

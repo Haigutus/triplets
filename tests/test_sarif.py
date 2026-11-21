@@ -1018,6 +1018,11 @@ def test_schema_rule_id_does_not_follow_the_scope_order():
             "urn:triplets:schema:" + ":".join(name.replace("#", "%23") for name in scope) + "#ACLineSegment.IdentifiedObject.name"}
         ids |= set(rule_ids(violations).values())
     assert ids == {"EQ%231:OP:ACLineSegment.IdentifiedObject.name/xsd:minOccurs"}
+    runs = [triplets.validation.validate_schema(frame(1), schema, rdf_map_scope=scope, engine="pandas")
+            for scope in (["OP", "EQ#1"], ["EQ#1", "OP"])]
+    (run,) = build_sarif(triplets.validation.concat_violations(runs))["runs"]       # joined: still one rule
+    assert [rule["id"] for rule in run["tool"]["driver"]["rules"]] == sorted(ids)
+    assert run["results"][0]["occurrenceCount"] == 2
     other = violations.assign(SOURCE_SHAPE="urn:triplets:schemaX#MyShape")
     other.attrs = {}
     run = build_sarif(other)["runs"][0]
