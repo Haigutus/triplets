@@ -16,17 +16,11 @@ RDF_MAP = str(schemas.ENTSOE_CGMES_3_0_0_552_ED1)
 
 
 def triples(paths):
-    """(ID, KEY, VALUE) of the model objects; numbers compared by value (the written form may change)."""
+    """(ID, KEY, VALUE) of the model objects, every VALUE as its text."""
     data = triplets.parse(paths)
     meta = data.loc[(data["KEY"] == "Type") & data["VALUE"].isin(["Distribution", "NamespaceMap"]), "ID"]
     data = data[~data["ID"].isin(meta) & (data["KEY"] != "Model.applicationSoftware")]
-
-    def value(text):
-        try:
-            return float(text) if text.lower() not in ("nan", "inf", "-inf", "infinity") else text
-        except ValueError:
-            return text
-    return {(str(i), str(k), value(str(v))) for i, k, v in zip(data["ID"], data["KEY"], data["VALUE"])}
+    return {(str(i), str(k), str(v)) for i, k, v in zip(data["ID"], data["KEY"], data["VALUE"])}
 
 
 EQ = str(Path(next(path for path in SVEDALA_FILES if "_EQ_" in path)).resolve())

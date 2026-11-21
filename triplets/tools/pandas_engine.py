@@ -538,7 +538,7 @@ def set_value_at_key_and_id(data, key, value, id):
     data.loc[data[(data.ID == id) & (data.KEY == key)].index, "VALUE"] = _string_or_none(value)
 
 
-def triplets_to_tableviews(triplet_df, multivalue=False):
+def triplets_to_tableviews(triplet_df, multivalue=False, string_to_number=True):
     """Convert triplet DataFrame to dict of tableview DataFrames.
 
     Parameters
@@ -547,6 +547,9 @@ def triplets_to_tableviews(triplet_df, multivalue=False):
         Triplet dataset with columns [ID, KEY, VALUE, INSTANCE_ID].
     multivalue : bool, default False
         If True, aggregate duplicate (ID, KEY) pairs into lists.
+    string_to_number : bool, default True
+        If True, convert columns containing numbers to numeric types; False keeps
+        every VALUE as its text (``1.0`` stays ``1.0``).
 
     Returns
     -------
@@ -556,7 +559,8 @@ def triplets_to_tableviews(triplet_df, multivalue=False):
     types = types_dict(triplet_df)
     tableviews = {}
     for class_name in types:
-        table_view = type_tableview(triplet_df, class_name, multivalue=multivalue)
+        table_view = type_tableview(triplet_df, class_name, string_to_number=string_to_number,
+                                    multivalue=multivalue)
         if table_view is not None:
             tableviews[class_name] = table_view
     return tableviews

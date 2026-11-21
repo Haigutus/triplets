@@ -572,6 +572,39 @@ class TestExportToCsv:
         assert hasattr(result[0], 'read')
 
 
+LEXICAL = ["1.0", "0.10", "1e3", "007", "522000000.0", "-0"]   # a column of numbers only
+
+
+def _lexical_frame():
+    rows = [(f"id{i}", key, value, "i1") for i, text in enumerate(LEXICAL)
+            for key, value in (("Type", "ParameterValue"), ("ParameterValue.value", text))]
+    return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
+@pytest.mark.parametrize("fmt", ["excel", "csv"])
+def test_spreadsheet_export_keeps_the_value_text(fmt):
+    """A number is a cell with the VALUE text, so the spreadsheet → CIM direction writes it back unchanged."""
+    import io
+    from triplets.tools import tableviews_to_triplets
+    if fmt == "excel":
+        pytest.importorskip("openpyxl")
+        file = triplets.export.export_to_excel(_lexical_frame(), export_to_memory=True, single_file=True)
+        table = pandas.read_excel(file, sheet_name="ParameterValue", index_col=0, dtype=str)
+    else:
+        (file,) = triplets.export.export_to_csv(_lexical_frame(), export_to_memory=True, single_file=True)
+        table = pandas.read_csv(io.BytesIO(file.getvalue()), index_col=0, dtype=str)
+    assert table["ParameterValue.value"].tolist() == LEXICAL
+    back = tableviews_to_triplets({"ParameterValue": table})
+    assert back.loc[back["KEY"] == "ParameterValue.value", "VALUE"].tolist() == LEXICAL
+
+
+def test_triplets_to_tableviews_string_to_number():
+    views = triplets.tools.triplets_to_tableviews(_lexical_frame())
+    assert views["ParameterValue"]["ParameterValue.value"].tolist() == [1.0, 0.1, 1000.0, 7.0, 522000000.0, 0.0]
+    views = triplets.tools.triplets_to_tableviews(_lexical_frame(), string_to_number=False)
+    assert views["ParameterValue"]["ParameterValue.value"].tolist() == LEXICAL
+
+
 # CIM XML export engines; cython_pugixml skipped when the extension is not built
 CIMXML_ENGINES = ["python_lxml", "cython_pugixml"]
 

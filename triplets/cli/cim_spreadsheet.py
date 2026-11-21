@@ -102,11 +102,12 @@ Features
 
 Notes
 -----
-- Values are read back as text, so they return as written, except numbers: the
-  spreadsheet export writes them as numbers, so a number can come back in another
-  written form (``500`` -> ``500.0``, ``8e-5`` -> ``8e-05``). Excel keeps 15
-  significant digits, so longer numbers are rounded (``1.0712249999999999`` ->
-  ``1.071225``); CSV keeps them.
+- Every value is written as text and read back as text, so it returns as written,
+  numbers included (``1.0``, ``8e-5``, ``1.0712249999999999``): a number is a text
+  cell in Excel. A cell that is edited into a number cell is read as Excel stores
+  the number (``1.0`` -> ``1``, 15 significant digits).
+- An empty value is an empty cell, and an empty cell is no value: it is not
+  written back.
 - Excel limits sheet names to 31 characters. Longer class names (e.g.
   ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns
   and Excel may refuse or rename the sheet. Use CSV for such models.

@@ -249,6 +249,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`export_to_excel` and `export_to_csv` (pandas) write every VALUE as its text**, so
+  `cim-spreadsheet` CIM XML → Excel → CIM XML keeps the lexical form of numbers. A column
+  that held only numbers was converted to numbers first: `1.0` came back as `1`,
+  `522000000.0` as `522000000`, `0.10` as `0.1`, `007` as `7` (716 values of the emtiop
+  IEEE39 case through `.xlsx`). Number cells in the Excel file are now text cells. The
+  polars CSV export already wrote the text. `triplets_to_tableviews` (pandas, polars)
+  takes `string_to_number=` like the DuckDB one; its default stays `True`.
 - **`SOURCE_SHAPE` and the SARIF ruleId of schema findings, against 0.2.0.** `SOURCE_SHAPE`
   carries the scope in its namespace: `urn:triplets:schema:EMTIOP#ACLineSegment.ACLineSegment.r`
   (0.2.0: `urn:triplets:schema#EMTIOP:ACLineSegment.ACLineSegment.r`), every profile of a

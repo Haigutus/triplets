@@ -43,7 +43,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         if filename is None:
             filename = 'export.xlsx'
 
-        tableviews = triplets_to_tableviews(data, multivalue=multivalue)
+        tableviews = triplets_to_tableviews(data, string_to_number=False, multivalue=multivalue)
         output = BytesIO()
         output.name = filename
 
@@ -77,7 +77,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
 
         for _, label in labels.iterrows():
             instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplets_to_tableviews(instance_data, multivalue=multivalue)
+            tableviews = triplets_to_tableviews(instance_data, string_to_number=False, multivalue=multivalue)
             file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
             output = BytesIO()
             output.name = file_name
