@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, XSD_NS, local_id, local_key, local_value, split_iri
+from ..iri import SH_NS, XSD_NS, absolute_value, local_id, local_key, local_value, split_iri
 from .value_space import bound_space, pair_params
 
 logger = logging.getLogger(__name__)
@@ -171,6 +171,19 @@ def _term(shape_id):
     """A shape id (``shape_id`` / ``shapes`` string form) → its rdflib term."""
     import rdflib
     return rdflib.URIRef(shape_id) if _is_iri(shape_id) else rdflib.BNode(shape_id)
+
+
+def named_focus(rule, namespaces, value_types, undefined_namespace):
+    """The VALUE an inverse path looks for when the rule's ``sh:targetNode`` is a class
+    (``sh:inversePath rdf:type``) or an enumeration value: the VALUE column holds the
+    local name, and the node is the IRI that name stands for (``iri.absolute_value``:
+    the name's schema namespace, else *undefined_namespace*). None for every other
+    rule: a node id is spelled alike as focus and as VALUE."""
+    if not rule.inverse or rule.target_by != "ID" or getattr(rule, "focus_ids", None) is not None:
+        return None
+    name = split_iri(rule.target_on)[1]
+    term = absolute_value(rule.path, name, namespaces, value_types, undefined_namespace=undefined_namespace)
+    return name if term == ("iri", rule.target_on) else None
 
 
 def _mark_switched_off(graph, compiled):

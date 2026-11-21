@@ -31,8 +31,8 @@ import polars
 from .._header import without_metadata
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, node_kind, prefixes, rdf_map_entries, value_types
+from .shacl_ir import named_focus, split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
+from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, namespaces, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -44,13 +44,15 @@ _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
-    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None, lexical=True):
+    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None, lexical=True, undefined_namespace=CIM_NS):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
+        self.namespaces = namespaces(rdf_map)     # sh:targetNode on a class / enum value: its local name
+        self.undefined_namespace = undefined_namespace
         # a set: an ID typed in several instances repeats its Type row, and every
         # join on these rows (batch path rows, via_type) would count its values again
         type_rows = frame.filter(polars.col("KEY") == TYPE_KEY).select("VALUE", "ID").unique()
@@ -124,6 +126,10 @@ class _Context:
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""
         rows = self.base.filter(polars.col("KEY") == rule.path)
+        name = named_focus(rule, self.namespaces, self.value_types, self.undefined_namespace)
+        if name is not None:   # the focus is a class / enum value: the VALUE column holds its name
+            return rows.filter(polars.col("VALUE") == name).select(
+                polars.lit(rule.target_on, dtype=polars.Utf8).alias("FOCUS"), polars.col("ID").alias("PATH_VALUE"))
         ids = self.focus_ids_in(rule)
         if rule.inverse:
             plan = rows.filter(polars.col("VALUE").is_in(ids)).select(
@@ -614,7 +620,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     targets, notes = (shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
                                                   undefined_namespace=undefined_namespace)
                       if sparql_rules else ({}, pandas.DataFrame(columns=VIOLATION_COLUMNS)))
-    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets, lexical)
+    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets, lexical, undefined_namespace)
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — the other targets take the per-rule path

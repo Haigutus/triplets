@@ -25,10 +25,10 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import split_rules, FALLBACK_COMPONENTS
+from .shacl_ir import named_focus, split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from ..iri import CIM_NS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, prefixes, rdf_map_entries, value_types
+from ..iri import CIM_NS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, namespaces, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -59,10 +59,14 @@ def _focus_sql(rule, table):
     return _class_sql()
 
 
-def _rows_sql(rule, table):
+def _rows_sql(rule, table, context):
     """The rule's path as (FOCUS, PV) rows — inverse- and via_type-aware, like
     the other engines (via_type: PV = the referenced object's type; a target
-    without a Type row yields no value node, hence the inner join)."""
+    without a Type row yields no value node, hence the inner join; a
+    sh:targetNode class or enum value is matched by its name, ``named_focus``)."""
+    name = named_focus(rule, context.namespaces, context.value_types, context.undefined_namespace)
+    if name is not None:
+        return f"SELECT ? AS FOCUS, ID AS PV FROM {table} WHERE KEY = ? AND VALUE = ?", [rule.target_on, rule.path, name]
     if rule.inverse:
         sql = (f"SELECT VALUE AS FOCUS, ID AS PV FROM {table} "
                f"WHERE KEY = ? AND VALUE IN ({_focus_sql(rule, table)})")
@@ -93,7 +97,7 @@ _NULL_VALUE = "CAST(NULL AS VARCHAR)"
 # ── SQL builders: (rule, table, context) → (sql, params) ─────────────────────
 
 def _min_count(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
                 f"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
@@ -103,7 +107,7 @@ def _min_count(rule, table, context):
 
 
 def _max_count(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING COUNT(*) > ?"
     return _wrap(rule, f"{rule.path} occurs more than {rule.params} time(s)",
                  from_sql, [*rows_params, rule.params], "TRUE", [], value_expr=_NULL_VALUE)
@@ -115,7 +119,7 @@ def _datatype(rule, table, context):
     if spec is None:
         return None
     valid_pattern, warn_pattern = spec
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
 
     warn_sql = "regexp_full_match(PV, ?)" if warn_pattern else "FALSE"
     warn_params = [warn_pattern] if warn_pattern else []
@@ -135,19 +139,19 @@ def _datatype(rule, table, context):
 
 
 def _pattern(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     return _wrap(rule, f"value does not match pattern '{rule.params}'",
                  rows, rows_params, "NOT regexp_matches(PV, ?)", [rule.params])
 
 
 def _min_length(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     return _wrap(rule, f"value is shorter than {rule.params} characters",
                  rows, rows_params, "length(PV) < ?", [rule.params])
 
 
 def _max_length(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     return _wrap(rule, f"value is longer than {rule.params} characters",
                  rows, rows_params, "length(PV) > ?", [rule.params])
 
@@ -168,7 +172,7 @@ def _range(operator, description):
     the comparison is not true). A number bound is a float already; any other is
     parsed like the values, after the comparable-form gate the three engines share."""
     def builder(rule, table, context):
-        rows, rows_params = _rows_sql(rule, table)
+        rows, rows_params = _rows_sql(rule, table, context)
         space, bound = value_space.range_bound(rule.params)
         parsed = _PARSE[space]("PV")
         if space == "number":
@@ -185,7 +189,7 @@ def _range(operator, description):
 def _in(rule, table, context):
     """Value's lexical form (an IRI's local id; any other value as it is) against each member's
     text; the datatype is ignored."""
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     allowed = [str(value) for value in rule.params]
     local = f"CASE WHEN {iri_duckdb.is_iri('PV')} THEN {iri_duckdb.local_value('PV')} ELSE PV END"
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
@@ -193,7 +197,7 @@ def _in(rule, table, context):
 
 
 def _has_value(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
                 f"WHERE f.ID NOT IN (SELECT FOCUS FROM ({rows}) WHERE PV = ?)")
     return _wrap(rule, f"{rule.path} does not have required value '{rule.params}'",
@@ -202,7 +206,7 @@ def _has_value(rule, table, context):
 
 
 def _class(rule, table, context):
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     return _wrap(rule, f"referenced object is not of class {rule.params}",
                  rows, rows_params, f"PV NOT IN ({_class_sql()})", [rule.params])
 
@@ -210,7 +214,7 @@ def _class(rule, table, context):
 def _schema_range(rule, table, context):
     """triplets:range — ANY of the target's types in the allowed set conforms
     (issue #100); a target without a Type row is left to triplets:missing."""
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     placeholders = ", ".join("?" for _ in rule.params)
     condition = (f"EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = '{TYPE_KEY}') "
                  f"AND PV NOT IN (SELECT ID FROM {table} x "
@@ -221,7 +225,7 @@ def _schema_range(rule, table, context):
 
 def _schema_missing(rule, table, context):
     """triplets:missing — the referenced object has no Type row in the validated data."""
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     condition = f"NOT EXISTS (SELECT 1 FROM {table} x WHERE x.ID = PV AND x.KEY = '{TYPE_KEY}')"
     return _wrap(rule, "referenced object not found in the data", rows, rows_params, condition, [])
 
@@ -230,7 +234,7 @@ def _node_kind(rule, table, context):
     if rule.params not in ("IRI", "Literal"):
         logger.debug("sh:nodeKind %s not checkable on triplets — skipped (%s)", rule.params, rule.shape_id)
         return None
-    rows, rows_params = _rows_sql(rule, table)
+    rows, rows_params = _rows_sql(rule, table, context)
     # via_type value nodes are the referenced objects' types — always IRIs
     kind = "iri" if getattr(rule, "via_type", False) else node_kind(rule.path, context.value_types)
     if kind is not None:                                 # schema decides for the whole path
@@ -245,9 +249,9 @@ def _node_kind(rule, table, context):
                  rows, rows_params, condition, condition_params)
 
 
-def _pair_sql(rule, table, other_path):
+def _pair_sql(rule, table, context, other_path):
     """Both paths' values per focus node, for the pair constraints."""
-    left, left_params = _rows_sql(rule, table)
+    left, left_params = _rows_sql(rule, table, context)
     right = (f"SELECT ID AS FOCUS, VALUE AS OTHER FROM {table} "
              f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
     return left, left_params, right, [other_path, rule.target_on]
@@ -256,7 +260,7 @@ def _pair_sql(rule, table, other_path):
 def _equals(rule, table, context):
     """sh:equals is set equality per focus node: a value present at only one
     of the two properties is a violation; matching multi-valued sets conform."""
-    left, left_params, right, right_params = _pair_sql(rule, table, rule.params)
+    left, left_params, right, right_params = _pair_sql(rule, table, context, rule.params)
     from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
                 f"ANTI JOIN ({right}) b ON a.FOCUS = b.FOCUS AND a.PV = b.OTHER "
                 f"UNION ALL "
@@ -267,7 +271,7 @@ def _equals(rule, table, context):
 
 
 def _disjoint(rule, table, context):
-    left, left_params, right, right_params = _pair_sql(rule, table, rule.params)
+    left, left_params, right, right_params = _pair_sql(rule, table, context, rule.params)
     from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
                 f"JOIN ({right}) b ON a.FOCUS = b.FOCUS WHERE a.PV = b.OTHER")
     return _wrap(rule, f"{rule.path} shares a value with {rule.params}",
@@ -293,7 +297,7 @@ def _pair_compare(operator, description):
     value space (``value_space.pair_space``; null comparisons count as failed, like pandas)."""
     def builder(rule, table, context):
         other, space = value_space.pair_space(rule, context.entries, context.prefixes)
-        left, left_params, right, right_params = _pair_sql(rule, table, other)
+        left, left_params, right, right_params = _pair_sql(rule, table, context, other)
         holds, holds_params = ((f"TRY_CAST(a.PV AS DOUBLE) {operator} TRY_CAST(b.OTHER AS DOUBLE)", [])
                                if space == "number" else _typed_pair_holds(space, operator))
         from_sql = (f"SELECT a.FOCUS AS FOCUS, a.PV AS PV FROM ({left}) a "
@@ -344,12 +348,14 @@ class _Context:
     operands' types resolve from, and the lexical flag (shared with the other
     vectorized engines)."""
 
-    def __init__(self, rdf_map, lexical=True):
+    def __init__(self, rdf_map, lexical=True, undefined_namespace=CIM_NS):
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
+        self.namespaces = namespaces(rdf_map)     # sh:targetNode on a class / enum value: its local name
+        self.undefined_namespace = undefined_namespace
 
 
 def _create_types_table(connection, table, ancestors):
@@ -418,7 +424,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         targets, notes = shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
                                                      undefined_namespace=undefined_namespace)
         _create_targets_table(connection, targets)
-    context = _Context(rdf_map, lexical)
+    context = _Context(rdf_map, lexical, undefined_namespace)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
 

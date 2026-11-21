@@ -190,6 +190,19 @@ CASES = {
         sh:property [ sh:path rdf:type ; sh:sparql [ a sh:SPARQLConstraint ; sh:message "no name" ;
             sh:select """SELECT $this ?value WHERE { ?value a <http://iec.ch/TC57/CIM100#Breaker> .
                 FILTER NOT EXISTS { ?value <http://iec.ch/TC57/CIM100#IdentifiedObject.name> ?n } }""" ] ] .''', TRIO),
+    # the class as focus node: its instances are the values of the inverse rdf:type path
+    "target_node_class_instances": ("cim:V a sh:NodeShape ; sh:targetNode cim:Bay, cim:Substation, cim:VoltageLevel ; "
+                                    "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 1 ; sh:maxCount 2 ] .",
+                                    TRIO + obj("sub2", "Substation") + obj("sub3", "Substation")),
+    "target_node_class_instances_no_schema": ("cim:V a sh:NodeShape ; sh:targetNode cim:Bay, cim:VoltageLevel ; "
+                                              "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 1 ] .",
+                                              TRIO, NO_SCHEMA),
+    # a class of that name in another namespace has no instance
+    "target_node_class_other_namespace": ("cim:V a sh:NodeShape ; sh:targetNode <http://other.example/ns#Bay> ; "
+                                          "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 1 ] .", TRIO),
+    "target_node_enum_value": ("cim:V a sh:NodeShape ; sh:targetNode cim:SwitchKind.breaker, cim:SwitchKind.fuse ; "
+                               "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:minCount 1 ] .",
+                               TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
     "target_sparql": (sparql_target(HAS_CONTAINER, NAME_MIN), TRIO),
     "target_sparql_plus_class": (sparql_target(HAS_CONTAINER, f"sh:targetClass cim:Breaker ; {NAME_MIN}"), TRIO),
     "target_sparql_node": (sparql_target(HAS_CONTAINER, "sh:node cim:Named .") + NAMED, TRIO),

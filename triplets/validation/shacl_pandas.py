@@ -50,9 +50,10 @@ import pandas
 
 from .._header import without_metadata
 from ..export.nquads_utils import make_subject
-from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, prefixes, rdf_map_entries, split_iri,
+from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, split_iri,
                    value_types)
 from .schema_scope import ancestor_pairs
+from .shacl_ir import named_focus
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
 from .value_space import datatype_patterns
@@ -85,6 +86,7 @@ class _Context:
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
+        self.namespaces = namespaces(rdf_map)     # sh:targetNode on a class / enum value: its local name
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
@@ -166,14 +168,20 @@ class _Context:
 
         Normal path:  FOCUS = row ID,   PATH_VALUE = row VALUE.
         Inverse path: FOCUS = row VALUE (the referenced focus object),
-                      PATH_VALUE = row ID (the referencing object).
+                      PATH_VALUE = row ID (the referencing object); a
+                      sh:targetNode class or enum value is matched by its
+                      name (``shacl_ir.named_focus``).
         via_type:     PATH_VALUE = the referenced object's type (the
                       ( assoc rdf:type ) sequence path; SHACL path semantics:
                       a reference whose target has no Type row yields no
                       value node, hence the inner join).
         """
-        ids = self.focus(rule)
         rows = self.key_rows(rule.path)
+        name = named_focus(rule, self.namespaces, self.value_types, self.undefined_namespace)
+        if name is not None:   # the focus is a class / enum value: the VALUE column holds its name
+            rows = rows[rows["VALUE"] == name]
+            return pandas.DataFrame({"FOCUS": rule.target_on, "PATH_VALUE": rows["ID"].to_numpy()})
+        ids = self.focus(rule)
         if rule.inverse:
             rows = rows[_isin(rows["VALUE"], ids)]
             frame = pandas.DataFrame({"FOCUS": rows["VALUE"].to_numpy(),

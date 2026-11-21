@@ -556,6 +556,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`sh:targetNode <class IRI>` with `sh:path [ sh:inversePath rdf:type ]` finds the
+  class's instances** on pandas, polars and duckdb, as pyshacl does. The engines compared
+  the class IRI with the local `Type` VALUE, so a `sh:minCount 1` on that path ("no
+  TopologicalIsland instantiated") always failed. The node is matched when it is the IRI
+  the VALUE stands for (the name's schema namespace, else `undefined_namespace`); the
+  same holds for an enumeration value IRI under the inverse of an enumeration KEY.
 - **The parser's `Distribution` and `NamespaceMap` objects are no longer validated as
   data.** Every engine, pyshacl included, checked the two objects the parsers add to each
   file: `sh:targetSubjectsOf rdf:type` shapes reported them as classes outside the
