@@ -19,7 +19,7 @@ from ..iri import TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
 from .locations import member_name
-from .shacl_report import VIOLATION_COLUMNS
+from .shacl_report import VIOLATION_COLUMNS, run_language
 
 logger = logging.getLogger(__name__)
 
@@ -100,16 +100,21 @@ def concat_violations(frames):
     the joined runs' rule sets are kept in ``rule_sets``); lists and dicts united;
     other values kept when equal, else the list of distinct values; None is no value.
     A joined frame joins again: the result is the same however the frames are grouped.
-    The runs must share one constraint language (ValueError otherwise)."""
+    The frames must share one constraint language (ValueError otherwise): the run
+    metadata's, and for a frame without metadata the one its rows show
+    (``shacl_report.run_language``)."""
     frames = list(frames)
     if not frames:
         return pandas.DataFrame(columns=VIOLATION_COLUMNS)
+    # a frame's language is its run metadata's, else what its rows say (run_language);
+    # an empty frame without metadata says nothing
+    languages = {run_language(frame) for frame in frames if len(frame) or frame.attrs.get("validation")}
+    if len(languages) > 1:
+        raise ValueError("concat_violations joins runs of one constraint language (shacl or rdfs)")
     violations = pandas.concat(frames, ignore_index=True)
     metas = [frame.attrs["validation"] for frame in frames if frame.attrs.get("validation")]
     if not metas:
         return violations
-    if len({meta.get("language") for meta in metas}) > 1:
-        raise ValueError("concat_violations joins runs of one constraint language (shacl or rdfs)")
     merged = {}
     for meta in metas:
         for key, value in meta.items():

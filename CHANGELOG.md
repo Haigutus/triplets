@@ -595,6 +595,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `triplets.iri.METADATA_TYPES`, the one `cim-diff` and `cim-spreadsheet` use
   (`triplets.cli.METADATA_TYPES` is the same object). The schema validations never
   reported them: no schema defines the two classes.
+- **`concat_violations` raises on a schema frame without run metadata joined with a SHACL
+  frame.** Only the metadata was compared, so the result was one `triplets-shacl` run
+  holding schema rules. The language of a frame without metadata is the one its rows show,
+  as in the exports.
 - **`concat_violations` joins a frame it already joined.** A joined frame of runs with
   two rule sets (so also the frame of `validate_by_header`) raised
   `TypeError: unhashable type: 'list'` when joined again. The result is now the same

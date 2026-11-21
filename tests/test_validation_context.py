@@ -222,3 +222,10 @@ def test_concat_violations_merges_run_metadata(shapes):
     schema_run.attrs["validation"] = {**first.attrs["validation"], "language": "rdfs"}
     with pytest.raises(ValueError, match="one constraint language"):
         concat_violations([first, schema_run])
+    # a frame without metadata is told by its rows: schema shapes are no SHACL run
+    bare = pandas.DataFrame(first).assign(SOURCE_SHAPE="urn:triplets:schema:EQ#ACLineSegment.Conductor.length")
+    bare.attrs = {}
+    with pytest.raises(ValueError, match="one constraint language"):
+        concat_violations([bare, first])
+    assert len(concat_violations([bare, bare, bare.iloc[0:0]])) == 2
+    assert len(concat_violations([first, pandas.DataFrame(columns=first.columns)])) == 1
