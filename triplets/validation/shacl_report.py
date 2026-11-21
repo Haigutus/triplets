@@ -216,7 +216,9 @@ def violations_to_report_graph(violations, report_source=None, report_references
     ``sh:value`` has the term kind the schema entry type of the KEY gives it
     (:func:`~triplets.iri.absolute_value`): the IRI of the referenced object for
     an Association, the enumeration value IRI for an Enumeration, the class IRI
-    for ``Type`` (also without ``rdf_map``), a plain literal with the VALUE text
+    for ``Type`` (the name's schema namespace; ``undefined_namespace`` — CIM100 by
+    default — for a class the schema lacks and for every class without ``rdf_map``,
+    whatever the data's CIM version), a plain literal with the VALUE text
     for an Attribute and for a KEY the schema does not define — the same terms
     ``export_to_nquads`` writes for the row: a reference VALUE is
     :func:`~triplets.iri.absolute_id` of its text (``urn:uuid:…``, an absolute
