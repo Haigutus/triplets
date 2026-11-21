@@ -297,6 +297,10 @@ CASES = {
     "hasValue_iri": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:hasValue <urn:uuid:bay1>"), TRIO),
     "in_literals": (prop('sh:path cim:IdentifiedObject.name ; sh:in ( "B1" "B2" )'),
                     breaker("b1", (NAME, "B1")) + breaker("b2", (NAME, "other"))),
+    # a literal that looks like an ID form is compared as it is
+    "in_literals_like_ids": (prop('sh:path cim:IdentifiedObject.name ; sh:in ( "#1" "_2" "ok" )'),
+                             breaker("b1", (NAME, "#1")) + breaker("b2", (NAME, "_2")) + breaker("b3", (NAME, "1"))
+                             + breaker("b4", (NAME, "2")) + breaker("b5", (NAME, "ok"))),
     "in_enum": (prop("sh:path cim:Switch.kind ; sh:in ( cim:SwitchKind.open )"),
                 breaker("b1", ("Switch.kind", "SwitchKind.open")) + breaker("b2", ("Switch.kind", "SwitchKind.closed"))),
     # a "/"-only IRI stays whole, member and VALUE

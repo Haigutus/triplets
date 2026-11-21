@@ -183,10 +183,11 @@ def _range(operator, description):
 
 
 def _in(rule, table, context):
-    """Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""
+    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
+    text; the datatype is ignored."""
     rows, rows_params = _rows_sql(rule, table)
     allowed = [str(value) for value in rule.params]
-    local = iri_duckdb.local_value("PV")
+    local = f"CASE WHEN {iri_duckdb.is_iri('PV')} THEN {iri_duckdb.local_value('PV')} ELSE PV END"
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
                  rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
 
