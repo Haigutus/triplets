@@ -46,6 +46,7 @@ every engine's report carries the triplets:lexicalForm Warnings, with
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -55,7 +56,7 @@ from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, load_rdf_map
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
-from .shacl_ir import _mark_switched_off, _term
+from .shacl_ir import MESSAGE_VARIABLE, _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_ir import schema_name
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
@@ -217,9 +218,13 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=T
         violations = pandas.concat([violations, supplement], ignore_index=True)
     # identical findings once: a property shape on a parent and a child node shape
     # both reach a subclass instance, the same triple sits in two instance files,
-    # the lexical supplement repeats pyshacl
-    return violations.drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
-                                              "SOURCE_SHAPE", "SEVERITY"], ignore_index=True)
+    # the lexical supplement repeats pyshacl (in its own words). The solutions of a
+    # sh:sparql constraint are told apart by their message too: two that differ in
+    # another variable than ?value are two findings
+    solution = violations["MESSAGE"].where(violations["VIOLATION_TYPE"] == "sh:sparql")
+    repeated = violations.assign(MESSAGE=solution).duplicated(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
+                                                                      "SOURCE_SHAPE", "SEVERITY", "MESSAGE"])
+    return violations.loc[~repeated].reset_index(drop=True)
 
 
 def _present(violations, ir, language):
@@ -310,7 +315,13 @@ def _message_sources(violations, ir):
     authored = tuple(sorted({rule.message for rule in ir.itertuples()
                              if isinstance(rule.message, str) and rule.message},
                             key=len, reverse=True))
-    return ["shacl" if isinstance(message, str) and message.startswith(authored) else "engine"
+    # a sh:sparql message with {?variable} placeholders is authored with any values in them
+    filled = [re.compile(".*".join(map(re.escape, MESSAGE_VARIABLE.sub("\0", message).split("\0"))), re.DOTALL)
+              for message in authored if MESSAGE_VARIABLE.search(message)]
+
+    def is_authored(message):
+        return message.startswith(authored) or any(pattern.match(message) for pattern in filled)
+    return ["shacl" if isinstance(message, str) and is_authored(message) else "engine"
             for message in violations["MESSAGE"]]
 
 

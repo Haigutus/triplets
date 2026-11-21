@@ -53,7 +53,7 @@ from ..export.nquads_utils import make_subject
 from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, split_iri,
                    value_types)
 from .schema_scope import ancestor_pairs
-from .shacl_ir import named_focus
+from .shacl_ir import MESSAGE_VARIABLE, named_focus
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
 from .value_space import datatype_patterns
@@ -485,7 +485,8 @@ def _sparql_query_text(rule, focus_ids):
 
 
 def _sparql_violations(rule, result):
-    """Each SELECT result row is one violation: $this = focus node, ?value = value."""
+    """Each SELECT result row is one violation: $this = focus node, ?value = value,
+    the sh:message with the row's variables filled in (``_solution_messages``)."""
     if result is None or len(result) == 0 or "this" not in result.columns:
         return _empty()
     result = result[result["this"].notna()]   # a row without a focus node is no violation
@@ -493,7 +494,22 @@ def _sparql_violations(rule, result):
         return _empty()                       #  for some aggregate queries)
     focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
     values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
-    return _frame(rule, focus, values, "sparql constraint violated")
+    violations = _frame(rule, focus, values, "sparql constraint violated")
+    if rule.message and MESSAGE_VARIABLE.search(rule.message):
+        violations["MESSAGE"] = _solution_messages(rule.message, result)
+    return violations
+
+
+def _solution_messages(message, result):
+    """*message* once per solution, each ``{?name}`` / ``{$name}`` replaced by the
+    solution's term for that variable as the query returned it (an IRI whole, a
+    literal's lexical form — what pyshacl writes); a variable the solution does not
+    bind stays as written."""
+    names = [name for name in dict.fromkeys(MESSAGE_VARIABLE.findall(message)) if name in result.columns]
+    bound = result[names].astype(object).where(result[names].notna(), None)
+    return [MESSAGE_VARIABLE.sub(lambda variable: variable[0] if solution.get(variable[1]) is None
+                                 else str(solution[variable[1]]), message)
+            for solution in bound.to_dict("records")]
 
 
 def _shorten(terms, rule):

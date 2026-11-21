@@ -97,6 +97,11 @@ query that walks them on pyshacl only — no CGMES target query does). Schema cl
 never widen: each Class entry already lists its inherited attributes.
 Identical findings are reported once (a property shape on both a parent and a
 child node shape, the same triple in two instance files).
+Every solution of a `sh:sparql` constraint is a finding, with the constraint's
+`sh:message` filled in from the solution: `{?name}` / `{$name}` becomes the
+solution's value of that variable (an IRI whole, a literal's text; a variable the
+solution does not bind stays as written). Solutions that differ only in a variable
+other than `?value` stay apart when the message names that variable.
 
 The objects the parsers add to every file — `Distribution` (the file name) and
 `NamespaceMap` (the namespace prefixes), `triplets.iri.METADATA_TYPES`, the set
@@ -273,7 +278,7 @@ registries that consume it are internal.
 | `component` | str | the dispatch key (`"sh:minCount"`, …) — see the matrix below |
 | `params` | object | component parameter, shape varies (next table) |
 | `severity` | str | local name of `sh:severity`, default `"Violation"` applied at compile time |
-| `message` | str \| None | `sh:message` (several: sorted, newline-joined); engines substitute their own default text when None |
+| `message` | str \| None | `sh:message` (several: sorted, newline-joined); engines substitute their own default text when None; a `sh:sparql` message keeps its `{?name}` placeholders here, filled per solution at run time |
 | `name`, `description` | str \| None | `sh:name`/`sh:description` with parent-NodeShape inheritance — read only by `context.enrich`, never by engines |
 
 `params` per component:

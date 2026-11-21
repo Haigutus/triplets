@@ -173,6 +173,11 @@ def _term(shape_id):
     return rdflib.URIRef(shape_id) if _is_iri(shape_id) else rdflib.BNode(shape_id)
 
 
+MESSAGE_VARIABLE = re.compile(r"\{[?$](\w+)\}")
+"""``{?name}`` / ``{$name}`` in the sh:message of a sh:sparql constraint: replaced by the
+solution's value of that variable (SHACL 5.3.2)."""
+
+
 def named_focus(rule, namespaces, value_types, undefined_namespace):
     """The VALUE an inverse path looks for when the rule's ``sh:targetNode`` is a class
     (``sh:inversePath rdf:type``) or an enumeration value: the VALUE column holds the

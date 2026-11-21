@@ -166,6 +166,9 @@ A1, A2, VL, SUB = (f"{n:08d}-0000-0000-0000-000000000000" for n in (1, 2, 71, 72
 SEGMENTS = (obj(A1, "ACLineSegment", (CONT, VL), (NAME, "L1")) + obj(A2, "ACLineSegment", (CONT, SUB))
             + obj(VL, "VoltageLevel") + obj(SUB, "Substation"))
 
+COUNT_CLASSES = """sh:sparql [ sh:prefixes cim: ;
+    sh:message "The class {?class} appears {?value} times in the data graph ({$this}, {?unbound})." ;
+    sh:select "SELECT $this ?class (COUNT(?instance) AS ?value) WHERE { ?instance rdf:type ?class . } GROUP BY $this ?class" ] ] ."""
 HAS_CONTAINER = "SELECT DISTINCT ?this WHERE { ?this rdf:type cim:Breaker ; cim:Equipment.EquipmentContainer ?c . }"
 SHARED = """cim:P a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; {constraint} .
     cim:B a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:P .
@@ -383,6 +386,12 @@ CASES = {
     "sparql_constraint_message": (prop("""sh:path cim:IdentifiedObject.name ;
         sh:sparql [ sh:message "no B1" ;
                     sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "B1") }' ]"""), TRIO),
+    # the APL ClassCount form: one solution per class, told apart by ?class in the message only
+    "sparql_constraint_message_variables": (
+        "cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:property [ sh:path rdf:type ; sh:severity sh:Info ; " + COUNT_CLASSES,
+        TRIO + breaker("b4") + breaker("b5") + obj("vl1", "VoltageLevel") + obj("vl2", "VoltageLevel")
+        + obj("l1", "Line") + obj("l2", "Line") + obj("t1", "Terminal") + obj("j1", "Junction") + obj("bs1", "BusbarSection")
+        + obj("g1", "GeographicalRegion")),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
     # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has
@@ -789,3 +798,18 @@ def test_parser_metadata_is_not_validated(engine, scope):
     assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {
         ("sub1", "sh:in"), ("b2", "sh:minCount"), ("b3", "sh:minCount"), ("sub1", "sh:minCount")}
     assert violations.attrs["validation"]["source"] == ["grid/eq.xml"]
+
+
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_sparql_solutions_are_findings_with_their_message(engine):
+    """Nine classes, nine solutions, nine findings: the counts 1 and 2 repeat and
+    only the class in the message tells those solutions apart."""
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    case = "sparql_constraint_message_variables"
+    violations = triplets.validation.validate_shacl(frame(CASES[case][1]), compiled(case), engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*", lexical=False)
+    assert len(violations) == 9 and set(violations["MESSAGE_SOURCE"]) == {"shacl"}
+    assert sorted(violations["VALUE"].astype(str)) == ["1"] * 6 + ["2"] * 2 + ["5"]
+    assert (f"The class {CIM}Breaker appears 5 times in the data graph (urn:uuid:bay1, {{?unbound}})."
+            in set(violations["MESSAGE"]))

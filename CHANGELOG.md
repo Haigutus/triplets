@@ -556,6 +556,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **Every `sh:sparql` solution is a finding, with its `sh:message` filled in.**
+  Solutions that differed only in a variable other than `?value` were reported once,
+  and `{?name}` / `{$name}` in the message stayed as written (APL `ClassCount`: 9
+  classes, 3 rows with the text `The class {?class} appears {?value} times …`). The
+  placeholders are now replaced by the solution's values, as pyshacl writes them (an
+  IRI whole, a literal's text), on every engine, and identical findings of a
+  `sh:sparql` constraint are told apart by the message too. `MESSAGE_SOURCE` of a
+  filled message is `shacl`.
 - **`sh:targetNode <class IRI>` with `sh:path [ sh:inversePath rdf:type ]` finds the
   class's instances** on pandas, polars and duckdb, as pyshacl does. The engines compared
   the class IRI with the local `Type` VALUE, so a `sh:minCount 1` on that path ("no
