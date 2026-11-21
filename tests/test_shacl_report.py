@@ -497,6 +497,13 @@ cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     assert [str(item).split("#")[-1] for item in allowed] == ["Bay", "VoltageLevel"]
     # and the human-readable twin
     assert (violations["EXPECTED"] == "one of: Bay, VoltageLevel").all()
+    # a finding of a shape without sh:path (the closed NodeShape), next to the embedded sh:in list: a reference
+    closed = violations.assign(SOURCE_SHAPE="http://iec.ch/TC57/CIM100#BreakerShape", VALUE="s1")
+    both = pandas.concat([violations, closed, closed.assign(SOURCE_SHAPE=None)], ignore_index=True)
+    both.attrs = violations.attrs
+    cim = "http://iec.ch/TC57/CIM100#"
+    values = violations_to_report_graph(both, rdf_map={"Equipment.EquipmentContainer": {"type": "Association", "namespace": cim}})
+    assert sorted(values.objects(None, sh.value)) == [rdflib.URIRef(cim + "Substation")] + [rdflib.URIRef("urn:uuid:s1")] * 2
     # with the schema, the value of the ( association rdf:type ) path is the class, there and back
     cim = "http://iec.ch/TC57/CIM100#"
     rdf_map = {"Substation": {"type": "Class", "namespace": cim},

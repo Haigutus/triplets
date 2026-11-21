@@ -272,7 +272,8 @@ def violations_to_report_graph(violations, report_source=None, report_references
     def reports_type(shape):
         if shape not in via_type:
             path = None if pandas.isna(shape) else graph.value(_shape_term(str(shape)), sh.path)
-            via_type[shape] = (path, rdflib.RDF.first, None) in graph and list(Collection(graph, path))[-1] == rdflib.RDF.type
+            members = list(Collection(graph, path)) if path is not None and (path, rdflib.RDF.first, None) in graph else []
+            via_type[shape] = members[-1:] == [rdflib.RDF.type]
         return via_type[shape]
 
     def value_term(key, value, shape):
