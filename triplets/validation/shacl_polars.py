@@ -31,7 +31,7 @@ import polars
 from .._header import without_metadata
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from .shacl_ir import named_focus, split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
+from .shacl_ir import holds_names, split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, namespaces, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
@@ -97,9 +97,17 @@ class _Context:
         or VALUE (targetObjectsOf), computed once per KEY."""
         cache_key = (column, key)
         if cache_key not in self._subjects:
-            ids = self._frame.filter(polars.col("KEY") == key)[column].unique().rename("ID")
+            ids = self._frame.filter(polars.col("KEY") == key).select(
+                (self.nodes(key) if column == "VALUE" else polars.col(column)).alias("ID"))["ID"].unique()
             self._subjects[cache_key] = (ids, ids.implode())
         return self._subjects[cache_key]
+
+    def nodes(self, key):
+        """The VALUE column under *key* as focus nodes: a class or enumeration value
+        is the IRI it stands for (``shacl_ir.holds_names``), any other VALUE its text."""
+        if not holds_names(key, self.value_types):
+            return polars.col("VALUE")
+        return iri_polars.absolute_name("VALUE", self.namespaces, self.undefined_namespace)
 
     def _focus(self, rule):
         """(flat IDs, imploded IDs) the rule applies to, by ``target_by``."""
@@ -126,14 +134,10 @@ class _Context:
     def path_rows(self, rule):
         """The rule's path as a lazy (FOCUS, PATH_VALUE) plan, restricted to the rule's focus."""
         rows = self.base.filter(polars.col("KEY") == rule.path)
-        name = named_focus(rule, self.namespaces, self.value_types, self.undefined_namespace)
-        if name is not None:   # the focus is a class / enum value: the VALUE column holds its name
-            return rows.filter(polars.col("VALUE") == name).select(
-                polars.lit(rule.target_on, dtype=polars.Utf8).alias("FOCUS"), polars.col("ID").alias("PATH_VALUE"))
         ids = self.focus_ids_in(rule)
         if rule.inverse:
-            plan = rows.filter(polars.col("VALUE").is_in(ids)).select(
-                polars.col("VALUE").alias("FOCUS"), polars.col("ID").alias("PATH_VALUE"))
+            plan = rows.select(self.nodes(rule.path).alias("FOCUS"), polars.col("ID").alias("PATH_VALUE")).filter(
+                polars.col("FOCUS").is_in(ids))
         else:
             plan = rows.filter(polars.col("ID").is_in(ids)).select(
                 polars.col("ID").alias("FOCUS"), polars.col("VALUE").alias("PATH_VALUE"))
@@ -624,7 +628,9 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — the other targets take the per-rule path
-        if rule.component in BATCH_BUILDERS and getattr(rule, "target_by", "Type") == "Type":
+        # (nor an inverse path over names: its focus is the IRI a VALUE stands for)
+        if (rule.component in BATCH_BUILDERS and getattr(rule, "target_by", "Type") == "Type"
+                and not (rule.inverse and holds_names(rule.path, context.value_types))):
             batched.setdefault(rule.component, []).append(rule)
         elif (plan := PLAN_BUILDERS[rule.component](context, rule)) is not None:
             plans.append(plan)

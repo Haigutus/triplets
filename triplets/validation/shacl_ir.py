@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, XSD_NS, absolute_value, local_id, local_key, local_value, split_iri
+from ..iri import SH_NS, TYPE_KEY, XSD_NS, local_id, local_key, local_value, split_iri
 from .value_space import bound_space, pair_params
 
 logger = logging.getLogger(__name__)
@@ -178,17 +178,13 @@ MESSAGE_VARIABLE = re.compile(r"\{[?$](\w+)\}")
 solution's value of that variable (SHACL 5.3.2)."""
 
 
-def named_focus(rule, namespaces, value_types, undefined_namespace):
-    """The VALUE an inverse path looks for when the rule's ``sh:targetNode`` is a class
-    (``sh:inversePath rdf:type``) or an enumeration value: the VALUE column holds the
-    local name, and the node is the IRI that name stands for (``iri.absolute_value``:
-    the name's schema namespace, else *undefined_namespace*). None for every other
-    rule: a node id is spelled alike as focus and as VALUE."""
-    if not rule.inverse or rule.target_by != "ID" or getattr(rule, "focus_ids", None) is not None:
-        return None
-    name = split_iri(rule.target_on)[1]
-    term = absolute_value(rule.path, name, namespaces, value_types, undefined_namespace=undefined_namespace)
-    return name if term == ("iri", rule.target_on) else None
+def holds_names(key, value_types):
+    """Whether the VALUEs under *key* are names that stand for IRI nodes: classes
+    (``Type``) and enumeration values. As a focus node — ``sh:targetObjectsOf``, a
+    ``sh:targetNode`` class, the focus of an inverse path — such a VALUE is its IRI
+    (``iri.absolute_name``: the name's schema namespace, else the undefined
+    namespace); a reference VALUE is a node id as it is."""
+    return key == TYPE_KEY or value_types.get(key) == "enum"
 
 
 def _mark_switched_off(graph, compiled):

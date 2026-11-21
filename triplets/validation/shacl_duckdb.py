@@ -25,10 +25,10 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import named_focus, split_rules, FALLBACK_COMPONENTS
+from .shacl_ir import holds_names, split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from ..iri import CIM_NS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, namespaces, node_kind, prefixes, rdf_map_entries, value_types
+from ..iri import CIM_NS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -43,15 +43,18 @@ def _class_sql():
     return "SELECT ID FROM _shacl_types WHERE VALUE = ?"
 
 
-def _focus_sql(rule, table):
+def _focus_sql(rule, table, context):
     """The rule's focus nodes (bound with one target_on parameter), by ``target_by``:
-    the IDs having the KEY, the VALUEs under the KEY, the one ID, the SPARQL
-    target's result (``_shacl_targets``), or the Type's instances."""
+    the IDs having the KEY, the VALUEs under the KEY (classes and enumeration values
+    as the IRIs they stand for, ``_shacl_names``), the one ID, the SPARQL target's
+    result (``_shacl_targets``), or the Type's instances."""
     by = getattr(rule, "target_by", "Type")
     if by == "SPARQL":
         return "SELECT ID FROM _shacl_targets WHERE QUERY = ?"
     if by == "KEY":
         return f"SELECT DISTINCT ID FROM {table} WHERE KEY = ?"
+    if by == "VALUE" and holds_names(rule.target_on, context.value_types):
+        return "SELECT IRI AS ID FROM _shacl_names WHERE KEY = ?"
     if by == "VALUE":
         return f"SELECT DISTINCT VALUE AS ID FROM {table} WHERE KEY = ?"
     if by == "ID":
@@ -62,17 +65,17 @@ def _focus_sql(rule, table):
 def _rows_sql(rule, table, context):
     """The rule's path as (FOCUS, PV) rows — inverse- and via_type-aware, like
     the other engines (via_type: PV = the referenced object's type; a target
-    without a Type row yields no value node, hence the inner join; a
-    sh:targetNode class or enum value is matched by its name, ``named_focus``)."""
-    name = named_focus(rule, context.namespaces, context.value_types, context.undefined_namespace)
-    if name is not None:
-        return f"SELECT ? AS FOCUS, ID AS PV FROM {table} WHERE KEY = ? AND VALUE = ?", [rule.target_on, rule.path, name]
-    if rule.inverse:
+    without a Type row yields no value node, hence the inner join; under an inverse
+    path a class or enumeration VALUE is the IRI it stands for, ``_shacl_names``)."""
+    if rule.inverse and holds_names(rule.path, context.value_types):
+        sql = (f"SELECT n.IRI AS FOCUS, t.ID AS PV FROM {table} t JOIN _shacl_names n ON n.KEY = t.KEY AND n.VALUE = t.VALUE "
+               f"WHERE t.KEY = ? AND n.IRI IN ({_focus_sql(rule, table, context)})")
+    elif rule.inverse:
         sql = (f"SELECT VALUE AS FOCUS, ID AS PV FROM {table} "
-               f"WHERE KEY = ? AND VALUE IN ({_focus_sql(rule, table)})")
+               f"WHERE KEY = ? AND VALUE IN ({_focus_sql(rule, table, context)})")
     else:
         sql = (f"SELECT ID AS FOCUS, VALUE AS PV FROM {table} "
-               f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
+               f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table, context)})")
     if getattr(rule, "via_type", False):
         sql = (f"SELECT r.FOCUS AS FOCUS, t.VALUE AS PV FROM ({sql}) r "
                f"JOIN (SELECT DISTINCT ID, VALUE FROM {table} WHERE KEY = '{TYPE_KEY}') t ON t.ID = r.PV")
@@ -98,7 +101,7 @@ _NULL_VALUE = "CAST(NULL AS VARCHAR)"
 
 def _min_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
-    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
+    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
                 f"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
     return _wrap(rule, f"{rule.path} occurs fewer than {rule.params} time(s)",
@@ -198,7 +201,7 @@ def _in(rule, table, context):
 
 def _has_value(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
-    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table)}) f "
+    from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
                 f"WHERE f.ID NOT IN (SELECT FOCUS FROM ({rows}) WHERE PV = ?)")
     return _wrap(rule, f"{rule.path} does not have required value '{rule.params}'",
                  from_sql, [rule.target_on, *rows_params, str(rule.params)], "TRUE", [],
@@ -253,7 +256,7 @@ def _pair_sql(rule, table, context, other_path):
     """Both paths' values per focus node, for the pair constraints."""
     left, left_params = _rows_sql(rule, table, context)
     right = (f"SELECT ID AS FOCUS, VALUE AS OTHER FROM {table} "
-             f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table)})")
+             f"WHERE KEY = ? AND ID IN ({_focus_sql(rule, table, context)})")
     return left, left_params, right, [other_path, rule.target_on]
 
 
@@ -311,7 +314,7 @@ def _pair_compare(operator, description):
 def _closed(rule, table, context):
     allowed = list(set(rule.params) | {TYPE_KEY})
     sql = (f"SELECT ID, KEY, VALUE, ? AS VIOLATION_TYPE, ? AS MESSAGE, ? AS SEVERITY, ? AS SOURCE_SHAPE "
-           f"FROM {table} WHERE ID IN ({_focus_sql(rule, table)}) AND NOT list_contains(?, KEY)")
+           f"FROM {table} WHERE ID IN ({_focus_sql(rule, table, context)}) AND NOT list_contains(?, KEY)")
     params = [rule.component, rule.message or "property is not allowed on a closed shape",
               rule.severity, rule.shape_id, rule.target_on, allowed]
     return sql, params
@@ -372,6 +375,23 @@ def _create_types_table(connection, table, ancestors):
         connection.unregister("_shacl_type_ancestors")
 
 
+def _create_names_table(connection, table, rules, context):
+    """Temp ``_shacl_names`` (KEY, VALUE, IRI): the class and enumeration VALUEs the
+    *rules* meet as focus nodes — a ``sh:targetObjectsOf`` KEY, an inverse path —
+    with the IRI each stands for (``iri.absolute_name``)."""
+    keys = sorted({key for rule in rules for key in ((rule.target_on,) if rule.target_by == "VALUE" else ())
+                   + ((rule.path,) if rule.inverse else ()) if holds_names(key, context.value_types)})
+    connection.execute("CREATE OR REPLACE TEMP TABLE _shacl_names (KEY VARCHAR, VALUE VARCHAR, IRI VARCHAR)")
+    if not keys:
+        return
+    names = connection.execute(f"SELECT DISTINCT KEY, VALUE FROM {table} WHERE VALUE IS NOT NULL "
+                               f"AND KEY IN ({', '.join('?' for _ in keys)})", keys).df().astype(object)
+    names["IRI"] = iri_pandas.absolute_name(names["VALUE"].astype(str), context.namespaces, context.undefined_namespace)
+    connection.register("_shacl_name_rows", names)
+    connection.execute("INSERT INTO _shacl_names SELECT KEY, VALUE, IRI FROM _shacl_name_rows")
+    connection.unregister("_shacl_name_rows")
+
+
 def _create_targets_table(connection, targets):
     """Temp ``_shacl_targets`` (QUERY, ID): the focus IDs per SPARQL target query.
     A native table, like ``_shacl_types``; the schema is explicit because an
@@ -426,6 +446,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
                                                      undefined_namespace=undefined_namespace)
         _create_targets_table(connection, targets)
     context = _Context(rdf_map, lexical, undefined_namespace)
+    _create_names_table(connection, table, vectorized, context)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
 
@@ -458,6 +479,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     # don't leave them on the caller's connection
     connection.execute("DROP TABLE IF EXISTS _shacl_types")
     connection.execute("DROP TABLE IF EXISTS _shacl_targets")
+    connection.execute("DROP TABLE IF EXISTS _shacl_names")
     connection.execute("DROP VIEW IF EXISTS _shacl_scoped")
     connection.execute("DROP TABLE IF EXISTS _shacl_metadata")
     return violations

@@ -206,6 +206,20 @@ CASES = {
     "target_node_enum_value": ("cim:V a sh:NodeShape ; sh:targetNode cim:SwitchKind.breaker, cim:SwitchKind.fuse ; "
                                "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:minCount 1 ] .",
                                TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
+    # the classes and enumeration values in use as focus nodes: the IRIs the VALUEs stand for
+    "target_objects_of_type": ("cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type ; "
+                               f"sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 2 ] ; {NAME_MIN}", TRIO),
+    "target_objects_of_type_no_schema": ("cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type ; "
+                                         "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:maxCount 1 ] .",
+                                         TRIO, NO_SCHEMA),
+    "target_objects_of_enum": ("cim:O a sh:NodeShape ; sh:targetObjectsOf cim:Switch.kind ; "
+                               "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:minCount 2 ] .",
+                               TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq"), ("b2", "Switch.kind", "SwitchKind.breaker", "eq"),
+                                       ("b3", "Switch.kind", "SwitchKind.fuse", "eq")]),
+    "target_objects_of_type_data_scope": ("cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type ; "
+                                          "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 2 ] .",
+                                          TRIO + breaker("x1", instance="other") + obj("l1", "Line", instance="other"),
+                                          {"data_scope": ["eq"]}),
     "target_sparql": (sparql_target(HAS_CONTAINER, NAME_MIN), TRIO),
     "target_sparql_plus_class": (sparql_target(HAS_CONTAINER, f"sh:targetClass cim:Breaker ; {NAME_MIN}"), TRIO),
     "target_sparql_node": (sparql_target(HAS_CONTAINER, "sh:node cim:Named .") + NAMED, TRIO),

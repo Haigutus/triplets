@@ -566,6 +566,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`sh:targetObjectsOf rdf:type` findings carry the class IRI as `ID`** on pandas, polars
+  and duckdb, as pyshacl reports them (`http://iec.ch/TC57/CIM100#Bay`; it was the local
+  `Bay`), and so do the findings of `sh:targetObjectsOf` on an enumeration KEY. A class
+  or enumeration VALUE met as a focus node is the IRI it stands for, from every target
+  and under every inverse path.
 - **`cim-spreadsheet` keeps the values pandas reads as missing, and texts that start with
   `=`.** A VALUE `NaN` (a legal `xsd:float`), `NA`, `null`, `None`, `N/A` or `nan` was
   dropped on the way back from CSV and Excel, and a VALUE `=1+2` was written to Excel as

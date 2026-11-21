@@ -53,7 +53,7 @@ from ..export.nquads_utils import make_subject
 from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, split_iri,
                    value_types)
 from .schema_scope import ancestor_pairs
-from .shacl_ir import MESSAGE_VARIABLE, named_focus
+from .shacl_ir import MESSAGE_VARIABLE, holds_names
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
 from .value_space import datatype_patterns
@@ -144,6 +144,14 @@ class _Context:
             self._typed_ids = self.key_rows(TYPE_KEY)["ID"].astype(object).unique()
         return self._typed_ids
 
+    def nodes(self, key, values):
+        """The VALUEs under *key* as focus nodes: a class or enumeration value is
+        the IRI it stands for (``shacl_ir.holds_names``), any other VALUE its text."""
+        values = values.astype(str)
+        if not holds_names(key, self.value_types):
+            return values
+        return iri_pandas.absolute_name(values, self.namespaces, self.undefined_namespace)
+
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
         referenced value nodes), else what ``target_by`` names: the IDs having
@@ -158,7 +166,7 @@ class _Context:
         if by == "KEY":
             return self.key_rows(rule.target_on)["ID"].unique()
         if by == "VALUE":
-            return self.key_rows(rule.target_on)["VALUE"].astype(str).unique()
+            return self.nodes(rule.target_on, self.key_rows(rule.target_on)["VALUE"]).unique()
         if by == "ID":
             return numpy.array([rule.target_on], dtype=object)
         return self.class_ids(rule.target_on)
@@ -168,24 +176,20 @@ class _Context:
 
         Normal path:  FOCUS = row ID,   PATH_VALUE = row VALUE.
         Inverse path: FOCUS = row VALUE (the referenced focus object),
-                      PATH_VALUE = row ID (the referencing object); a
-                      sh:targetNode class or enum value is matched by its
-                      name (``shacl_ir.named_focus``).
+                      PATH_VALUE = row ID (the referencing object); a class
+                      or enum VALUE is the IRI node it stands for (``nodes``).
         via_type:     PATH_VALUE = the referenced object's type (the
                       ( assoc rdf:type ) sequence path; SHACL path semantics:
                       a reference whose target has no Type row yields no
                       value node, hence the inner join).
         """
         rows = self.key_rows(rule.path)
-        name = named_focus(rule, self.namespaces, self.value_types, self.undefined_namespace)
-        if name is not None:   # the focus is a class / enum value: the VALUE column holds its name
-            rows = rows[rows["VALUE"] == name]
-            return pandas.DataFrame({"FOCUS": rule.target_on, "PATH_VALUE": rows["ID"].to_numpy()})
         ids = self.focus(rule)
         if rule.inverse:
-            rows = rows[_isin(rows["VALUE"], ids)]
-            frame = pandas.DataFrame({"FOCUS": rows["VALUE"].to_numpy(),
-                                      "PATH_VALUE": rows["ID"].to_numpy()})
+            nodes = self.nodes(rule.path, rows["VALUE"])
+            found = _isin(nodes, ids)
+            frame = pandas.DataFrame({"FOCUS": nodes[found].to_numpy(),
+                                      "PATH_VALUE": rows.loc[found, "ID"].to_numpy()})
         else:
             rows = rows[_isin(rows["ID"], ids)]
             frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
