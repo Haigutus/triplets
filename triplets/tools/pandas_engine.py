@@ -538,7 +538,7 @@ def set_value_at_key_and_id(data, key, value, id):
     data.loc[data[(data.ID == id) & (data.KEY == key)].index, "VALUE"] = _string_or_none(value)
 
 
-def triplets_to_tableviews(triplet_df, multivalue=False, string_to_number=True):
+def triplets_to_tableviews(triplet_df, multivalue=False, *, string_to_number=True):
     """Convert triplet DataFrame to dict of tableview DataFrames.
 
     Parameters

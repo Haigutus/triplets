@@ -351,7 +351,7 @@ def set_value_at_key_and_id(data, key, value, id):
     )
 
 
-def triplets_to_tableviews(triplet_df, multivalue=False, string_to_number=True):
+def triplets_to_tableviews(triplet_df, multivalue=False, *, string_to_number=True):
     """Convert triplet DataFrame to dict of tableview DataFrames; ``string_to_number=False``
     keeps every VALUE as its text."""
     td = types_dict(triplet_df)

@@ -470,8 +470,10 @@ def get_namespace_map(self, table=None, schema=None, table_name=None):
 
 
 def triplets_to_tableviews(self, table=None, schema=None, table_name=None,
-                           string_to_number=False, multivalue=False):
-    """Return {type_name: tableview relation} for every type in the dataset."""
+                           multivalue=False, *, string_to_number=False):
+    """Return {type_name: tableview relation} for every type in the dataset
+    (*multivalue* / *string_to_number* as in the pandas and polars engines;
+    ``string_to_number=True`` is not implemented here, see ``type_tableview``)."""
     return {name: type_tableview(self, name, table=table, schema=schema, table_name=table_name,
                                  string_to_number=string_to_number, multivalue=multivalue)
             for name in types_dict(self, table=table, schema=schema, table_name=table_name)}
