@@ -67,11 +67,14 @@ exported as ``rdf:Description`` in CIM XML and as no ``rdf:type`` in N-Quads."""
 
 UUID_PREFIX = "urn:uuid:"
 ID_PREFIXES = ("urn:uuid:", "#_", "#", "_")      # longest first; exactly one is stripped ("#x" references rdf:ID="x")
+ID_REPLACEMENT = r"\1"                            # what ID_PREFIX_RE is replaced with: the character after a bare "#"
 URI_PREFIXES = ("http://", "https://", "urn:")
 
 # Flavors consume ``.pattern`` — keep case and anchors inside the pattern text,
 # never in flags, so pandas / polars / duckdb / C++ see the same regex.
-ID_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, ID_PREFIXES)) + ")")
+# a bare "#" is a prefix only when something follows (group 1; "#" alone is the document itself)
+ID_PREFIX_RE = re.compile("^(?:" + "|".join(re.escape(prefix) + ("(.)" if prefix == "#" else "")
+                                            for prefix in ID_PREFIXES) + ")")
 URI_PREFIX_RE = re.compile("^(?:" + "|".join(map(re.escape, URI_PREFIXES)) + ")")
 SPLIT_RE = re.compile(r"^(?:.*[#/]|urn:.*:)")  # the namespace: up to the last "#" or "/", else a URN's last ":"
 GUESS_NAME_RE = re.compile(r"^http.*#(?:.*/)?")   # local_value guess: split_iri's namespace, only for http IRIs with a "#"; an empty rest keeps the value whole
@@ -96,12 +99,13 @@ IRI_ESCAPE_RE = re.compile("|".join(IRI_ESCAPES.values()))
 # ── local (schema-free) ──────────────────────────────────────────────────────
 
 def local_id(text):
-    """``urn:uuid:x`` / ``#_x`` / ``#x`` / ``_x`` → ``x``. One prefix, longest first. None → None."""
+    """``urn:uuid:x`` / ``#_x`` / ``#x`` / ``_x`` → ``x``. One prefix, longest first; a lone
+    ``#`` stays. None → None."""
     if text is None:
         return None
     text = str(text)
     for prefix in ID_PREFIXES:          # a startswith loop beats ID_PREFIX_RE.sub per call
-        if text.startswith(prefix):
+        if text.startswith(prefix) and text != "#":
             return text[len(prefix):]
     return text
 

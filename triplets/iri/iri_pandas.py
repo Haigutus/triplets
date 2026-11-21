@@ -7,7 +7,7 @@ downcast is deprecated on object columns).
 import numpy
 import pandas
 
-from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
+from . import (GUESS_NAME_RE, ID_PREFIX_RE, ID_REPLACEMENT, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
                TYPE_KEY, URI_PREFIXES, UUID_PREFIX, UUID_RE)
 from . import decode_iri as _decode_iri, encode_iri as _encode_iri
 
@@ -36,7 +36,7 @@ def split_iri(series):
 
 
 def local_id(series):
-    return series.str.replace(ID_PREFIX_RE.pattern, "", regex=True)
+    return series.str.replace(ID_PREFIX_RE.pattern, ID_REPLACEMENT, regex=True)
 
 
 def local_key(series, type_key=TYPE_KEY):

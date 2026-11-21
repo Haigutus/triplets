@@ -338,6 +338,8 @@ LOCAL_CASES = [
     ("local_id", "urn:uuid:_x", "_x"),                       # exactly one prefix
     ("local_id", "#__x", "_x"),
     ("local_id", "#x", "x"),                                 # rdf:resource="#x" references rdf:ID="x"
+    ("local_id", "#", "#"),                                  # the document itself: nothing follows the "#"
+    ("local_id", "##c", "#c"),
     ("local_id", "http://example.org/ns#g", "http://example.org/ns#g"),
     ("local_id", "plain", "plain"),
     ("local_value", None, None),

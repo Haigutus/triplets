@@ -5,7 +5,7 @@ like the other flavors.
 """
 
 
-from . import GUESS_NAME_RE, ID_PREFIX_RE, SPLIT_RE
+from . import GUESS_NAME_RE, ID_PREFIX_RE, ID_REPLACEMENT, SPLIT_RE, URI_PREFIX_RE
 
 
 def _local(column):
@@ -16,6 +16,11 @@ def local_value(column, kind=None):
     """The scalar ``local_value`` rule as SQL; *kind*: None (guess) or one of ``VALUE_KINDS``."""
     if kind in ("class", "enum"):
         return _local(column)
-    node = f"regexp_replace({column}, '{ID_PREFIX_RE.pattern}', '')"
+    node = f"regexp_replace({column}, '{ID_PREFIX_RE.pattern}', '{ID_REPLACEMENT}')"
     # a namespace IRI ("...#") has no name: keep it whole
     return node if kind == "reference" else f"COALESCE(NULLIF(regexp_replace({node}, '{GUESS_NAME_RE.pattern}', ''), ''), {node})"
+
+
+def is_iri(column):
+    """Absolute IRI already; NULL → false, as the scalar."""
+    return f"COALESCE(regexp_matches({column}, '{URI_PREFIX_RE.pattern}'), false)"
