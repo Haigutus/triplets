@@ -246,10 +246,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `urn:uuid:`, `#_`, `#`, `_` (longest first), where a bare `#` stayed: a file whose IDs
   have no underscore (`rdf:ID="SS1"`, `rdf:resource="#SS1"`) parsed to the ID `SS1` and
   the reference VALUE `#SS1`, which matched nothing and was exported as `#_#SS1`. All
-  parser engines, `read_nquads` and the pandas / polars / DuckDB `local_id` follow
-  `iri.ID_PREFIXES`. An `rdf:about="#Name"` ID parses to `Name` too: RDFS vocabularies,
-  whose IDs are `#Name`, keep their IRIs with `local_resources=False`, as `rdfs_tools`
-  parses them.
+  parser engines, `read_nquads`, the pandas / polars `local_id` and the pandas / polars /
+  DuckDB `local_value` follow the rule. A lone `#` (the document itself) stays `#`. An
+  `rdf:about="#Name"` ID parses to `Name` too: RDFS vocabularies, whose IDs are `#Name`,
+  keep their IRIs with `local_resources=False`, as `rdfs_tools` parses them.
+- **`triplets.rdfs_tools.cim_rdfs_to_json_deprecated` is removed** — a script that ran on
+  import; use `triplets.rdfs_tools.cim_rdfs_to_json`.
+- **`triplets.validation.schema_name(rdf_map)`** — the name a schema run reports in
+  `references`: the file name for a path, `"rdf_map"` for a dict.
 - **`export_to_cimxml` raises `ValueError` for an unsupported `export_type`**, before any
   work; it logged "Not supported option" and returned an empty list.
 - **A file in a zip is named `<zip file name>/<member name>` in validation results**
@@ -530,14 +534,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a `value_prefix` the prefix was put before the IRI. An object ID that is an absolute
   IRI is written as `rdf:about="<IRI>"`, where it took the class's ID attribute and
   prefix (`rdf:about="urn:uuid:http://…"`). Both engines.
-- **`python_lxml` CIM XML export: a `Type` VALUE that names a schema entry which is not a
-  `Class`** raised `KeyError: 'attrib'`; it is an undefined class, as in `cython_pugixml`.
-  A KEY that names a `Class` entry is an undefined key.
+- **CIM XML export: a `Type` VALUE that names a schema entry which is not a `Class`** (an
+  enumeration value used as `rdf:type`) is written in that entry's namespace, the
+  `rdf:type` `export_to_nquads` writes, with `rdf:about="urn:uuid:<ID>"`. `python_lxml`
+  raised `KeyError: 'attrib'`; `cython_pugixml` dropped it, or wrote it under
+  `undefined_namespace` with `export_undefined=True`. An entry without a namespace is an
+  undefined class. A KEY that names a `Class` entry, or an entry with an empty namespace,
+  is an undefined key in both engines; `python_lxml` raised `ValueError: Empty tag name`
+  for the empty namespace.
 - **The CIM XML file name is the `label` of the instance's `Distribution` object** (the
   source file name the parsers write). It was the first `label` row of any object, so data
   with its own `label` key (`rdfs:label`) could name the file. An instance without a
-  `Distribution` label is written as `<uuid>.xml`.
-- **CIM XML export: a schema entry with `"namespace": ""` under a namespace map with a
+  `Distribution` label, or with a null one (it named the file `nan` or raised `TypeError`),
+  is written as `<uuid>.xml`. The other readers of the file name follow the same rule:
+  the `label` column of `cgmes_tools.get_loaded_profiles`,
+  `cgmes_tools.update_FullModel_from_filename`, `cgmes_tools.update_filename_from_FullModel`
+  (it rewrote every `label` row of the instance, a data `rdfs:label` too) and the per-file
+  names of `export_to_csv` (pandas and polars).
+- **CIM XML export: a `Class` entry with `"namespace": ""` under a namespace map with a
   default namespace** stays in no namespace: the default namespace is then written under
   a generated prefix instead of `xmlns="…"`, where the element fell into it. Both engines.
 - **`export_to_nquads(engine="pandas")` runs without pyarrow** (the core install: pandas and
@@ -562,6 +576,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   (both engines).
 - **`python_lxml` CIM XML export: the root is `RDF` in the RDF namespace** whatever the
   namespace map binds the `rdf` prefix to; it was written in the namespace of that prefix.
+  Both engines bind the RDF namespace to a prefix of its own when the map has none for it
+  (`rdf`, or the first free `ns0`, `ns1`, … when `rdf` is taken).
+- **`sh:in` in the pandas, polars and DuckDB engines compares a VALUE that is not an IRI as
+  it is.** The VALUE was shortened like an ID first, so a literal `_2` — or `#1` — did not
+  match the member `"_2"` / `"#1"` and was reported; pyshacl accepts it.
 - **`cgmes_tools.validate_by_header` reports the schema file name.** The run metadata
   `references` held `"rdf_map"` for a schema given as a path; they hold the file name, as
   with `validate_schema`, and `"rdf_map"` for a dict. A run where no instance resolves a

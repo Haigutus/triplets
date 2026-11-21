@@ -64,8 +64,10 @@ plain). Both engines write the same attributes.
 is an absolute IRI (`http://`, `https://`, `urn:`) is written as it is, without the prefix —
 the ID always as `rdf:about` — as `export_to_nquads` writes it. A reference key with an
 empty `value_prefix` is an enumeration: a VALUE that is not an absolute IRI is a schema name
-and takes that entry's namespace. An undefined class (`export_undefined=True`) is written
-with `rdf:about="urn:uuid:<ID>"`.
+and takes that entry's namespace. A `Type` VALUE naming a schema entry that is not a `Class`
+but has a namespace (an enumeration value as `rdf:type`) is written in that namespace, and
+an undefined class (`export_undefined=True`) under `undefined_namespace`, both with
+`rdf:about="urn:uuid:<ID>"`.
 
 A schema `language` ([export_schemas.md](export_schemas.md#fixed-language-tag-language))
 writes `xml:lang="<tag>"` on the literal element in both engines, with or without
