@@ -64,11 +64,14 @@ def test_headerless_frame_warns_on_sectioned_schema(engine, caplog):
     assert "nothing is exported unless export_undefined=True" in caplog.text
 
 
+@pytest.mark.parametrize("nested", [{}, {"AttributeDatatypes": {"Float": {"xsd:type": "xsd:float"}}}],
+                         ids=["flat", "flat-with-nested-dict"])
 @pytest.mark.parametrize("rows", [[], header()], ids=["headerless", "header"])
 @pytest.mark.parametrize("engine", ENGINES)
-def test_flat_schema_exports_its_entries_without_warning(engine, rows, caplog):
+def test_flat_schema_exports_its_entries_without_warning(engine, rows, nested, caplog):
+    """Root entries are exported, also next to a nested dict that reads as a profile section."""
     with caplog.at_level(logging.WARNING, logger="triplets.export.cimxml_utils"):
-        xml = cimxml(frame(rows + OBJECTS[:2]), engine, rdf_map=SCHEMA["EQ"])
+        xml = cimxml(frame(rows + OBJECTS[:2]), engine, rdf_map={**SCHEMA["EQ"], **nested})
     assert "matches none of the schema profiles" not in caplog.text
     assert f'xmlns:cim="{CIM_NS}"' in xml                                     # the flat schema's ProfileNamespaceMap
     assert "<cim:IdentifiedObject.name>L1</cim:IdentifiedObject.name>" in xml

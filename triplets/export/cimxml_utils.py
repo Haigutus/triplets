@@ -10,7 +10,7 @@ from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
 from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for the cimxml engines
     PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index, merge_sections, profile_sections)
-from triplets.iri import RDF_NS, TYPE_KEY, _sections
+from triplets.iri import RDF_NS, TYPE_KEY, _root_entries, _sections
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,8 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
           identity metadata (section key / keyword / versionIRI / profileVersionIRI /
           conformsTo) against the header (Model.messageType, keyword, Model.profile,
           conformsTo); legacy URL-substring fallback for 2.4.15-era URLs; the schema's
-          root entries when nothing matches (warns on a sectioned schema)
+          root entries when nothing matches (warns when the schema has sections and no
+          root entries)
     """
     if not namespace_map:
         namespace_map, xml_base = get_namespace_map(instance_data)
@@ -79,7 +80,7 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
 
     hints = _instance_profile_hints(header_rows)
     sections = profile_sections(hints, rdf_map)
-    if not sections and _sections(rdf_map):
+    if not sections and _sections(rdf_map) and not _root_entries(rdf_map):
         logger.warning("%s: header %s matches none of the schema profiles %s — no class or key is defined, "
                        "nothing is exported unless export_undefined=True", file_name, hints[:4], _sections(rdf_map))
     instance_rdf_map = merge_sections(rdf_map, sections or None)[0]
