@@ -398,13 +398,14 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     """
     connection, table = _connection(data, table=table, schema=schema, table_name=table_name)
     # the validated rows: the scoped instances, without the objects the parsers add to every file
-    metadata_types = ", ".join(f"'{name}'" for name in METADATA_TYPES)
-    connection.execute(f"CREATE OR REPLACE TEMP TABLE _shacl_metadata AS SELECT DISTINCT ID FROM {table} "
-                       f"WHERE KEY = '{TYPE_KEY}' AND VALUE IN ({metadata_types})")
-    where = "ID NOT IN (SELECT ID FROM _shacl_metadata)"
+    scoped = "TRUE"
     if data_scope is not None:
         values = ", ".join("'" + str(instance).replace("'", "''") + "'" for instance in data_scope)
-        where += f" AND INSTANCE_ID IN ({values})" if values else " AND FALSE"   # an empty scope loads no instance
+        scoped = f"INSTANCE_ID IN ({values})" if values else "FALSE"   # an empty scope loads no instance
+    metadata_types = ", ".join(f"'{name}'" for name in METADATA_TYPES)
+    connection.execute(f"CREATE OR REPLACE TEMP TABLE _shacl_metadata AS SELECT DISTINCT ID FROM {table} "
+                       f"WHERE KEY = '{TYPE_KEY}' AND VALUE IN ({metadata_types}) AND {scoped}")
+    where = f"{scoped} AND ID NOT IN (SELECT ID FROM _shacl_metadata)"
     connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS SELECT * FROM {table} WHERE {where}")
     table = '"_shacl_scoped"'
 
