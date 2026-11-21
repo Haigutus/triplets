@@ -15,41 +15,43 @@ logger = logging.getLogger(__name__)
 
 
 
-def _values_for_key(instance_data, key):
-    """VALUEs of rows with the given KEY (pandas or polars frame), nulls dropped."""
+HEADER_KEYS = (*PROFILE_KEYS, "label")
+
+
+def _header_rows(instance_data):
+    """``(ID, KEY, VALUE)`` of the rows resolve_instance_config reads — the profile keys and
+    ``label`` — in one pass over the instance (pandas or polars frame), nulls dropped."""
     if flavor(instance_data) == "polars":
         import polars
-        values = instance_data.filter(polars.col("KEY") == key)["VALUE"].to_list()
+        rows = instance_data.filter(polars.col("KEY").is_in(HEADER_KEYS)).select("ID", "KEY", "VALUE").rows()
     else:
-        values = instance_data.loc[instance_data["KEY"] == key, "VALUE"].tolist()
-    return [value for value in values if value is not None]
+        rows = instance_data.loc[instance_data["KEY"].isin(HEADER_KEYS), ["ID", "KEY", "VALUE"]].itertuples(
+            index=False, name=None)
+    return [row for row in rows if row[2] is not None]
 
 
-def _instance_profile_hints(instance_data):
+def _instance_profile_hints(header_rows):
     """Profile references the instance header may carry, in priority order:
     old header messageType, new dcat:Dataset keyword, then the URI fields
     (both can repeat — e.g. multiple Model.profile rows)."""
-    hints = []
-    for key in PROFILE_KEYS:
-        hints.extend(str(value) for value in _values_for_key(instance_data, key))
-    return hints
+    return [str(value) for profile_key in PROFILE_KEYS for _, key, value in header_rows if key == profile_key]
 
 
-def _distribution_label(instance_data):
+def _distribution_label(instance_data, header_rows):
     """``label`` of the instance's ``Distribution`` object (the source file name the parsers
     write), or None — a ``label`` row of any other object is data, not the file name."""
+    labels = [(object_id, value) for object_id, key, value in header_rows if key == "label"]
+    if not labels:
+        return None
+    labelled = [object_id for object_id, _ in labels]      # few objects: one ID pass finds their types
     if flavor(instance_data) == "polars":
         import polars
-        types = instance_data.filter(polars.col("KEY") == TYPE_KEY)
-        distributions = types.filter(polars.col("VALUE") == "Distribution")["ID"]
-        labels = instance_data.filter(polars.col("KEY") == "label")
-        values = labels.filter(polars.col("ID").is_in(distributions.implode()))["VALUE"].to_list()
+        distributions = instance_data.filter(polars.col("ID").is_in(labelled) & (polars.col("KEY") == TYPE_KEY)
+                                             & (polars.col("VALUE") == "Distribution"))["ID"].to_list()
     else:
-        labels = instance_data.loc[instance_data["KEY"] == "label"]
-        owners = instance_data.loc[instance_data["ID"].isin(labels["ID"])]   # the few labelled objects: one ID pass
-        distributions = owners.loc[(owners["KEY"] == TYPE_KEY) & (owners["VALUE"] == "Distribution"), "ID"]
-        values = labels.loc[labels["ID"].isin(distributions), "VALUE"].tolist()
-    return next((value for value in values if value is not None), None)
+        owners = instance_data.loc[instance_data["ID"].isin(labelled)]
+        distributions = owners.loc[(owners["KEY"] == TYPE_KEY) & (owners["VALUE"] == "Distribution"), "ID"].tolist()
+    return next((value for object_id, value in labels if object_id in distributions), None)
 
 
 def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
@@ -72,10 +74,10 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     if not namespace_map:
         namespace_map, xml_base = get_namespace_map(instance_data)
 
-    # Filename is kept under label
-    file_name = _distribution_label(instance_data) or f"{uuid.uuid4()}.xml"
+    header_rows = _header_rows(instance_data)
+    file_name = _distribution_label(instance_data, header_rows) or f"{uuid.uuid4()}.xml"
 
-    hints = _instance_profile_hints(instance_data)
+    hints = _instance_profile_hints(header_rows)
     sections = profile_sections(hints, rdf_map)
     if not sections and _sections(rdf_map):
         logger.warning("%s: header %s matches none of the schema profiles %s — no class or key is defined, "
