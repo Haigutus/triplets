@@ -170,7 +170,7 @@ resolve_instance_config(instance_data, rdf_map)
 |   |   versionIRI, profileVersionIRI, conformsTo -> section name
 |   |-> every hint found in the index, in hint order (EQ, OP, SC for a CGMES 3.0 EQ file)
 |   '-> fallback: legacy 2.4.15 Model.profile URL substrings (PROFILE_URL_MAP)
-|-> fallback: the schema's root entries (a flat schema; warns on a schema with sections only)
+|-> fallback: the schema's root entries (a flat schema; warns on a schema with sections whose root entries define no class of the instance)
 |
 '-> _header.merge_sections(): the matched sections as one schema, merged like
     validation's rdf_map_scope; then a class concrete in any matched section is

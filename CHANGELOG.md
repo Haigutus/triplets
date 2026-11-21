@@ -627,7 +627,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **CIM XML export: no "matches none of the schema profiles … nothing is exported" warning
   for a schema with root entries.** A flat schema that also holds a nested dict without a
   `type` (read as a profile section) exported every object and logged the warning once per
-  file. The warning is for a schema with sections only.
+  file. The warning is for a schema with sections whose root entries define no class of
+  the instance (a bundled schema with one added root attribute still warns).
 - **`validate_schema_references` on the pandas engine no longer costs by the number of typed
   objects in every rule.** `Series.isin` on the pandas 3 `str` dtype converts every member
   of the ID list one by one at each call (about 40 ms for 15 000 IDs), and the reference

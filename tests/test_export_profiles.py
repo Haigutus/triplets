@@ -64,6 +64,17 @@ def test_headerless_frame_warns_on_sectioned_schema(engine, caplog):
     assert "nothing is exported unless export_undefined=True" in caplog.text
 
 
+@pytest.mark.parametrize("engine", ENGINES)
+def test_stray_root_entry_keeps_the_warning(engine, caplog):
+    """A sectioned schema with one root entry that defines none of the instance's classes
+    (a user extension): the header matches no section, nothing is exported, the log says so."""
+    rdf_map = {**SCHEMA, "Extension.note": {"type": "Attribute", "namespace": CIM_NS, "xsd:type": "xsd:string"}}
+    with caplog.at_level(logging.WARNING, logger="triplets.export.cimxml_utils"):
+        xml = cimxml(frame(OBJECTS), engine, rdf_map=rdf_map)
+    assert "matches none of the schema profiles" in caplog.text and "nothing is exported" in caplog.text
+    assert "ACLineSegment" not in xml
+
+
 @pytest.mark.parametrize("nested", [{}, {"AttributeDatatypes": {"Float": {"xsd:type": "xsd:float"}}}],
                          ids=["flat", "flat-with-nested-dict"])
 @pytest.mark.parametrize("rows", [[], header()], ids=["headerless", "header"])
