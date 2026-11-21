@@ -611,10 +611,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the KEY (`rdf_map=` on `export_to_shacl_report` / `violations_to_report_graph`): the
   referenced object's IRI for an Association (`<urn:uuid:…>`, an absolute IRI as it is),
   the enumeration value IRI for an Enumeration, the class IRI for a `Type` VALUE (also
-  without `rdf_map`) and for the class a `( association rdf:type )` path reports. Every
-  one was a string literal (`sh:value "00000000-…"`). An Attribute value, a value of a
-  KEY the schema does not define, and every value but `Type` without `rdf_map` stay plain
-  literals with the VALUE text, whatever the text looks like.
+  without `rdf_map`: in `undefined_namespace`, CIM100 by default) and for the class a
+  `( association rdf:type )` path reports (told by the shape's definition in the run
+  metadata). Every one was a string literal (`sh:value "00000000-…"`). An Attribute
+  value, a value of a KEY the schema does not define, and every value but `Type` without
+  `rdf_map` stay plain literals with the VALUE text, whatever the text looks like. The
+  terms are the ones `export_to_nquads` writes: a reference VALUE that reads like a
+  schema name is still `urn:uuid:<text>`, a KEY given as its IRI has the entry of its
+  local name, a VALUE that is no text is written as its text.
+  `report_to_violations(graph, rdf_map=…, undefined_namespace=…)` reads the values back
+  exactly: an IRI becomes a local name only when it is the IRI that name stands for, so
+  a reference or a class in another namespace comes back whole, with a `#` too
+  (`http://www.w3.org/ns/dcat#Dataset`). Without `rdf_map` the reader guesses, and an
+  `http` IRI with a `#` loses its namespace.
 - **A violations frame without run metadata that holds schema findings is exported as an
   RDFS run**, in SARIF (`triplets-rdfs`, `RDFS …` titles, `[rdfs_…]` message tags) and in
   the SHACL report: the language is `rdfs` when every `SOURCE_SHAPE` is a schema shape

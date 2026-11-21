@@ -99,9 +99,10 @@ def test_value_term_kind_follows_the_schema_entry_type():
                "BreakerKind.air": {"type": "EnumerationValue", "namespace": cim},
                "IdentifiedObject.mRID": {"type": "Attribute", "namespace": cim, "xsd:type": "xsd:string"}}
     values = [("Equipment.EquipmentContainer", uuid), ("Equipment.EquipmentContainer", "http://example.org/bay"),
-              ("Equipment.EquipmentContainer", "Bay"),                    # ( association rdf:type ) path
+              ("Equipment.EquipmentContainer", "http://example.org/ns#bay1"),
+              ("Equipment.EquipmentContainer", "Bay"),                    # an object ID that is also a class name
               ("Breaker.kind", "BreakerKind.air"), ("IdentifiedObject.mRID", uuid), ("Extension.ref", uuid),
-              ("Type", "Bay")]
+              ("Type", "Bay"), ("Type", "http://example.org/other#Bay")]
     violations = pandas.DataFrame([("b1", key, value, "sh:class", "m", "Violation", None) for key, value in values],
                                   columns=VIOLATION_COLUMNS)
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
@@ -112,16 +113,26 @@ def test_value_term_kind_follows_the_schema_entry_type():
                 for result, value in graph.subject_objects(sh.value)}
 
     literals = {(key, rdflib.Literal(value)) for key, value in values}
-    assert terms() == literals - {("Type", rdflib.Literal("Bay"))} | {(str(rdflib.RDF.type), rdflib.URIRef(cim + "Bay"))}
+    types = {(str(rdflib.RDF.type), rdflib.URIRef(cim + "Bay")),
+             (str(rdflib.RDF.type), rdflib.URIRef("http://example.org/other#Bay"))}
+    assert terms() == {(key, value) for key, value in literals if key != "Type"} | types
     assert terms(rdf_map=rdf_map) == {
         ("Equipment.EquipmentContainer", rdflib.URIRef(f"urn:uuid:{uuid}")),
         ("Equipment.EquipmentContainer", rdflib.URIRef("http://example.org/bay")),
-        ("Equipment.EquipmentContainer", rdflib.URIRef(cim + "Bay")),
+        ("Equipment.EquipmentContainer", rdflib.URIRef("http://example.org/ns#bay1")),
+        ("Equipment.EquipmentContainer", rdflib.URIRef("urn:uuid:Bay")),      # as export_to_nquads writes the row
         ("Breaker.kind", rdflib.URIRef(cim + "BreakerKind.air")),
-        ("IdentifiedObject.mRID", rdflib.Literal(uuid)), ("Extension.ref", rdflib.Literal(uuid)),
-        (str(rdflib.RDF.type), rdflib.URIRef(cim + "Bay"))}
-    back = report_to_violations(violations_to_report_graph(violations, rdf_map=rdf_map))
+        ("IdentifiedObject.mRID", rdflib.Literal(uuid)), ("Extension.ref", rdflib.Literal(uuid)), *types}
+    back = report_to_violations(violations_to_report_graph(violations, rdf_map=rdf_map), rdf_map=rdf_map)
     pandas.testing.assert_frame_equal(_canon(back), _canon(violations))
+
+    # a KEY given as its IRI has the entry of its name; a VALUE that is no text is its text
+    other = pandas.DataFrame([("b1", cim + "Equipment.EquipmentContainer", uuid, "sh:class", "m", "Violation", None),
+                              ("b2", "Equipment.EquipmentContainer", 3, "sh:class", "m", "Violation", None)],
+                             columns=VIOLATION_COLUMNS)
+    graph = violations_to_report_graph(other, rdf_map=rdf_map)
+    assert set(graph.objects(None, sh.value)) == {rdflib.URIRef(f"urn:uuid:{uuid}"), rdflib.URIRef("urn:uuid:3")}
+    assert set(graph.objects(None, sh.resultPath)) == {rdflib.URIRef(cim + "Equipment.EquipmentContainer")}
 
 
 def test_report_graph_shape():
@@ -486,6 +497,13 @@ cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     assert [str(item).split("#")[-1] for item in allowed] == ["Bay", "VoltageLevel"]
     # and the human-readable twin
     assert (violations["EXPECTED"] == "one of: Bay, VoltageLevel").all()
+    # with the schema, the value of the ( association rdf:type ) path is the class, there and back
+    cim = "http://iec.ch/TC57/CIM100#"
+    rdf_map = {"Substation": {"type": "Class", "namespace": cim},
+               "Equipment.EquipmentContainer": {"type": "Association", "namespace": cim}}
+    typed = violations_to_report_graph(violations, rdf_map=rdf_map)
+    assert list(typed.objects(None, sh.value)) == [rdflib.URIRef(cim + "Substation")]
+    assert list(report_to_violations(typed, rdf_map=rdf_map)["VALUE"]) == ["Substation"]
 
 
 def test_message_source_distinguishes_authored_from_engine(tmp_path):

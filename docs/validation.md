@@ -896,7 +896,10 @@ violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
 # rdf_map= expands sh:resultPath KEYs to their profile namespace
 # (undefined_namespace for KEYs it lacks) and writes sh:value of a reference
-# or an enumeration KEY as an IRI (a plain literal without it)
+# or an enumeration KEY as an IRI (a plain literal without it), the terms
+# export_to_nquads writes; report_to_violations(graph, rdf_map=rdf_map) reads
+# them back as the VALUEs they were (without rdf_map it guesses: an http IRI
+# with a "#" loses its namespace)
 violations.shacl.to_shacl_report(path="report.ttl", rdf_map=rdf_map)
 
 # tabular exports with the same metadata: CSV writes a report_meta.csv
