@@ -563,7 +563,9 @@ the returned frame as `violations.attrs["validation"]`. Every report exporter
 reads it, so all formats tell the same story; `concat_violations(frames)`
 joins the frames of several runs of one constraint language and merges their
 metadata (earliest start, latest end, counts once per rule set, lists
-united, differing values kept as the list of distinct values):
+united, differing values kept as the list of distinct values, None is no
+value). A joined frame joins again — the frame of `validate_by_header` is
+one — and the result is the same however the runs are grouped:
 
 | key | meaning |
 |-----|---------|
@@ -581,6 +583,7 @@ united, differing values kept as the list of distinct values):
 | `aborted` | True when `abort_on_first` met a Violation; the report may then be partial |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
+| `rule_sets` | joined frames only: one `{compiled_hash, deactivated_shapes, node_shapes, constraints}` entry per rule set of the joined runs, which `node_shapes` / `constraints` sum. Not exported (SARIF properties, csv / excel sidecars) |
 | `source_shapes` | `{shape id: N-Triples text}` — the defining triples (CBD) of each violated shape, blank-node labels as in `SOURCE_SHAPE`; `{}` for a schema run. Read by the SHACL report only (`shacl_report.shape_triples(text)` gives the graph) |
 
 Every value is a plain Python value (str, number, bool, None, list, dict):

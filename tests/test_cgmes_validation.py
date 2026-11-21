@@ -175,6 +175,22 @@ def test_schema_and_reference_runs_count_their_own_rules(engine):
     assert again.attrs["validation"]["constraints"] == schema_run.attrs["validation"]["constraints"]
 
 
+def test_by_header_frames_join_again(engine):
+    """The frame of validate_by_header is a joined frame: concat_violations takes it
+    again, alone or with other runs, and counts its rule sets once."""
+    from triplets import validation
+    rows = ([("h1", "keyword", "EQ", "eq"), ("h2", "keyword", "SSH", "ssh")]
+            + breaker("b1", ("Equipment.EquipmentContainer", "ghost")) + breaker("b2", instance="ssh"))
+    by_header = cgmes_tools.validate_by_header(frame(rows), SCHEMA, references=True, engine=engine)
+    meta = by_header.attrs["validation"]
+    assert len(meta["rule_sets"]) == 4 and isinstance(meta["compiled_hash"], list)
+    assert validation.concat_violations([by_header]).attrs["validation"] == meta
+    schema_run = validation.validate_schema(frame(rows), SCHEMA, data_scope=["eq"], rdf_map_scope=["EQ"], engine=engine)
+    both = validation.concat_violations([by_header, schema_run]).attrs["validation"]
+    assert (both["constraints"], both["rule_sets"]) == (meta["constraints"], meta["rule_sets"])
+    assert both["profiles"] == meta["profiles"] == ["EQ", "SSH"]
+
+
 def test_duckdb_connection_with_configured_table():
     duckdb = pytest.importorskip("duckdb")
     con = duckdb.connect(table="grid", schema="cim")

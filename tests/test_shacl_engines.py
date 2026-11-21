@@ -16,6 +16,7 @@ import triplets
 
 from triplets.validation import value_space
 from triplets.validation.shacl_report import has_violation
+from _parity import is_plain
 
 ENGINES = ["pandas", "polars", "duckdb"]
 
@@ -1098,6 +1099,32 @@ def test_concat_violations_counts_each_rule_set_once():
         return merged["node_shapes"], merged["constraints"]
     assert counts([every, without_name]) == (2, 3)
     assert counts([without_name, without_name]) == (1, 1)
+
+
+def test_concat_violations_joins_joined_frames():
+    """A joined frame joins again: the same rows and metadata however the runs are
+    grouped — runs of two compiles, one of them with two switched-off sets."""
+    concat = triplets.validation.concat_violations
+    compiled = compiled_shapes("""
+        cim:NameShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+        cim:DescriptionShape a sh:PropertyShape ; sh:path cim:IdentifiedObject.description ; sh:minCount 1 .
+        cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+            sh:property cim:NameShape, cim:DescriptionShape .""")
+    other = compiled_shapes("""cim:AliasShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+        sh:property [ sh:path cim:IdentifiedObject.aliasName ; sh:minCount 1 ] .""")
+    rows = breaker("b1")
+    a, b = (switched_off(rows, compiled, "pandas", off) for off in ((), ("NameShape",)))
+    c, d = switched_off(rows, other, "polars", ()), switched_off(rows, compiled, "pandas", ())
+    flat = concat([a, b, c, d])
+    meta = flat.attrs["validation"]
+    assert (meta["node_shapes"], meta["constraints"]) == (3, 4)            # d is a's rule set
+    assert meta["engine"] == ["pandas", "polars"] and len(meta["compiled_hash"]) == 2
+    assert meta["deactivated_shapes"] == [CIM + "NameShape"] and len(meta["rule_sets"]) == 3
+    assert is_plain(flat.attrs)
+    for grouped in (concat([concat([a, b]), c, d]), concat([a, concat([b, concat([c, d])])]),
+                    concat([concat([a, b]), concat([c, d])]), concat([flat])):
+        assert grouped.attrs["validation"] == meta
+        pandas.testing.assert_frame_equal(grouped, flat)
 
 
 @pytest.mark.parametrize("engine_name", ENGINES)

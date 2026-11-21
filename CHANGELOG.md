@@ -556,6 +556,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`concat_violations` joins a frame it already joined.** A joined frame of runs with
+  two rule sets (so also the frame of `validate_by_header`) raised
+  `TypeError: unhashable type: 'list'` when joined again. The result is now the same
+  however the runs are grouped: `concat_violations([concat_violations([a, b]), c])`
+  equals `concat_violations([a, b, c])`, rows and metadata. A joined frame keeps its
+  runs' rule sets with their counts in `attrs["validation"]["rule_sets"]` (not
+  exported); a single value meeting a list of distinct values joins the list, and
+  `None` is no value (`profiles` of a run without `rdf_map_scope` no longer nests as
+  `[None, [...]]`).
 - **The run metadata is plain values: operations on a violations frame no longer
   deep-copy rdflib graphs.** `attrs["validation"]["source_shapes"]` held one
   `rdflib.Graph` per violated shape, which pandas deep-copies with `attrs` at every

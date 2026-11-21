@@ -22,7 +22,7 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, REFERENCED_OBJECT, enrich
 from .locations import LOCATION_COLUMNS, check_source_root, locate_missing, relative_sources
-from .shacl_report import SCHEMA_SHAPES, _expand, message_prefix, profile_names, profile_text, run_language
+from .shacl_report import SCHEMA_SHAPES, UNEXPORTED, _expand, message_prefix, profile_names, profile_text, run_language
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -206,8 +206,7 @@ def _run(violations, group, sources, source_root):
         })] if meta.get("generated_at") or notifications else None,
         # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
-                       if key not in ("started_at", "generated_at", "creator",
-                                      "source_shapes")   # shape triples, SHACL report only
+                       if key not in ("started_at", "generated_at", "creator", *UNEXPORTED)
                        and value is not None} or None,
         "results": results,
     })

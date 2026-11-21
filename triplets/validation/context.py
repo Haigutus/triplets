@@ -96,9 +96,10 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
 def concat_violations(frames):
     """Concatenate violations frames, merging their run metadata (``attrs["validation"]``):
     the earliest start, the latest end and the duration between them; shape and
-    constraint counts once per rule set (``compiled_hash`` + ``deactivated_shapes``);
-    lists and dicts united; other values kept when equal, else the list of distinct
-    values.
+    constraint counts once per rule set (``compiled_hash`` + ``deactivated_shapes`` —
+    the joined runs' rule sets are kept in ``rule_sets``); lists and dicts united;
+    other values kept when equal, else the list of distinct values; None is no value.
+    A joined frame joins again: the result is the same however the frames are grouped.
     The runs must share one constraint language (ValueError otherwise)."""
     frames = list(frames)
     if not frames:
@@ -112,28 +113,46 @@ def concat_violations(frames):
     merged = {}
     for meta in metas:
         for key, value in meta.items():
-            if key not in merged:
-                merged[key] = list(value) if isinstance(value, list) else dict(value) if isinstance(value, dict) else value
-            elif isinstance(value, list) and isinstance(merged[key], list):
-                merged[key] = list(dict.fromkeys([*merged[key], *value]))
-            elif isinstance(value, dict) and isinstance(merged[key], dict):
-                merged[key] = {**merged[key], **value}
-            elif key not in ("started_at", "generated_at", "duration_seconds"):
-                distinct = merged.setdefault("_distinct", {}).setdefault(key, [merged[key]])
-                if value not in distinct:
-                    distinct.append(value)
-    for key, values in merged.pop("_distinct", {}).items():
-        merged[key] = values[0] if len(values) == 1 else values
+            if key not in _DERIVED:
+                merged[key] = _united(merged[key], value) if key in merged else _united(value, None)
     merged["started_at"] = min(meta["started_at"] for meta in metas)
     merged["generated_at"] = max(meta["generated_at"] for meta in metas)
     merged["duration_seconds"] = round((_moment(merged["generated_at"]) - _moment(merged["started_at"]))
                                        .total_seconds(), 3)
-    runs = {(meta.get("compiled_hash"), tuple(meta.get("deactivated_shapes") or ())):
-            (meta.get("node_shapes", 0), meta.get("constraints", 0)) for meta in metas}
-    merged["node_shapes"] = sum(counts[0] for counts in runs.values())
-    merged["constraints"] = sum(counts[1] for counts in runs.values())
+    rule_sets = {(rule_set["compiled_hash"], *rule_set["deactivated_shapes"]): rule_set
+                 for meta in metas for rule_set in _rule_sets(meta)}
+    merged["rule_sets"] = list(rule_sets.values())
+    for count in _COUNTS:
+        merged[count] = sum(rule_set[count] for rule_set in rule_sets.values())
     violations.attrs["validation"] = merged
     return violations
+
+
+_COUNTS = ("node_shapes", "constraints")
+# keys concat_violations computes from every frame, not value by value
+_DERIVED = ("started_at", "generated_at", "duration_seconds", "rule_sets", *_COUNTS)
+
+
+def _rule_sets(meta):
+    """The rule sets a frame's metadata counts: a joined frame's ``rule_sets``, else
+    the run's own (``compiled_hash`` + ``deactivated_shapes``) with its counts."""
+    return meta.get("rule_sets") or [{"compiled_hash": meta.get("compiled_hash"),
+                                      "deactivated_shapes": list(meta.get("deactivated_shapes") or ()),
+                                      **{count: meta.get(count, 0) for count in _COUNTS}}]
+
+
+def _united(old, new):
+    """Two values of one metadata key as one, in any grouping: dicts and lists
+    united (a single value joins a list as its member), equal values once,
+    different ones as the list of both; None is no value. Always a new container."""
+    if old is None or new is None:
+        kept = new if old is None else old
+        return list(kept) if isinstance(kept, list) else dict(kept) if isinstance(kept, dict) else kept
+    if isinstance(old, dict) and isinstance(new, dict):
+        return {**old, **new}
+    if isinstance(old, list) or isinstance(new, list):
+        return list(dict.fromkeys(item for value in (old, new) for item in (value if isinstance(value, list) else [value])))
+    return old if old == new else [old, new]
 
 
 def _moment(text):

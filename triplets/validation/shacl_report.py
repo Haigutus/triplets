@@ -475,11 +475,17 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
 
 # ── tabular exports (csv / excel) — same metadata as the RDF/SARIF reports ───
 
+# run metadata the SARIF run properties and the csv / excel sidecars leave out:
+# the violated shapes' triples (the SHACL report embeds them) and the per-rule-set
+# counts concat_violations keeps (the totals are node_shapes / constraints)
+UNEXPORTED = ("source_shapes", "rule_sets")
+
+
 def _meta_rows(meta):
     """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out; an
-    empty list keeps one blank row so "none" is stated, not implied.
-    source_shapes (the shapes' triples) belongs to the SHACL report only."""
-    return [(key, item) for key, value in meta.items() if key != "source_shapes"
+    empty list keeps one blank row so "none" is stated, not implied. Without
+    the UNEXPORTED keys."""
+    return [(key, item) for key, value in meta.items() if key not in UNEXPORTED
             for item in ((value or ("",)) if isinstance(value, (list, tuple)) else (value,))]
 
 
