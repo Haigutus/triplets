@@ -65,6 +65,10 @@ DESCRIPTION_TYPE = "Description"
 """``Type`` VALUE of an ``rdf:Description`` element: no typed-node shorthand, so not a class —
 exported as ``rdf:Description`` in CIM XML and as no ``rdf:type`` in N-Quads."""
 
+METADATA_TYPES = ("NamespaceMap", "Distribution")
+"""``Type`` VALUEs of the objects the parsers add to every file (its namespace prefixes, its
+file name): not model content."""
+
 UUID_PREFIX = "urn:uuid:"
 ID_PREFIXES = ("urn:uuid:", "#_", "#", "_")      # longest first; exactly one is stripped ("#x" references rdf:ID="x")
 ID_REPLACEMENT = r"\1"                            # what ID_PREFIX_RE is replaced with: the character after a bare "#"

@@ -359,16 +359,19 @@ def _add_schema_context(violations, rdf_map, scopes):
 
 
 def _scoped(data, data_scope, table_name="triplets"):
-    """The rows of the *data_scope* instances, as a pandas / polars frame."""
-    instances = [str(instance) for instance in data_scope]
+    """The rows of the *data_scope* instances (None: every instance), as a pandas /
+    polars frame."""
+    instances = None if data_scope is None else [str(instance) for instance in data_scope]
     kind = flavor(data)
     if kind == "duckdb":
-        where = f"INSTANCE_ID IN ({', '.join('?' for _ in instances)})" if instances else "FALSE"
-        return data.execute(f"SELECT * FROM {table_name} WHERE {where}", instances).df()
-    if kind == "polars":
-        return data.filter(data["INSTANCE_ID"].is_in(instances))
+        where = "TRUE" if instances is None else f"INSTANCE_ID IN ({', '.join('?' for _ in instances)})" if instances else "FALSE"
+        return data.execute(f"SELECT * FROM {table_name} WHERE {where}", instances or []).df()
     if kind == "pyarrow":
         data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+    if instances is None:
+        return data
+    if kind == "polars":
+        return data.filter(data["INSTANCE_ID"].is_in(instances))
     return data[data["INSTANCE_ID"].astype(str).isin(instances)]
 
 

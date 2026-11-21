@@ -748,3 +748,31 @@ def test_run_metadata_is_plain(engine):
         node = rdflib.BNode(shape)
         assert (None, rdflib.URIRef("http://www.w3.org/ns/shacl#sourceShape"), node) in report
         assert isomorphic(report.cbd(node), compiled(case).graph.cbd(node))
+
+
+# the objects the parsers add to every file; the namespace IRI is what a dangling-reference query finds
+METADATA = (obj("d1", "Distribution", ("label", "grid/eq.xml"), ("fileName", "eq.xml"))
+            + obj("n1", "NamespaceMap", ("cim", CIM), ("md", "http://iec.ch/TC57/61970-552/ModelDescription/1#")))
+ONLY_MODEL_CLASSES = f"""cim:A a sh:NodeShape ; sh:targetSubjectsOf rdf:type ;
+    sh:property [ sh:path rdf:type ; sh:in ( cim:Breaker cim:Bay ) ] .
+cim:S a sh:NodeShape ; sh:targetClass cim:Bay ; sh:sparql [ sh:prefixes cim: ;
+    sh:select 'SELECT $this ?value WHERE {{ ?value rdf:type ?class . FILTER (?class IN (cim:Distribution, cim:NamespaceMap)) }}' ] .
+cim:T a sh:NodeShape ; sh:target [ a sh:SPARQLTarget ; sh:prefixes cim: ;
+    sh:select 'SELECT DISTINCT ?this WHERE {{ ?this rdf:type ?class }}' ] ; {NAME_MIN}"""
+
+
+@pytest.mark.parametrize("scope", [None, ["eq"]])
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_parser_metadata_is_not_validated(engine, scope):
+    """Distribution and NamespaceMap objects are no focus node, no value node and in no
+    query's graph (targets, sh:in on rdf:type, sh:sparql, SPARQL target); the run still
+    names the file from the Distribution label."""
+    import rdflib
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    shapes = triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + ONLY_MODEL_CLASSES, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(TRIO + METADATA), shapes, engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*", data_scope=scope, lexical=False)
+    assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {
+        ("sub1", "sh:in"), ("b2", "sh:minCount"), ("b3", "sh:minCount"), ("sub1", "sh:minCount")}
+    assert violations.attrs["validation"]["source"] == ["grid/eq.xml"]

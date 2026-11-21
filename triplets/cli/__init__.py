@@ -4,8 +4,7 @@ CLI tools for the triplets package.
 
 __all__ = ['cim_spreadsheet', 'cim_diff', 'METADATA_TYPES', 'add_common_arguments', 'excluded_types']
 
-# classes the parser adds to every file (namespaces, source file path): not model content
-METADATA_TYPES = ("NamespaceMap", "Distribution")
+from ..iri import METADATA_TYPES  # the classes the parser adds to every file: not model content
 
 
 def names(value):

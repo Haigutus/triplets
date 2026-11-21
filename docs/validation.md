@@ -98,6 +98,13 @@ never widen: each Class entry already lists its inherited attributes.
 Identical findings are reported once (a property shape on both a parent and a
 child node shape, the same triple in two instance files).
 
+The objects the parsers add to every file — `Distribution` (the file name) and
+`NamespaceMap` (the namespace prefixes), `triplets.iri.METADATA_TYPES`, the set
+`cim-diff` and `cim-spreadsheet` leave out — are not model content and are never
+validated: on every engine they are no focus node, no value node and not in the
+graph the `sh:sparql` constraints, the SPARQL targets and pyshacl read. The run
+metadata and `enrich` still read the file names from them.
+
 ## Status & known limitations
 
 Known engine gaps (those a run can detect land in its coverage metadata,

@@ -10,6 +10,7 @@ import logging
 from importlib.util import find_spec
 
 from ..iri import CIM_NS
+from .._header import without_metadata
 from .._rdflib_loader import load_dataset
 from .context import _scoped
 from .shacl_ir import _mark_switched_off
@@ -43,7 +44,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
         Include dependency instances in the scope (or validate the full
-        union, data_scope=None) for cross-instance checks.
+        union, data_scope=None) for cross-instance checks. The objects the
+        parsers add to every file (``iri.METADATA_TYPES``) are never loaded.
     inference, advanced, abort_on_first : passed to pyshacl.validate;
         abort_on_first also sets ``allow_warnings``, so only a Violation stops the run.
     **kwargs : other engines' options (components, max_workers, table_name, lexical) —
@@ -57,9 +59,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         force-clones the data graph into rdflib Memory regardless
         (advanced=True), and the clone through the oxrdflib wrapper costs
         more than the Rust parse saves (95k warm: 1.8 s vs 1.2 s; 1.14M
-        load+clone: 40 s vs 33 s). Opt in when the store is already loaded
-        for SPARQL anyway — then the load leg is free (unscoped runs only:
-        a data_scope run loads its own store of the scoped rows).
+        load+clone: 40 s vs 33 s). The store holds the validated rows (the
+        scope, without the parser's metadata objects), cached by their content.
     """
     if compiled.graph is None:
         raise ValueError("schema-compiled (rdfs) shapes carry no SHACL graph — "
@@ -67,9 +68,10 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
 
     from pyshacl import validate as pyshacl_validate
 
-    if data_scope is not None:   # filter before the export — data outside the scope is never loaded
-        from . import _table_ref
-        data = _scoped(data, data_scope, _table_ref(data, **kwargs))
+    from . import _table_ref
+    # filter before the export — data outside the scope and the objects the parsers
+    # add to every file are never loaded
+    data = without_metadata(_scoped(data, data_scope, _table_ref(data, **kwargs)))
     data_graph = load_dataset(data, rdf_map=rdf_map, store=store, undefined_namespace=undefined_namespace)
     ont_graph = _ontology_graph(ancestors, rdf_map, undefined_namespace) if ancestors else None
 

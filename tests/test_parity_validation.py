@@ -302,9 +302,7 @@ def test_sparql_target_on_real_data(svedala_eq, tmp_path):
 # Each RealGrid instance on its own triplets against the Enhanced SHACL of its
 # header's profile, exact types only (inheritance=False: the shapes list concrete
 # classes in sh:in and close each concrete class on its own). Known artefacts:
-# references into the other instances are absent (the TP / SV sh:class findings),
-# and the 2 sh:in Info rows per profile are triplets' parser-metadata rows
-# (NamespaceMap, Distribution) flagged by AllowedClasses-property.
+# references into the other instances are absent (the TP / SV sh:class findings).
 # pyshacl runs on SV by default; SSH, TP and EQ under -m performance.
 CGMES24_SHACL_DIR = Path("test_data/application-profiles-library-cgmes-v2-4/CGMES/Enhanced/SHACL")
 CGMES24_PROFILES = {   # rdf_map section: (Model.profile of the RealGrid instance, shapes file)

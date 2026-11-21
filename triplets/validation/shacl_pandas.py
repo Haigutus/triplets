@@ -48,6 +48,7 @@ from types import SimpleNamespace
 import numpy
 import pandas
 
+from .._header import without_metadata
 from ..export.nquads_utils import make_subject
 from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, prefixes, rdf_map_entries, split_iri,
                    value_types)
@@ -850,7 +851,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         the sh:sparql graph and the IRI/literal decision for sh:nodeKind. Every
         other component reads the raw lexical forms.
     data_scope : iterable of INSTANCE_ID, optional
-        Validate only rows of these instances.
+        Validate only rows of these instances. The objects the parsers add to
+        every file (``iri.METADATA_TYPES``) are never validated.
     components : iterable of component names, optional
         Restrict to a subset (e.g. ``("sh:datatype",)`` for the lexical
         supplement run next to pyshacl). None = everything implemented.
@@ -871,6 +873,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     data = _to_pandas(data)
     if data_scope is not None:
         data = data[data["INSTANCE_ID"].isin(list(data_scope))]
+    data = without_metadata(data)
 
     rules = compiled.ir
     if components is not None:

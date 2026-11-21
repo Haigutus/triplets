@@ -28,7 +28,7 @@ from .._engine_detect import flavor
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, prefixes, rdf_map_entries, value_types
+from ..iri import CIM_NS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -391,11 +391,16 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         the connection, else ``triplets``).
     """
     connection, table = _connection(data, table=table, schema=schema, table_name=table_name)
+    # the validated rows: the scoped instances, without the objects the parsers add to every file
+    metadata_types = ", ".join(f"'{name}'" for name in METADATA_TYPES)
+    connection.execute(f"CREATE OR REPLACE TEMP TABLE _shacl_metadata AS SELECT DISTINCT ID FROM {table} "
+                       f"WHERE KEY = '{TYPE_KEY}' AND VALUE IN ({metadata_types})")
+    where = "ID NOT IN (SELECT ID FROM _shacl_metadata)"
     if data_scope is not None:
         values = ", ".join("'" + str(instance).replace("'", "''") + "'" for instance in data_scope)
-        where = f"INSTANCE_ID IN ({values})" if values else "FALSE"   # an empty scope loads no instance
-        connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS SELECT * FROM {table} WHERE {where}")
-        table = '"_shacl_scoped"'
+        where += f" AND INSTANCE_ID IN ({values})" if values else " AND FALSE"   # an empty scope loads no instance
+    connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS SELECT * FROM {table} WHERE {where}")
+    table = '"_shacl_scoped"'
 
     if "duckdb" not in compiled.plans:   # setdefault would re-split on every call
         compiled.plans["duckdb"] = split_rules(compiled.ir, SQL_BUILDERS, FALLBACK_COMPONENTS, "duckdb")
@@ -446,6 +451,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     # don't leave them on the caller's connection
     connection.execute("DROP TABLE IF EXISTS _shacl_types")
     connection.execute("DROP TABLE IF EXISTS _shacl_targets")
+    connection.execute("DROP VIEW IF EXISTS _shacl_scoped")
+    connection.execute("DROP TABLE IF EXISTS _shacl_metadata")
     return violations
 
 

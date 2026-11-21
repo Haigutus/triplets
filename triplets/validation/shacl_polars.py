@@ -28,6 +28,7 @@ import logging
 import pandas
 import polars
 
+from .._header import without_metadata
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from .shacl_ir import split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
@@ -599,6 +600,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     frame = _to_polars(data)
     if data_scope is not None:
         frame = frame.filter(polars.col("INSTANCE_ID").is_in([str(s) for s in data_scope]))
+    frame = without_metadata(frame)
 
     if "polars" not in compiled.plans:   # setdefault would re-split on every call
         compiled.plans["polars"] = split_rules(compiled.ir, PLAN_BUILDERS, FALLBACK_COMPONENTS, "polars")

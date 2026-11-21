@@ -19,7 +19,7 @@ rdf_map_scope. Import-light on purpose: stdlib only.
 
 from .iri import _root_entries, _sections, absolute_datatype, prefixes
 from .iri import load_rdf_map  # noqa: F401 — re-exported for the export engines
-from .iri import TYPE_KEY
+from .iri import METADATA_TYPES, TYPE_KEY
 from ._engine_detect import flavor
 
 # Profile identity a header may declare, in priority order: old FullModel
@@ -182,6 +182,18 @@ def _merge_entry(name, merged, found, notes, bound):
         merged["values"] = list(dict.fromkeys(value for each in values for value in each))
         notes["relaxed_constraints"].append(
             f"{name}: enumeration values united ({' + '.join(section for section, _ in found)})")
+
+
+def without_metadata(data):
+    """*data* (pandas or polars) without the objects the parsers add to every file
+    (``METADATA_TYPES``) — every row of their IDs; the same frame when it has none."""
+    if flavor(data) == "polars":
+        import polars
+        ids = data.filter((polars.col("KEY") == TYPE_KEY) & polars.col("VALUE").is_in(METADATA_TYPES))["ID"]
+        return data.filter(~polars.col("ID").is_in(ids.implode())) if len(ids) else data
+    types = data.loc[data["KEY"] == TYPE_KEY]
+    ids = types.loc[types["VALUE"].isin(METADATA_TYPES), "ID"]
+    return data.loc[~data["ID"].isin(ids)] if len(ids) else data
 
 
 def distribution_labels(data, label_key="label"):

@@ -556,6 +556,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **The parser's `Distribution` and `NamespaceMap` objects are no longer validated as
+  data.** Every engine, pyshacl included, checked the two objects the parsers add to each
+  file: `sh:targetSubjectsOf rdf:type` shapes reported them as classes outside the
+  profile, and dangling-reference queries reported the namespace IRIs of `NamespaceMap`.
+  Their IDs are new at every parse, so those findings never matched the previous run.
+  They are now left out of the validated rows (focus nodes, value nodes, the graph of
+  `sh:sparql`, SPARQL targets and pyshacl) on every engine. The set is
+  `triplets.iri.METADATA_TYPES`, the one `cim-diff` and `cim-spreadsheet` use
+  (`triplets.cli.METADATA_TYPES` is the same object). The schema validations never
+  reported them: no schema defines the two classes.
 - **`concat_violations` joins a frame it already joined.** A joined frame of runs with
   two rule sets (so also the frame of `validate_by_header`) raised
   `TypeError: unhashable type: 'list'` when joined again. The result is now the same
