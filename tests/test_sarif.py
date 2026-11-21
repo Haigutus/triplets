@@ -290,8 +290,8 @@ def _schema_violations():
 
 
 def test_one_log_for_a_schema_run_and_a_shacl_run(violations, tmp_path):
-    """A list of frames is one log with one run per frame, each named by its own language;
-    a single frame is the same document as before."""
+    """A list of frames is one log with one run per frame, each named by its own language
+    and equal to the run of that frame alone."""
     jsonschema = pytest.importorskip("jsonschema")
     schema_violations = _schema_violations()
     document = build_sarif([schema_violations, violations])
@@ -312,6 +312,21 @@ def test_one_log_for_a_schema_run_and_a_shacl_run(violations, tmp_path):
     uris = {location["physicalLocation"]["artifactLocation"]["uri"]
             for run in written["runs"] for result in run["results"] for location in result["locations"]}
     assert uris == {quote("Svedala EQ.xml")}                       # data= enriched every frame
+
+
+def test_frames_of_one_language_are_joined_first(violations):
+    """Two frames of one language would be two runs of one tool: ValueError naming the
+    language. A tuple is a list of frames; no frame is a log without runs."""
+    schema_violations = _schema_violations()
+    for frames in ([violations, violations], (schema_violations, violations, schema_violations)):
+        with pytest.raises(ValueError, match="(shacl|rdfs).*concat_violations"):
+            build_sarif(frames)
+    with pytest.raises(ValueError, match="rdfs"):
+        export_to_sarif([schema_violations, schema_violations], export_to_memory=True)
+    joined = triplets.validation.concat_violations([schema_violations, schema_violations])
+    assert [run["tool"]["driver"]["name"] for run in build_sarif((joined, violations))["runs"]] \
+        == ["triplets-rdfs", "triplets-shacl"]
+    assert build_sarif([])["runs"] == []
 
 
 def test_language_of_a_frame_without_run_metadata(violations):

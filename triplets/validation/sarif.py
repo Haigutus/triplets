@@ -57,7 +57,8 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         tool name, rules and run metadata of its own frame — a schema run and a
         SHACL run in one file (``[schema_violations, shacl_violations]``); every
         other argument applies to each frame. Runs of one constraint language
-        share a tool name: join them with ``concat_violations`` first.
+        would share a tool name: two frames of one language raise ValueError —
+        join them with ``concat_violations`` first.
     data, shapes, rdf_map : optional
         Run the context enrichment pass first (see context.enrich) — fills
         object names, source files and shape/schema descriptions into the
@@ -131,10 +132,16 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
     absolute file names under it are written relative to it (see
     export_to_sarif)."""
     check_source_root(source_root)
+    frames = _frames(violations)
+    languages = [run_language(frame) for frame in frames]
+    repeated = sorted({language for language in languages if languages.count(language) > 1})
+    if repeated:
+        raise ValueError(f"build_sarif got several frames of the constraint language {', '.join(repeated)}: they would "
+                         f"be runs with one tool name (triplets-{repeated[0]}) — join them with concat_violations first")
     return {
         "$schema": _SCHEMA,
         "version": "2.1.0",
-        "runs": [_run(frame, group, sources, source_root) for frame in _frames(violations)],
+        "runs": [_run(frame, group, sources, source_root) for frame in frames],
     }
 
 

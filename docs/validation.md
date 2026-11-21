@@ -970,8 +970,9 @@ enrichment pass first (an already-enriched frame is used as-is).
   `triplets.validation.export_to_sarif([schema_violations, shacl_violations], ...)`
   (also `build_sarif`). The log has one run per frame, in order, each with its
   own tool name, rules and run metadata; the other arguments apply to every
-  frame. Runs of one language share a tool name — join those with
-  `concat_violations` first.
+  frame. Runs of one language would share a tool name, which GitHub code
+  scanning does not take in one file: two frames of one language raise
+  `ValueError` — join those with `concat_violations` first.
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
   rule's findings (the `PROFILE` column — a list of section keys, or the

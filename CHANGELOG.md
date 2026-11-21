@@ -13,7 +13,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `triplets.validation.export_to_sarif([schema_violations, shacl_violations], data=data)`
   is one file with a `triplets-rdfs` run and a `triplets-shacl` run. The other arguments
   apply to every frame; a single frame gives the same log as before. Runs of one
-  constraint language share a tool name, so join those with `concat_violations` first.
+  constraint language would share a tool name: two frames of one language raise
+  `ValueError`, so join those with `concat_violations` first.
 - **`stereotype` and `rdf:type` on every bundled schema entry** — the RDFS source types
   of the entry's object, as lists in source order, deduplicated, and left out when the
   object has none. Covers classes, attributes, associations, enumeration attributes,
