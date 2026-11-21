@@ -22,7 +22,7 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, REFERENCED_OBJECT, enrich
 from .locations import LOCATION_COLUMNS, check_source_root, locate_missing, relative_sources
-from .shacl_report import _expand, message_prefix, profile_names, profile_text
+from .shacl_report import SCHEMA_SHAPES, _expand, message_prefix, profile_names, profile_text
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -218,8 +218,17 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
+def _shape_name(shape):
+    """The shape part of a ruleId: the local name of a shape IRI; a schema shape keeps its
+    scope, so one class and key checked under two scopes are two rules
+    (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` → ``EQ:OP:Breaker.Switch.open``)."""
+    if shape.startswith(SCHEMA_SHAPES):
+        return shape.removeprefix(SCHEMA_SHAPES).replace("#", ":").lstrip(":")
+    return split_iri(shape)[1]
+
+
 def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl", references=None):
-    identifier = f"{split_iri(str(shape))[1]}/{constraint}" if not pandas.isna(shape) else str(constraint)
+    identifier = f"{_shape_name(str(shape))}/{constraint}" if not pandas.isna(shape) else str(constraint)
     if identifier in seen_ids:                       # distinct shapes, same local name
         seen_ids[identifier] += 1
         identifier = f"{identifier}-{seen_ids[identifier]}"

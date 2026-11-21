@@ -22,6 +22,8 @@ from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS,
 logger = logging.getLogger(__name__)
 
 VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"]
+# SOURCE_SHAPE of a schema finding: ``urn:triplets:schema[:<profile>…]#<Class>[.<KEY>]``
+SCHEMA_SHAPES = "urn:triplets:schema"
 
 
 def has_violation(violations):

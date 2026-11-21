@@ -709,7 +709,10 @@ violation carries them as a list in the `PROFILE` column, reports carry
 `[rdfs_profile] EQ, OP, SC` entries, and SARIF alert titles read
 `RDFS <profiles> <Class> <attr> (N×)`. Schema shape ids carry the scope in
 their namespace (`urn:triplets:schema:EQ:OP:SC#Breaker.IdentifiedObject.name`),
-so findings of different scopes never share a rule.
+so findings of different scopes never share a rule; the SARIF ruleId is the scope, the
+shape's local name and the constraint
+(`EQ:OP:SC:Breaker.IdentifiedObject.name/xsd:minOccurs`; `Breaker.IdentifiedObject.name/xsd:minOccurs`
+without a scope).
 The same vectorized engines run everything (plans cached per compiled
 schema); the pyshacl engine refuses schema-compiled IR. **Results do not
 masquerade as SHACL**: constraint language `"rdfs"`, violation types

@@ -242,6 +242,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`SOURCE_SHAPE` and the SARIF ruleId of schema findings, against 0.2.0.** `SOURCE_SHAPE`
+  carries the scope in its namespace: `urn:triplets:schema:EMTIOP#ACLineSegment.ACLineSegment.r`
+  (0.2.0: `urn:triplets:schema#EMTIOP:ACLineSegment.ACLineSegment.r`), every profile of a
+  merged scope in order (`urn:triplets:schema:EQ:OP:SC#Breaker.IdentifiedObject.name`), no
+  profile without a scope (`urn:triplets:schema#Breaker.IdentifiedObject.name`). The ruleId
+  is the scope, the shape's local name and the constraint:
+  `EMTIOP:ACLineSegment.ACLineSegment.r/xsd:type`, `EQ:OP:SC:Breaker.IdentifiedObject.name/xsd:minOccurs`,
+  `Breaker.IdentifiedObject.name/xsd:minOccurs`. It is the same for the same scope in every
+  run, and one class and key checked under two scopes are two rules. A one-profile scope
+  keeps its 0.2.0 ruleId; a scope of several profiles had one rule per profile in 0.2.0, so
+  its GitHub code scanning alerts close and re-open once on upgrade. A consumer that
+  parses `SOURCE_SHAPE` or `properties.sourceShape` reads the new form.
 - **`rdf:resource="#x"` references `rdf:ID="x"`** — `iri.local_id` strips one of
   `urn:uuid:`, `#_`, `#`, `_` (longest first), where a bare `#` stayed: a file whose IDs
   have no underscore (`rdf:ID="SS1"`, `rdf:resource="#SS1"`) parsed to the ID `SS1` and
