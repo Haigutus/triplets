@@ -37,7 +37,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`validate_schema(..., severity=)` / `validate_schema_references(..., severity=)`** (and
   `compile_schema` / `compile_references`) — report schema findings as `"Warning"` or `"Info"`
   instead of `"Violation"` (SARIF `warning` / `note`, `sh:resultSeverity`); other values raise
-  `ValueError`, `triplets:lexicalForm` findings stay `Warning`; `validate_by_header` forwards it
+  `ValueError`, `triplets:lexicalForm` findings stay `Warning`; `cgmes_tools.validate_by_header` has the same
+  `severity=` parameter, for both of its runs
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
 - **SARIF `rules[].help`** (text + markdown) — the rule help GitHub shows under an alert:
   the shape's `sh:message`, path and expected value, the schema description with
