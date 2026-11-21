@@ -234,6 +234,21 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   (`iri.REFERENCE_LIKE`: any-case UUID, `scheme://…`, `urn:…`, `Name.attr`, or an
   ID in the data), while the exported graph pyshacl sees uses the stricter export
   rule (absolute IRI or lowercase UUID → IRI) — the two can disagree on such keys.
+  The file's own form is not kept: an `Attribute` whose datatype is a URI is a
+  literal even when the file writes it as `rdf:resource`, so `sh:nodeKind sh:IRI`
+  reports it on every engine, pyshacl included, and the exports write it as text.
+  The NC 2.5 header properties are such entries in the bundled schema
+  (`dcterms:accessRights`, `dcterms:conformsTo`, `dcterms:license`, …: `Attribute`,
+  from the `URI` primitive the upstream RDFS gives them).
+- **Only the local name of an `rdf:resource` / `rdf:type` IRI is kept** by the
+  CIM XML parser ([#240](https://github.com/Haigutus/triplets/issues/240)). A
+  reference into another namespace
+  (`rdf:resource="http://iec.ch/TC57/CIM100#ACDCConverter.targetPpcc"`) parses to
+  the VALUE `ACDCConverter.targetPpcc` and is `urn:uuid:ACDCConverter.targetPpcc`
+  in the exports and in the graph the `sh:sparql` constraints and pyshacl read. A
+  class is its local name too: on polars / pandas / duckdb a class target in
+  another namespace (`cim16:Switch`) matches every class of that local name, while
+  pyshacl sees the class in the namespace the schema gives the name.
 - The duckdb engine streams/spills by design, but a true larger-than-RAM
   validation has not been exercised yet.
 
