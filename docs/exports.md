@@ -58,6 +58,15 @@ Engine aliases: `performance` / `pugixml` -> `cython_pugixml`, `lxml` / `pandas`
 `rdf:datatype` from the schema's `xsd:type` (like N-Quads; `xsd:string` stays
 plain). Both engines write the same attributes.
 
+**IDs and references.** A class entry's `attrib` gives the ID attribute and its
+`value_prefix` (`rdf:ID="_<ID>"`, `rdf:about="urn:uuid:<ID>"`), and a reference key's
+`attrib` the same for the VALUE (`rdf:resource="#_<VALUE>"`). An ID or reference VALUE that
+is an absolute IRI (`http://`, `https://`, `urn:`) is written as it is, without the prefix —
+the ID always as `rdf:about` — as `export_to_nquads` writes it. A reference key with an
+empty `value_prefix` is an enumeration: a VALUE that is not an absolute IRI is a schema name
+and takes that entry's namespace. An undefined class (`export_undefined=True`) is written
+with `rdf:about="urn:uuid:<ID>"`.
+
 A schema `language` ([export_schemas.md](export_schemas.md#fixed-language-tag-language))
 writes `xml:lang="<tag>"` on the literal element in both engines, with or without
 `datatypes=` — the tag is part of the value; that element carries no `rdf:datatype`.
