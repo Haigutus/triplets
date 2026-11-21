@@ -94,7 +94,8 @@ pandas.read_RDF([paths])
     |   fall back python_lxml_pandas -> always works
     |
     |-> find_all_xml(paths)
-    |   |-> open .xml/.rdf/.owl files
+    |   |-> open .xml/.rdf/.owl files (the suffix of the file name, any case;
+    |   |   .owl as RDF/XML only: a .owl zip member in Turtle is skipped)
     |   |-> extract from .zip (nested zips supported)
     |   '-> returns [file_obj, file_obj, ...]
     |

@@ -5,6 +5,7 @@ Extracted/adapted from rdf_parser.py and rdf_parser_lxml_arrow.py cues.
 
 from io import BytesIO
 import os
+import re
 import uuid
 import logging
 import zipfile
@@ -19,13 +20,17 @@ RDF_ABOUT = f"{{{RDF_NS}}}about"
 RDF_NODEID = f"{{{RDF_NS}}}nodeID"
 RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
-# file name parts that mark an RDF/XML file (anywhere in the name: ``model.xml.tmp`` is read)
+# file name suffixes of an RDF/XML file; ``.owl`` is read as RDF/XML only (no Turtle, no OWL/XML)
 RDF_XML_SUFFIXES = (".xml", ".rdf", ".owl")
+# how an XML document starts (BOM and white space aside): a declaration, a comment or
+# DOCTYPE, or an element name — a Turtle file opening with ``<http://…>`` does not
+XML_START = re.compile(rb"(?:\xef\xbb\xbf)?\s*<(?:[?!]|[A-Za-z_][\w.-]*(?::[\w.-]+)?[\s>/])")
 
 
 def is_rdf_xml(name: str) -> bool:
-    """Whether a file name (lower case) names an RDF/XML file (:data:`RDF_XML_SUFFIXES`)."""
-    return any(suffix in name for suffix in RDF_XML_SUFFIXES)
+    """Whether a path or zip member name ends in an RDF/XML suffix (:data:`RDF_XML_SUFFIXES`,
+    any case) — its file name, never a directory of the path."""
+    return base_name(name).lower().endswith(RDF_XML_SUFFIXES)
 
 
 def document_base(root, default_base=TRIPLETS_NS):
@@ -168,11 +173,17 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
                     zipped_file_lower = zipped_file.lower()
                     if is_rdf_xml(zipped_file_lower):
                         try:
-                            file_object = BytesIO(zip_container.read(zipped_file))
+                            content = zip_container.read(zipped_file)
+                            file_object = BytesIO(content)
                             file_object.name = zipped_file
                             file_object.container = zip_name
                         except Exception as e:
                             logger.warning("Zip member read fail %s: %s", zipped_file, e)
+                            continue
+                        # an ontology in Turtle or another syntax: not RDF/XML, skipped like any other member
+                        if zipped_file_lower.endswith(".owl") and not XML_START.match(content):
+                            if debug:
+                                logger.debug("Skipped in zip: %s", zipped_file)
                             continue
                         if debug:
                             logger.debug("Added from zip: %s", zipped_file)

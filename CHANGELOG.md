@@ -623,7 +623,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rows stays one SHACL run: pass the frames as a list for one run each.
 - **`parse()` reads a `.owl` file as RDF/XML**, as a path and as a zip member, like `.xml` and
   `.rdf`; it logged "Not supported file" and returned no rows. `cim-spreadsheet` takes a
-  `.owl` input as CIM XML too.
+  `.owl` input as CIM XML too. A file is told by the suffix of its file name
+  (`.xml` / `.rdf` / `.owl`, any case), not by those letters anywhere in its path: a zip in
+  a directory `j.owlett/` is a zip, `model.xml.zip` is a zip, and `model.xml.tmp` is no
+  longer read. `.owl` is read as RDF/XML only; a `.owl` zip member in another syntax
+  (Turtle) is skipped like the other members that are not RDF/XML.
 - **CIM XML export: no "matches none of the schema profiles … nothing is exported" warning
   for a schema with root entries.** A flat schema that also holds a nested dict without a
   `type` (read as a profile section) exported every object and logged the warning once per

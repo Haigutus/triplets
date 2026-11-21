@@ -60,6 +60,23 @@ def test_rdf_xml_suffixes(tmp_path, suffix):
     assert len(parse(str(tmp_path / "model.zip"), engine="python_lxml_pandas")) == expected + 1   # belongsToContainer
 
 
+def test_rdf_xml_is_told_by_the_file_name(tmp_path):
+    """A directory name with a suffix in it does not make a zip an XML file, and a
+    Turtle ``.owl`` zip member is skipped like any other member that is not RDF/XML."""
+    folder = tmp_path / "j.owlett.xml.d"
+    folder.mkdir()
+    with zipfile.ZipFile(folder / "grid.zip", "w") as archive:
+        archive.write(MINIMAL, "model.xml")
+        archive.writestr("ontology.owl", "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n<http://example.org/o> a owl:Ontology .\n")
+        archive.writestr("iri-first.owl", "<http://example.org/o> a <http://www.w3.org/2002/07/owl#Ontology> .\n")
+        archive.write(MINIMAL, "model.owl")
+    expected = len(parse(MINIMAL, engine="python_lxml_pandas")) + 1                    # belongsToContainer
+    assert [file.name for file in find_all_xml([str(folder / "grid.zip")])] == ["model.xml", "model.owl"]
+    assert len(parse(str(folder / "grid.zip"), engine="python_lxml_pandas")) == 2 * expected
+    shutil.copy(MINIMAL, tmp_path / "model.xml.txt")
+    assert find_all_xml([str(tmp_path / "model.xml.txt")]) == []                   # neither suffix: not supported
+
+
 # ── Registration ────────────────────────────────────────────────────────────
 
 class TestRegistration:
