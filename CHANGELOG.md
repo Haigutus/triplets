@@ -566,6 +566,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`engine="pyshacl"` no longer crashes on a shape pyshacl gives up on.** pyshacl returns
+  its `ValidationFailure` in place of the report (a `sh:sparql` query it does not accept),
+  and the run ended in `AttributeError: 'ValidationFailure' object has no attribute
+  'objects'`. The run now returns one `triplets:invalidSparql` Violation row with
+  pyshacl's reason, like the vectorized engines flag a query no engine can run; pyshacl
+  names no shape, so the row has no `SOURCE_SHAPE`.
 - **`sh:targetObjectsOf rdf:type` findings carry the class IRI as `ID`** on pandas, polars
   and duckdb, as pyshacl reports them (`http://iec.ch/TC57/CIM100#Bay`; it was the local
   `Bay`), and so do the findings of `sh:targetObjectsOf` on an enumeration KEY. A class

@@ -827,3 +827,17 @@ def test_sparql_solutions_are_findings_with_their_message(engine):
     assert sorted(violations["VALUE"].astype(str)) == ["1"] * 6 + ["2"] * 2 + ["5"]
     assert (f"The class {CIM}Breaker appears 5 times in the data graph (urn:uuid:bay1, {{?unbound}})."
             in set(violations["MESSAGE"]))
+
+
+def test_pyshacl_validation_failure_is_a_note_row():
+    """A query pyshacl does not accept (pre-bound $this missing from a nested SELECT) stops its
+    run: one triplets:invalidSparql Violation with pyshacl's reason, no crash; no data Violation."""
+    import rdflib
+    shape = PREFIX + """cim:V a sh:NodeShape ; sh:targetClass cim:Bay ; sh:sparql [ sh:prefixes cim: ; sh:select
+        'SELECT $this ?value WHERE { { SELECT ?class (COUNT(?s) AS ?value) WHERE { ?s rdf:type ?class } GROUP BY ?class } }' ] ."""
+    shapes = triplets.validation.compile(rdflib.Graph().parse(data=shape, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(TRIO), shapes, engine="pyshacl", rdf_map=SCHEMA, rdf_map_scope="*")
+    assert violations[["ID", "VIOLATION_TYPE", "SEVERITY"]].values.tolist() == [[None, "triplets:invalidSparql", "Violation"]]
+    assert "pre-bound variables must be selected" in violations["MESSAGE"][0]
+    assert not triplets.validation.has_violation(violations)
+    assert violations.shacl.to_sarif(export_to_memory=True).read()

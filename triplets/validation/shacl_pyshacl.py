@@ -7,6 +7,8 @@ for the vectorized engines.
 """
 import logging
 
+import pandas
+
 from importlib.util import find_spec
 
 from ..iri import CIM_NS
@@ -14,7 +16,7 @@ from .._header import without_metadata
 from .._rdflib_loader import load_dataset
 from .context import _scoped
 from .shacl_ir import _mark_switched_off
-from .shacl_report import report_to_violations
+from .shacl_report import VIOLATION_COLUMNS, report_to_violations
 
 if find_spec("pyshacl") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("pyshacl is not installed")
@@ -82,7 +84,23 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         allow_warnings=abort_on_first,   # else pyshacl's abort_on_first also stops on a Warning
     )
     logger.debug("SHACL conforms=%s", conforms)
+    if isinstance(report_graph, Exception):   # pyshacl returns its ValidationFailure in place of the report
+        return _not_validated(report_graph)
     return report_to_violations(report_graph, shapes_graph=shapes_graph)
+
+
+def _not_validated(failure):
+    """The one row of a run pyshacl gave up on (a ``ValidationFailure``: a sh:sparql
+    query it does not accept, …) — a ``triplets:invalidSparql`` Violation without a
+    focus node, as the vectorized engines flag a query no engine can run. pyshacl
+    stops at the first such shape and names none, so the row has no SOURCE_SHAPE and
+    pyshacl reports nothing else."""
+    reason = " ".join(str(getattr(failure, "message", failure)).split())
+    logger.error("pyshacl stopped the validation: %s", reason)
+    message = (f"pyshacl stopped the validation — {reason} Nothing was evaluated: a shapes bug, "
+               f"not a data finding; the vectorized engines name the shape.")
+    return pandas.DataFrame([[None, None, None, "triplets:invalidSparql", message, "Violation", None]],
+                            columns=VIOLATION_COLUMNS)
 
 
 def _shapes_graph(compiled):

@@ -467,7 +467,11 @@ them too.
   **No query fixing**: constraint queries run exactly as authored. A
   constraint query a strict engine rejects is reported as a
   `triplets:invalidSparql` Warning row naming the shape and is still
-  evaluated on the lenient rdflib engine.
+  evaluated on the lenient rdflib engine. `engine="pyshacl"` stops at the
+  first query pyshacl itself does not accept (its `ValidationFailure`, e.g. a
+  nested SELECT that does not project `$this`) and names no shape: the run
+  returns one `triplets:invalidSparql` Violation row with pyshacl's reason,
+  without a focus node or `SOURCE_SHAPE`, and no other pyshacl finding.
 - **SPARQL targets** (`target_by="SPARQL"`) run the same way: each distinct
   target query once per run over the (scoped) data, its `?this` column the
   focus nodes. A target query a strict engine rejects gets the same Warning
