@@ -26,6 +26,17 @@ VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERIT
 SCHEMA_SHAPES = "urn:triplets:schema"
 
 
+def run_language(violations):
+    """The constraint language of a violations frame (``"shacl"`` / ``"rdfs"``): the run
+    metadata's (``attrs["validation"]["language"]``); for a frame without it (``pandas.concat``
+    drops the attrs) ``"rdfs"`` when every SOURCE_SHAPE is a schema shape, else ``"shacl"``."""
+    language = violations.attrs.get("validation", {}).get("language")
+    if language:
+        return language
+    shapes = violations["SOURCE_SHAPE"].dropna().astype(str)
+    return "rdfs" if len(shapes) and shapes.str.startswith(SCHEMA_SHAPES).all() else "shacl"
+
+
 def has_violation(violations):
     """Whether *violations* holds a data Violation — the ``abort_on_first`` stop.
     A ``triplets:invalidSparql`` row flags a defective shape, not the data."""
@@ -214,7 +225,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
         for triple in shape_graph:
             graph.add(triple)
 
-    language = meta.get("language", "shacl")
+    language = run_language(violations)
 
     report = rdflib.BNode()
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))

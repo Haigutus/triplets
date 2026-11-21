@@ -280,6 +280,59 @@ def test_official_schema_conformance(violations):
     jsonschema.validate(document, schema)
 
 
+def _schema_violations():
+    """One xsd:minOccurs finding of a schema run."""
+    schema = {"EQ": {"ACLineSegment": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                                       "parameters": ["IdentifiedObject.name"]},
+                     "IdentifiedObject.name": {"type": "Attribute", "xsd:minOccours": "1", "xsd:maxOccours": "1",
+                                               "xsd:type": "xsd:string"}}}
+    return triplets.validation.validate_schema(frame(1), schema, rdf_map_scope="EQ", engine="pandas")
+
+
+def test_one_log_for_a_schema_run_and_a_shacl_run(violations, tmp_path):
+    """A list of frames is one log with one run per frame, each named by its own language;
+    a single frame is the same document as before."""
+    jsonschema = pytest.importorskip("jsonschema")
+    schema_violations = _schema_violations()
+    document = build_sarif([schema_violations, violations])
+    jsonschema.validate(document, json.loads((Path(__file__).parent / "data" / "sarif-schema-2.1.0.json")
+                                             .read_text(encoding="utf-8")))
+    assert [run["tool"]["driver"]["name"] for run in document["runs"]] == ["triplets-rdfs", "triplets-shacl"]
+    assert document["runs"] == [build_sarif(schema_violations)["runs"][0], build_sarif(violations)["runs"][0]]
+    assert [rule["id"] for rule in document["runs"][0]["tool"]["driver"]["rules"]] \
+        == ["EQ:ACLineSegment.IdentifiedObject.name/xsd:minOccurs"]
+    assert document["runs"][0]["properties"]["language"] == "rdfs"
+    for run in document["runs"]:                                   # ruleIndex is per run
+        for result in run["results"]:
+            assert run["tool"]["driver"]["rules"][result["ruleIndex"]]["id"] == result["ruleId"]
+
+    path = export_to_sarif([schema_violations, violations], data=frame(), path=tmp_path / "both.sarif")
+    written = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert [run["tool"]["driver"]["name"] for run in written["runs"]] == ["triplets-rdfs", "triplets-shacl"]
+    uris = {location["physicalLocation"]["artifactLocation"]["uri"]
+            for run in written["runs"] for result in run["results"] for location in result["locations"]}
+    assert uris == {quote("Svedala EQ.xml")}                       # data= enriched every frame
+
+
+def test_language_of_a_frame_without_run_metadata(violations):
+    """A frame without run metadata: schema rows alone are an RDFS run, anything else SHACL."""
+    def bare(rows):
+        rows = rows.copy()
+        rows.attrs = {}
+        return rows
+
+    run = build_sarif(bare(_schema_violations()))["runs"][0]
+    assert run["tool"]["driver"]["name"] == "triplets-rdfs"
+    assert run["tool"]["driver"]["rules"][0]["name"].startswith("RDFS ")
+    assert "[rdfs_path] IdentifiedObject.name" in run["results"][0]["message"]["text"]
+    report = triplets.validation.shacl_report.violations_to_report_graph(bare(_schema_violations()))
+    assert "[rdfs_profile] EQ" in {str(term) for term in report.objects()}
+    mixed = pandas.concat([_schema_violations(), violations], ignore_index=True)
+    assert not mixed.attrs                                          # pandas.concat drops differing attrs
+    for rows in (bare(violations), mixed, bare(_schema_violations()).iloc[0:0]):
+        assert build_sarif(rows)["runs"][0]["tool"]["driver"]["name"] == "triplets-shacl"
+
+
 def test_github_code_scanning_requirements(violations):
     """GitHub code-scanning ingestion rules (docs.github.com, 'SARIF support
     for code scanning'): driver.name, a non-empty message.text per result,

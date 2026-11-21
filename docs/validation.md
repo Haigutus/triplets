@@ -648,7 +648,9 @@ so GitHub alert matching is unaffected).
 `report_source=` / `report_references=` override the stamped values (plain
 labels — distinct from the `sources=` locate pass and the shapes object
 `to_sarif(shapes=)` takes). Frames without the attrs (bare frames,
-`report_to_violations` output) carry no run metadata in SARIF/csv/excel; the
+`report_to_violations` output) carry no run metadata in SARIF/csv/excel, and
+their constraint language is read from the rows (`rdfs` when every
+`SOURCE_SHAPE` is a schema shape, else `shacl`); the
 SHACL report node still gets `prov:generatedAtTime` (export time) and
 `dcterms:creator` — a standard report always says when and by what it was
 written.
@@ -928,9 +930,18 @@ enrichment pass first (an already-enriched frame is used as-is).
   `occurrenceCount` and the first-3 + last-3 sample instances (all listed
   when ≤ 6). `group=False` emits one result per violation row.
 - The tool is named per constraint language: `tool.driver.name` is
-  `triplets-shacl` for SHACL runs and bare frames, `triplets-rdfs` for schema
+  `triplets-shacl` for SHACL runs, `triplets-rdfs` for schema
   runs (a frame holds one language: `concat_violations` raises on a mix).
-  GitHub code scanning filters alerts by tool.
+  GitHub code scanning filters alerts by tool. A frame without run metadata
+  (`pandas.concat` drops the attrs) is `rdfs` when every `SOURCE_SHAPE` is a
+  schema shape (`urn:triplets:schema…`), else `shacl` — so is a frame that
+  mixes both, which is exported as one SHACL run.
+- **A schema run and a SHACL run in one file**: pass the frames as a list,
+  `triplets.validation.export_to_sarif([schema_violations, shacl_violations], ...)`
+  (also `build_sarif`). The log has one run per frame, in order, each with its
+  own tool name, rules and run metadata; the other arguments apply to every
+  frame. Runs of one language share a tool name — join those with
+  `concat_violations` first.
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
   rule's findings (the `PROFILE` column — a list of section keys, or the

@@ -7,6 +7,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **One SARIF log for several validation runs** — `export_to_sarif` and `build_sarif` take
+  a list of violations frames and write one run per frame, in order, each with the tool
+  name, rules and run metadata of its own frame:
+  `triplets.validation.export_to_sarif([schema_violations, shacl_violations], data=data)`
+  is one file with a `triplets-rdfs` run and a `triplets-shacl` run. The other arguments
+  apply to every frame; a single frame gives the same log as before. Runs of one
+  constraint language share a tool name, so join those with `concat_violations` first.
 - **`stereotype` and `rdf:type` on every bundled schema entry** — the RDFS source types
   of the entry's object, as lists in source order, deduplicated, and left out when the
   object has none. Covers classes, attributes, associations, enumeration attributes,
@@ -541,6 +548,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **A violations frame without run metadata that holds schema findings is exported as an
+  RDFS run**, in SARIF (`triplets-rdfs`, `RDFS …` titles, `[rdfs_…]` message tags) and in
+  the SHACL report: the language is `rdfs` when every `SOURCE_SHAPE` is a schema shape
+  (`urn:triplets:schema…`), where every such frame was labelled SHACL. `pandas.concat`
+  drops the metadata of frames from different runs. A frame that mixes schema and SHACL
+  rows stays one SHACL run: pass the frames as a list for one run each.
 - **`parse()` reads a `.owl` file as RDF/XML**, as a path and as a zip member, like `.xml` and
   `.rdf`; it logged "Not supported file" and returned no rows. `cim-spreadsheet` takes a
   `.owl` input as CIM XML too.

@@ -22,7 +22,7 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, REFERENCED_OBJECT, enrich
 from .locations import LOCATION_COLUMNS, check_source_root, locate_missing, relative_sources
-from .shacl_report import SCHEMA_SHAPES, _expand, message_prefix, profile_names, profile_text
+from .shacl_report import SCHEMA_SHAPES, _expand, message_prefix, profile_names, profile_text, run_language
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -46,12 +46,17 @@ _LINK_BREAKERS = set("[]\\")
 
 def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True,
                     sources=None, path=None, export_to_memory=False, source_root=None, data_scope=None):
-    """Violations frame → SARIF 2.1.0 log.
+    """Violations frame(s) → SARIF 2.1.0 log.
 
     Parameters
     ----------
-    violations : DataFrame in VIOLATION_COLUMNS (any engine's output).
+    violations : DataFrame in VIOLATION_COLUMNS (any engine's output), or a list of them.
         A frame already carrying the enrichment columns is used as-is.
+        A list writes one log with one run per frame, in order, each with the
+        tool name, rules and run metadata of its own frame — a schema run and a
+        SHACL run in one file (``[schema_violations, shacl_violations]``); every
+        other argument applies to each frame. Runs of one constraint language
+        share a tool name: join them with ``concat_violations`` first.
     data, shapes, rdf_map : optional
         Run the context enrichment pass first (see context.enrich) — fills
         object names, source files and shape/schema descriptions into the
@@ -92,9 +97,10 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         object the run did not see (see context.enrich).
     """
     check_source_root(source_root)
-    if any(source is not None for source in (data, shapes, rdf_map)) \
-            and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
-        violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map, data_scope=data_scope)
+    if any(source is not None for source in (data, shapes, rdf_map)):
+        violations = [frame if set(ENRICHMENT_COLUMNS) <= set(frame.columns)
+                      else enrich(frame, data=data, shapes=shapes, rdf_map=rdf_map, data_scope=data_scope)
+                      for frame in _frames(violations)]
 
     payload = json.dumps(build_sarif(violations, group=group, sources=sources, source_root=source_root),
                          ensure_ascii=False, indent=2).encode("utf-8")
@@ -110,14 +116,30 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     return path
 
 
+def _frames(violations):
+    """One violations frame, or a sequence of them → the list of frames."""
+    return [violations] if isinstance(violations, pandas.DataFrame) else list(violations)
+
+
 def build_sarif(violations, group=True, sources=None, source_root=None):
-    """Violations frame → SARIF document dict (I/O only when *sources* is
+    """Violations frame, or a list of them → SARIF document dict with one run
+    per frame (I/O only when *sources* is
     given — the locate pass reads just the source files and stamps only the
     location columns the frame lacks, see locations.locate_missing).
     *source_root*:
     absolute file names under it are written relative to it (see
     export_to_sarif)."""
     check_source_root(source_root)
+    return {
+        "$schema": _SCHEMA,
+        "version": "2.1.0",
+        "runs": [_run(frame, group, sources, source_root) for frame in _frames(violations)],
+    }
+
+
+def _run(violations, group, sources, source_root):
+    """One violations frame → its SARIF run: the tool is named by the frame's
+    constraint language (shacl_report.run_language)."""
     frame = violations.copy()
     if sources is not None:
         frame = locate_missing(frame, sources)
@@ -129,7 +151,7 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
     frame, names = relative_sources(frame, {key: meta[key] for key in ("source", "references")
                                             if meta.get(key)}, source_root)
     meta = {**meta, **names}
-    language = meta.get("language", "shacl")
+    language = run_language(violations)
     groups = [(key, rows.to_dict("records")) for key, rows
               in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
 
@@ -163,7 +185,7 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
     skipped = {key: descriptor for key, descriptor in _SKIPPED.items() if meta.get(key)}
     notifications = [{"descriptor": {"id": descriptor}, "level": "warning", "message": {"text": str(text)}}
                      for key, (descriptor, _) in skipped.items() for text in meta[key]]
-    run = _prune({
+    return _prune({
         "tool": {"driver": _prune({
             "name": f"triplets-{language}",
             "informationUri": "https://github.com/Haigutus/triplets",
@@ -189,11 +211,6 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
                        and value is not None} or None,
         "results": results,
     })
-    return {
-        "$schema": _SCHEMA,
-        "version": "2.1.0",
-        "runs": [run],
-    }
 
 
 def _fallback_name(shape, first, language):
