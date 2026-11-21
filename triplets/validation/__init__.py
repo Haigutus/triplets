@@ -316,14 +316,19 @@ def _message_sources(violations, ir):
     authored = tuple(sorted({rule.message for rule in ir.itertuples()
                              if isinstance(rule.message, str) and rule.message},
                             key=len, reverse=True))
-    # a sh:sparql message with {?variable} placeholders is authored with any values in them
-    filled = [re.compile(".*".join(map(re.escape, MESSAGE_VARIABLE.sub("\0", message).split("\0"))), re.DOTALL)
-              for message in authored if MESSAGE_VARIABLE.search(message)]
+    # the sh:sparql messages of a shape, their {?variable} placeholders filled with any values
+    filled = {}
+    for rule in ir.itertuples():
+        if rule.component == "sh:sparql" and isinstance(rule.message, str) and MESSAGE_VARIABLE.search(rule.message):
+            parts = MESSAGE_VARIABLE.sub("\0", rule.message).split("\0")
+            filled.setdefault(rule.shape_id, []).append(re.compile(".*".join(map(re.escape, parts)), re.DOTALL))
 
-    def is_authored(message):
-        return message.startswith(authored) or any(pattern.match(message) for pattern in filled)
-    return ["shacl" if isinstance(message, str) and is_authored(message) else "engine"
-            for message in violations["MESSAGE"]]
+    def is_authored(message, violation_type, shape):
+        return message.startswith(authored) or (violation_type == "sh:sparql"
+                                                and any(pattern.match(message) for pattern in filled.get(shape, ())))
+    return ["shacl" if isinstance(message, str) and is_authored(message, violation_type, shape) else "engine"
+            for message, violation_type, shape in zip(violations["MESSAGE"], violations["VIOLATION_TYPE"],
+                                                      violations["SOURCE_SHAPE"])]
 
 
 def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
