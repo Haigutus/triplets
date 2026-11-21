@@ -2,6 +2,9 @@
 
 Uses minimal_cim.xml (committed) + RealGrid when present.
 """
+import shutil
+import zipfile
+
 import pytest
 import pandas
 
@@ -43,6 +46,18 @@ def test_local_id():
 def test_find_all_xml_minimal():
     files = find_all_xml([MINIMAL])
     assert len(files) == 1
+
+
+@pytest.mark.parametrize("suffix", [".xml", ".rdf", ".owl", ".OWL"])
+def test_rdf_xml_suffixes(tmp_path, suffix):
+    """An RDF/XML file is read under each of its usual suffixes, as a path and as a zip member."""
+    path = tmp_path / f"model{suffix}"
+    shutil.copy(MINIMAL, path)
+    with zipfile.ZipFile(tmp_path / "model.zip", "w") as archive:
+        archive.write(path, path.name)
+    expected = len(parse(MINIMAL, engine="python_lxml_pandas"))
+    assert len(parse(str(path), engine="python_lxml_pandas")) == expected
+    assert len(parse(str(tmp_path / "model.zip"), engine="python_lxml_pandas")) == expected + 1   # belongsToContainer
 
 
 # ── Registration ────────────────────────────────────────────────────────────

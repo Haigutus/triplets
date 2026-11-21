@@ -19,6 +19,13 @@ RDF_ABOUT = f"{{{RDF_NS}}}about"
 RDF_NODEID = f"{{{RDF_NS}}}nodeID"
 RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
+# file name parts that mark an RDF/XML file (anywhere in the name: ``model.xml.tmp`` is read)
+RDF_XML_SUFFIXES = (".xml", ".rdf", ".owl")
+
+
+def is_rdf_xml(name: str) -> bool:
+    """Whether a file name (lower case) names an RDF/XML file (:data:`RDF_XML_SUFFIXES`)."""
+    return any(suffix in name for suffix in RDF_XML_SUFFIXES)
 
 
 def document_base(root, default_base=TRIPLETS_NS):
@@ -101,8 +108,8 @@ def base_name(label: str) -> str:
 def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False):
     """Yield XML file objects and/or str paths, one at a time (lazy).
 
-    Supports str paths, file-like, .xml/.rdf, .zip (recursive). Same items and
-    order as :func:`find_all_xml`: direct .xml/.rdf items first in input order,
+    Supports str paths, file-like, .xml/.rdf/.owl, .zip (recursive). Same items and
+    order as :func:`find_all_xml`: direct .xml/.rdf/.owl items first in input order,
     then zip members in zip order. Zip members are read into memory only when
     yielded, so a consumer that processes-and-drops each file keeps at most one
     member in RAM (out-of-core ingest). Zip handles this function opens are
@@ -128,7 +135,7 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
         else:
             item_lower = str(item).lower()
 
-        if ".xml" in item_lower or ".rdf" in item_lower:
+        if is_rdf_xml(item_lower):
             # str paths stay str (no open fd; enables the cython mmap fast path)
             yield item
             if debug:
@@ -159,7 +166,7 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
             with zip_container:
                 for zipped_file in zip_container.namelist():
                     zipped_file_lower = zipped_file.lower()
-                    if ".xml" in zipped_file_lower or ".rdf" in zipped_file_lower:
+                    if is_rdf_xml(zipped_file_lower):
                         try:
                             file_object = BytesIO(zip_container.read(zipped_file))
                             file_object.name = zipped_file
@@ -187,7 +194,7 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
 def find_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debug: bool = False) -> List:
     """Returns list of XML file objects and/or paths in ZIP file.
 
-    Supports str paths, file-like, .xml/.rdf, .zip (recursive). Eager form of
+    Supports str paths, file-like, .xml/.rdf/.owl, .zip (recursive). Eager form of
     :func:`iter_all_xml` — every zip member is read into memory up front.
     """
     return list(iter_all_xml(list_of_paths_to_zip_globalzip_xml, debug=debug))

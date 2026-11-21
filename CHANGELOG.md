@@ -527,6 +527,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`parse()` reads a `.owl` file as RDF/XML**, as a path and as a zip member, like `.xml` and
+  `.rdf`; it logged "Not supported file" and returned no rows. `cim-spreadsheet` takes a
+  `.owl` input as CIM XML too.
 - **CIM XML export: no "matches none of the schema profiles … nothing is exported" warning
   for a schema with root entries.** A flat schema that also holds a nested dict without a
   `type` (read as a profile section) exported every object and logged the warning once per

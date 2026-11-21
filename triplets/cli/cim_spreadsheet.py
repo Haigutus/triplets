@@ -138,6 +138,7 @@ from uuid import uuid4
 
 from ..export import export_to_cimxml
 from ..parser import parse
+from ..parser.utils import RDF_XML_SUFFIXES
 from ..tools import filter_triplets_by_type, tableviews_to_triplets
 from . import add_common_arguments, excluded_types
 
@@ -514,7 +515,7 @@ def detect_conversion_direction(input_path, output_path):
     -----
     Detection logic:
 
-    - If input is .xml/.rdf (or ZIP containing such files), direction is 'to-spreadsheet'
+    - If input is .xml/.rdf/.owl (or ZIP containing such files), direction is 'to-spreadsheet'
     - If input is .xlsx/.xls/.csv (or directory with CSVs), direction is 'to-cim'
     - If ambiguous from input, checks output path for spreadsheet extensions or
       directory-like patterns
@@ -529,10 +530,10 @@ def detect_conversion_direction(input_path, output_path):
     """
 
     # Check if input is CIM XML
-    input_is_cim = input_path.endswith(('.xml', '.rdf'))
+    input_is_cim = input_path.endswith(RDF_XML_SUFFIXES)
     if not input_is_cim and zipfile.is_zipfile(input_path):
         with zipfile.ZipFile(input_path, 'r') as zf:
-            input_is_cim = any(f.endswith(('.xml', '.rdf')) for f in zf.namelist())
+            input_is_cim = any(f.endswith(RDF_XML_SUFFIXES) for f in zf.namelist())
 
     # Check if input is spreadsheet
     input_is_spreadsheet = input_path.endswith(('.xlsx', '.xls', '.csv')) or (
