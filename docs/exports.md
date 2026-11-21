@@ -48,13 +48,26 @@ Both engines expose the same interface:
 returning `{"filename": str, "file": bytes}` for one instance — the dispatcher loads the
 schema once and passes the `iri.datatypes` / `iri.languages` maps to every instance. They produce
 data-identical XML (verified by an engine-equivalence test); only whitespace
-formatting differs.
+formatting differs. A namespace that the namespace map leaves unbound (and an attribute of
+the default namespace) is written under a generated prefix (`ns0`, `ns1`, …), which
+`cython_pugixml` declares on the `rdf:RDF` root and `python_lxml` on the elements that use it.
 
 Engine aliases: `performance` / `pugixml` -> `cython_pugixml`, `lxml` / `pandas` -> `python_lxml`
 
 `export_to_cimxml(..., datatypes=True)` annotates literal elements with
 `rdf:datatype` from the schema's `xsd:type` (like N-Quads; `xsd:string` stays
 plain). Both engines write the same attributes.
+
+**IDs and references.** A class entry's `attrib` gives the ID attribute and its
+`value_prefix` (`rdf:ID="_<ID>"`, `rdf:about="urn:uuid:<ID>"`), and a reference key's
+`attrib` the same for the VALUE (`rdf:resource="#_<VALUE>"`). An ID or reference VALUE that
+is an absolute IRI (`http://`, `https://`, `urn:`) is written as it is, without the prefix —
+the ID always as `rdf:about` — as `export_to_nquads` writes it. A reference key with an
+empty `value_prefix` is an enumeration: a VALUE that is not an absolute IRI is a schema name
+and takes that entry's namespace. A `Type` VALUE naming a schema entry that is not a `Class`
+but has a namespace (an enumeration value as `rdf:type`) is written in that namespace, and
+an undefined class (`export_undefined=True`) under `undefined_namespace`, both with
+`rdf:about="urn:uuid:<ID>"`.
 
 A schema `language` ([export_schemas.md](export_schemas.md#fixed-language-tag-language))
 writes `xml:lang="<tag>"` on the literal element in both engines, with or without
@@ -79,7 +92,7 @@ data.export_to_cimxml(rdf_map=schemas.ENTSOE_CGMES_3_0_0_552_ED1)
     |   '-> engine.generate_xml(instance, rdf_map, ...)
     |       |
     |       |-> cimxml_utils.resolve_instance_config()
-    |       |   |-> file_name from 'label' (source filename) or new UUID
+    |       |   |-> file_name from the Distribution object's 'label' (source filename) or new UUID
     |       |   |-> every declared profile section, merged (header: Model.messageType /
     |       |   |   keyword / Model.profile / conformsTo)
     |       |   '-> namespace map: given > instance NamespaceMap > schema

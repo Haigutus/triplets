@@ -13,7 +13,7 @@ from lxml.etree import QName
 
 from .. import iri
 from ..iri import DESCRIPTION_TYPE, RDF_NS, TRIPLETS_NS, TYPE_KEY, UUID_PREFIX, XML_NS
-from .cimxml_utils import load_rdf_map, resolve_instance_config
+from .cimxml_utils import declared_namespaces, load_rdf_map, resolve_instance_config
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ def _get_qname(namespace, tag=None):
     --------
     >>> qname = _get_qname("http://www.w3.org/1999/02/22-rdf-syntax-ns#", "RDF")
     """
-    qname = QName(namespace, tag)
+    qname = QName(namespace or None, tag)   # "" is no namespace
     #logger.debug(f"Cache info: {get_qname.cache_info()}")
     return qname
 
@@ -103,15 +103,20 @@ def generate_xml(instance_data,
             If ``None``, every name is undefined and only ``export_undefined=True`` writes it
             (:func:`triplets.export.export_to_cimxml` sets that when it has no schema).
         namespace_map : dict, optional
-            Mapping of namespace prefixes to URIs (e.g., ``{"cim": "http://iec.ch/TC57/2013/CIM-schema-cim16#"}``).
-            Must include ``"rdf"`` namespace. If ``None``, inferred from ``rdf_map`` or instance.
+            Mapping of namespace prefixes to URIs (e.g., ``{"cim": "http://iec.ch/TC57/2013/CIM-schema-cim16#"}``),
+            declared on the root; the prefix ``""`` or ``None`` is the default namespace. If ``None``,
+            inferred from ``rdf_map`` or instance. A namespace the map leaves unbound (and an attribute
+            of the default namespace) is written under a generated prefix (``ns0``, ``ns1``, …):
+            this engine declares it on the elements that use it, ``cython_pugixml`` on the root.
         class_KEY : str, default "Type"
             Column key used to identify object class/type in the triplet data.
         export_undefined : bool, default False
             If True, also export classes and attributes without a schema definition
-            (internal structures like Distribution/NamespaceMap) under the
-            http://triplets# namespace. Off by default — normal exports carry
+            (internal structures like Distribution/NamespaceMap) under
+            ``undefined_namespace``. Off by default — normal exports carry
             only schema-defined content.
+        undefined_namespace : str, default "http://triplets#"
+            Namespace for the undefined names ``export_undefined`` writes.
         comment : str, optional
             Optional comment to insert at the top of the XML output (as XML comment).
         datatypes : bool, default False
@@ -176,17 +181,13 @@ def generate_xml(instance_data,
     if key_languages is None:
         key_languages = iri.languages(rdf_map)
 
-    namespace_map = namespace_map or {}
+    namespace_map = declared_namespaces(namespace_map, instance_rdf_map, export_undefined, undefined_namespace)
 
-    if export_undefined and undefined_namespace not in namespace_map.values():
-        # an undefined_namespace the map already binds (e.g. CIM100) keeps its own prefix
-        namespace_map = {**namespace_map, "triplets": undefined_namespace}
-
-    # Create element builder
-    E = ElementMaker(nsmap=namespace_map)
+    # Create element builder; the prefix "" is the default namespace (None for lxml)
+    E = ElementMaker(nsmap={prefix or None: uri for prefix, uri in namespace_map.items()})
 
     # Create xml root element
-    RDF = E(QName(namespace_map.get("rdf", RDF_NS), "RDF"))
+    RDF = E(QName(RDF_NS, "RDF"))
 
     # Add comment
     if comment:
@@ -209,11 +210,18 @@ def generate_xml(instance_data,
         # Get class export definition
         class_def = instance_rdf_map.get(class_name, None)
 
-        if class_def is not None:
+        if isinstance(class_def, dict) and class_def.get("type") == "Class":
 
             class_namespace = class_def["namespace"]
             id_name = class_def["attrib"]["attribute"]
             id_value_prefix = class_def["attrib"]["value_prefix"]
+
+        elif isinstance(class_def, dict) and class_def.get("namespace"):
+            # a name the schema gives a namespace but no Class entry (an enumeration value as rdf:type):
+            # that namespace, as export_to_nquads writes it, and the ID form of an undefined class
+            class_namespace = class_def["namespace"]
+            id_name = f"{{{RDF_NS}}}about"
+            id_value_prefix = UUID_PREFIX
 
         else:
             logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))
@@ -226,6 +234,9 @@ def generate_xml(instance_data,
             else:
                 logger.debug(f"{class_name} not Exported")
                 continue
+
+        if iri.is_iri(ID):                                   # an absolute IRI is the ID itself
+            id_name, id_value_prefix = f"{{{RDF_NS}}}about", ""
 
         # Create class element
         # logger.debug(class_namespace, class_name) # DEBUG
@@ -259,7 +270,8 @@ def generate_xml(instance_data,
 
             tag_def = instance_rdf_map.get(KEY, None)
 
-            if tag_def is not None:
+            # a KEY is defined by a namespaced entry that is no Class
+            if isinstance(tag_def, dict) and tag_def.get("type") != "Class" and tag_def.get("namespace"):
                 tag = E(_get_qname(tag_def["namespace"], KEY))
                 attrib = tag_def.get("attrib", None)
                 text_prefix = tag_def.get("text", "")
@@ -268,8 +280,11 @@ def generate_xml(instance_data,
 
                     value_prefix = attrib.get("value_prefix", "")
 
-                    if not value_prefix:                     # enumeration: namespace from the resolved profile (same as the cython exporter)
-                        value_prefix = instance_rdf_map.get(VALUE, {}).get("namespace")
+                    if iri.is_iri(VALUE):                    # an absolute IRI is the reference itself
+                        value_prefix = ""
+                    elif not value_prefix:                   # enumeration: namespace from the resolved profile (same as the cython exporter)
+                        enum_def = instance_rdf_map.get(VALUE)
+                        value_prefix = enum_def.get("namespace") if isinstance(enum_def, dict) else None
                         if not value_prefix:                 # undefined enum value: same switch as undefined classes / keys
                             if not export_undefined:
                                 logger.debug("Definition missing for enum value: " + str(VALUE))

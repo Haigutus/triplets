@@ -245,16 +245,18 @@ cdef extern from *:
     #include <string>
     #include <string_view>
 
-    // Clean CIM ID prefixes: "urn:uuid:", "#_", "_" — exactly one, longest first.
+    // Clean CIM ID prefixes: "urn:uuid:", "#_", "#", "_" — exactly one, longest first; a lone "#" stays.
     // Native mirror of triplets.iri.local_id (parity: tests/test_iri.py).
     // Pure string_view — zero-copy slice into the original pugixml buffer.
     static inline std::string_view clean_id(std::string_view sv) {
         using namespace std::string_view_literals;
         constexpr auto urn_uuid   = "urn:uuid:"sv;
         constexpr auto hash_under = "#_"sv;
+        constexpr auto hash       = "#"sv;
         constexpr auto underscore = "_"sv;
         if (sv.starts_with(urn_uuid))        sv.remove_prefix(urn_uuid.size());
         else if (sv.starts_with(hash_under)) sv.remove_prefix(hash_under.size());
+        else if (sv.starts_with(hash)) {     if (sv.size() > hash.size()) sv.remove_prefix(hash.size()); }
         else if (sv.starts_with(underscore)) sv.remove_prefix(underscore.size());
         return sv;
     }

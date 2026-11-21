@@ -25,7 +25,7 @@ def split_iri(column):
 
 
 def local_id(column):
-    return _col(column).str.replace(ID_PREFIX_RE.pattern, "")
+    return _col(column).str.replace(ID_PREFIX_RE.pattern, "${1}")     # ID_REPLACEMENT in polars syntax
 
 
 def local_key(column, type_key=TYPE_KEY):

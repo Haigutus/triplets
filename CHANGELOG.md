@@ -242,6 +242,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`rdf:resource="#x"` references `rdf:ID="x"`** — `iri.local_id` strips one of
+  `urn:uuid:`, `#_`, `#`, `_` (longest first), where a bare `#` stayed: a file whose IDs
+  have no underscore (`rdf:ID="SS1"`, `rdf:resource="#SS1"`) parsed to the ID `SS1` and
+  the reference VALUE `#SS1`, which matched nothing and was exported as `#_#SS1`. All
+  parser engines, `read_nquads`, the pandas / polars `local_id` and the pandas / polars /
+  DuckDB `local_value` follow the rule. A lone `#` (the document itself) stays `#`. An
+  `rdf:about="#Name"` ID parses to `Name` too: RDFS vocabularies, whose IDs are `#Name`,
+  keep their IRIs with `local_resources=False`, as `rdfs_tools` parses them.
+- **`triplets.rdfs_tools.cim_rdfs_to_json_deprecated` is removed** — a script that ran on
+  import; use `triplets.rdfs_tools.cim_rdfs_to_json`.
+- **`triplets.validation.schema_name(rdf_map)`** — the name a schema run reports in
+  `references`: the file name for a path, `"rdf_map"` for a dict.
+- **`export_to_cimxml` raises `ValueError` for an unsupported `export_type`**, before any
+  work; it logged "Not supported option" and returned an empty list.
 - **A file in a zip is named `<zip file name>/<member name>` in validation results**
   (`grid.zip/models/grid.xml`; the zip's name without directories, the inner zip's for a
   zip in a zip): `SOURCE_URI` / `TARGET_URI` from `locate` and from `sources=` on the
@@ -513,6 +527,75 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **CIM XML export: a reference VALUE that is an absolute IRI is written as it is**, as
+  `export_to_nquads` writes it. For a reference key with an empty `value_prefix` the VALUE
+  was only looked up as an enumeration name, so `rdf:resource="http://www.w3.org/ns/dcat#Dataset"`
+  was dropped, or written as `http://triplets#http://…` with `export_undefined=True`; under
+  a `value_prefix` the prefix was put before the IRI. An object ID that is an absolute
+  IRI is written as `rdf:about="<IRI>"`, where it took the class's ID attribute and
+  prefix (`rdf:about="urn:uuid:http://…"`). Both engines.
+- **CIM XML export: a `Type` VALUE that names a schema entry which is not a `Class`** (an
+  enumeration value used as `rdf:type`) is written in that entry's namespace, the
+  `rdf:type` `export_to_nquads` writes, with `rdf:about="urn:uuid:<ID>"`. `python_lxml`
+  raised `KeyError: 'attrib'`; `cython_pugixml` dropped it, or wrote it under
+  `undefined_namespace` with `export_undefined=True`. An entry without a namespace is an
+  undefined class. A KEY that names a `Class` entry, or an entry with an empty namespace,
+  is an undefined key in both engines; `python_lxml` raised `ValueError: Empty tag name`
+  for the empty namespace.
+- **The CIM XML file name is the `label` of the instance's `Distribution` object** (the
+  source file name the parsers write). It was the first `label` row of any object, so data
+  with its own `label` key (`rdfs:label`) could name the file. An instance without a
+  `Distribution` label, or with a null one (it named the file `nan` or raised `TypeError`),
+  is written as `<uuid>.xml`. The other readers of the file name follow the same rule:
+  the `label` column of `cgmes_tools.get_loaded_profiles`,
+  `cgmes_tools.update_FullModel_from_filename`, `cgmes_tools.update_filename_from_FullModel`
+  (it rewrote every `label` row of the instance, a data `rdfs:label` too) and the per-file
+  names of `export_to_csv` (pandas and polars).
+- **CIM XML export: a `Class` entry with `"namespace": ""` under a namespace map with a
+  default namespace** stays in no namespace: the default namespace is then written under
+  a generated prefix instead of `xmlns="…"`, where the element fell into it. Both engines.
+- **`export_to_nquads(engine="pandas")` runs without pyarrow** (the core install: pandas and
+  lxml). It imported pyarrow unconditionally; the lines are still joined in Arrow when
+  pyarrow is installed, else in pandas.
+- **`cython_pugixml` CIM XML export: a schema namespace the file's namespace map does not
+  bind.** Elements of that namespace were written without a prefix, so in no namespace —
+  e.g. every `cim:` class and key of a file binding `cim:` to CIM16 exported against a
+  CIM100 schema, or one `entsoe:` key in a file that does not declare the prefix. The
+  engine now writes them under a generated prefix (`ns0`, `ns1`, …, numbered in order of
+  first use) declared on the `rdf:RDF` root, only when used; the names equal those of the
+  `python_lxml` engine. The
+  root element and the `rdf:` attributes take the prefix the map binds to the RDF
+  namespace, where the root was always written as `rdf:RDF`; a map without the RDF
+  namespace gets `xmlns:rdf` declared, where the `rdf:` prefix was left undeclared.
+- **CIM XML export with a default namespace** (a namespace map prefix `""`, as parsed from
+  a file with `xmlns="…"`, or `None`). `cython_pugixml` wrote `xmlns:=` / `xmlns:None=`,
+  not well-formed or with the elements in no namespace; it writes `xmlns="…"` and
+  unprefixed elements. `python_lxml` raised `ValueError` on the prefix `""`; it reads it as
+  the default namespace. An attribute never takes the default namespace: with the RDF
+  namespace as default, `rdf:about` / `rdf:ID` / `rdf:resource` get a generated prefix
+  (both engines).
+- **`python_lxml` CIM XML export: the root is `RDF` in the RDF namespace** whatever the
+  namespace map binds the `rdf` prefix to; it was written in the namespace of that prefix.
+  Both engines bind the RDF namespace to a prefix of its own when the map has none for it
+  (`rdf`, or the first free `ns0`, `ns1`, … when `rdf` is taken).
+- **`sh:in` in the pandas, polars and DuckDB engines compares a VALUE that is not an IRI as
+  it is.** The VALUE was shortened like an ID first, so a literal `_2` — or `#1` — did not
+  match the member `"_2"` / `"#1"` and was reported; pyshacl accepts it.
+- **`cgmes_tools.get_filename_from_metadata` accepts a metadata key without a prefix**
+  (`keyword` on a FullModel header extended with the Dataset keys): it raised
+  `IndexError`, also through `update_filename_from_FullModel` (pandas and polars). Such a
+  key keeps its name and can be used in the `filename_mask`.
+- **`cgmes_tools.validate_by_header` reports the schema file name.** The run metadata
+  `references` held `"rdf_map"` for a schema given as a path; they hold the file name, as
+  with `validate_schema`, and `"rdf_map"` for a dict. A run where no instance resolves a
+  profile has `references` too. In SARIF, a tool finding without a location takes that
+  file name as its artifact, where it took `rdf_map`.
+- **The order of a run's shape file names does not depend on earlier runs.** A second
+  `compile` / `validate_shacl` of the same shape files given in another order returned the
+  first call's order in `references` (`CompiledShapes.sources`). The names are sorted, each
+  name once: two files with one base name in different directories report one name. In
+  SARIF, a tool finding without a location takes the alphabetically first shape file as its
+  artifact, where it took the first one given.
 - **An open file handle in `sources=` is read from its start by every locate pass**
   (`locate`, `to_sarif`, `to_shacl_report`) — a seekable handle is rewound before it is
   read. Before, the second pass over one handle read nothing: a second export had no line

@@ -159,7 +159,7 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
     from .. import validation
     from ..iri import load_rdf_map
 
-    rdf_map = load_rdf_map(rdf_map)
+    schema_file, rdf_map = validation.schema_name(rdf_map), load_rdf_map(rdf_map)
     loaded = declared_profiles(data, rdf_map, **kwargs)
     if rdf_map_scope is not None:
         override = [rdf_map_scope] if isinstance(rdf_map_scope, str) else list(rdf_map_scope)
@@ -186,6 +186,7 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
         violations["PROFILE"] = pandas.Series(dtype=object)
     meta = violations.attrs.setdefault("validation", {"language": "rdfs", "skipped_shapes": []})
     meta["skipped_shapes"] = [*meta.get("skipped_shapes", []), *unresolved]
+    meta["references"] = [schema_file]   # the runs were handed the loaded dict
     return violations
 
 

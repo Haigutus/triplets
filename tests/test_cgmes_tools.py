@@ -430,3 +430,54 @@ def test_unsupported_explicit_engine_rejected():
                              "VALUE": ["Breaker"], "INSTANCE_ID": ["i1"]})
     with pytest.raises(ValueError, match="cgmes_tools supports engine="):
         cgmes_tools.get_loaded_models(tiny, engine="duckdb")
+
+
+# ── the file name is the Distribution object's label, not any object's label row ──
+LABELLED = [
+    ("g1", "Type", "Substation", "i1"), ("g1", "label", "A name", "i1"),          # rdfs:label data, ordered first
+    ("d1", "Type", "Distribution", "i1"), ("d1", "label", "old.xml", "i1"),
+    ("fm", "Type", "FullModel", "i1"), ("fm", "Model.scenarioTime", "2024-01-01T00:30:00Z", "i1"),
+    ("fm", "Model.processType", "1D", "i1"), ("fm", "Model.modelingEntity", "ELERING", "i1"),
+    ("fm", "Model.messageType", "EQ", "i1"), ("fm", "Model.version", "1", "i1"),
+    ("fm", "keyword", "EQ", "i1"),                                                # hybrid header: a key without "Model."
+]
+
+
+@pytest.fixture(params=["pandas", "polars"])
+def labelled(request):
+    data = pandas.DataFrame(LABELLED, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    return data if request.param == "pandas" else pytest.importorskip("polars").from_pandas(data)
+
+
+def _labels(data):
+    data = data if isinstance(data, pandas.DataFrame) else data.to_pandas()
+    return dict(zip(data.loc[data["KEY"] == "label", "ID"], data.loc[data["KEY"] == "label", "VALUE"]))
+
+
+def test_loaded_profiles_label_is_the_distribution_label(labelled):
+    profiles = cgmes_tools.get_loaded_profiles(labelled)
+    assert set(profiles["label"]) == {"old.xml"}
+
+
+def test_update_filename_rewrites_only_the_distribution_label(labelled):
+    updated = cgmes_tools.update_filename_from_FullModel(labelled)
+    assert _labels(updated) == {"g1": "A name", "d1": "20240101T0030Z_1D_ELERING_EQ_001.xml"}
+
+
+def test_filename_from_metadata_with_a_key_without_a_prefix():
+    metadata = {"Model.scenarioTime": "2024-01-01T00:30:00Z", "Model.processType": "1D", "Model.modelingEntity": "ELERING",
+                "Model.messageType": "EQ", "Model.version": "1", "keyword": "EQ"}
+    assert cgmes_tools.get_filename_from_metadata(metadata) == "20240101T0030Z_1D_ELERING_EQ_001.xml"
+    assert cgmes_tools.get_filename_from_metadata(metadata, filename_mask="{keyword}_{version:03d}") == "EQ_001.xml"
+
+
+def test_update_fullmodel_reads_only_the_distribution_label(labelled):
+    parsed = []
+    cgmes_tools.update_FullModel_from_filename(labelled, parser=lambda name: parsed.append(name) or {})
+    assert parsed == ["old.xml"]
+
+
+def test_csv_files_are_named_by_the_distribution_label(labelled):
+    from triplets import export
+    files = export.export_to_csv(labelled, export_to_memory=True)
+    assert files and all(file.name.startswith("old_") for file in files)

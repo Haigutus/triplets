@@ -13,7 +13,7 @@ import math
 import polars as pl
 
 from triplets import tools as rdf_parser
-from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES
+from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES, distribution_labels
 from .pandas_engine import (  # pure, engine-agnostic helpers
     default_filename_mask,
     get_metadata_from_filename,
@@ -74,10 +74,10 @@ def update_FullModel_from_dict(data, metadata, update=True, add=False):
 
 
 def update_FullModel_from_filename(data, parser=get_metadata_from_filename, update=False, add=True):
-    """Parse each instance's `label` (filename) into metadata and stamp it on its FullModel."""
+    """Parse each instance's Distribution `label` (filename) into metadata and stamp it on its FullModel."""
     d = _u(data)
     records = []
-    for label in d.filter(pl.col("KEY") == "label").iter_rows(named=True):
+    for label in distribution_labels(d).iter_rows(named=True):
         metadata = parser(label["VALUE"])
         fm = d.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == "FullModel")
                       & (pl.col("INSTANCE_ID") == label["INSTANCE_ID"]))
@@ -88,10 +88,10 @@ def update_FullModel_from_filename(data, parser=get_metadata_from_filename, upda
 
 
 def update_filename_from_FullModel(data, filename_mask=default_filename_mask, filename_key="label"):
-    """Regenerate each instance's filename (`label`) from its FullModel metadata."""
+    """Regenerate each instance's filename (the Distribution `label`) from its FullModel metadata."""
     d = _u(data)
     records = []
-    for label in d.filter(pl.col("KEY") == filename_key).iter_rows(named=True):
+    for label in distribution_labels(d, filename_key).iter_rows(named=True):
         metadata = get_metadata_from_FullModel(d.filter(pl.col("INSTANCE_ID") == label["INSTANCE_ID"]))
         filename = get_filename_from_metadata(metadata, filename_mask=filename_mask)
         records.append({"ID": label["ID"], "KEY": filename_key, "VALUE": filename, "INSTANCE_ID": label["INSTANCE_ID"]})
@@ -128,7 +128,7 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
     key = pl.col("KEY").cast(pl.Utf8)
     hints = (data.filter(key.is_in(list(profile_keys)) & pl.col("VALUE").is_not_null() & (pl.col("VALUE").cast(pl.Utf8) != "")).select("ID", "KEY", "VALUE", "INSTANCE_ID").rename({"ID": "HEADER_ID"}))
     types = (data.filter((key == "Type") & pl.col("ID").is_in(hints.get_column("HEADER_ID").to_list())).select("ID", "VALUE").unique(subset="ID", keep="first").rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
-    labels = (data.filter(key == "label").select("INSTANCE_ID", "VALUE").unique(subset="INSTANCE_ID", keep="first").rename({"VALUE": "label"}))
+    labels = (distribution_labels(data).select("INSTANCE_ID", "VALUE").unique(subset="INSTANCE_ID", keep="first").rename({"VALUE": "label"}))
     return hints.join(types, on="HEADER_ID", how="left").join(labels, on="INSTANCE_ID", how="left").select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE")
 
 

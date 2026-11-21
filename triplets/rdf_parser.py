@@ -75,7 +75,7 @@ def get_namespace_map(data: pandas.DataFrame):
 
 
 def clean_ID(ID):
-    """Deprecated: use :func:`triplets.iri.local_id` (strips one of ``urn:uuid:``, ``#_``, ``_``)."""
+    """Deprecated: use :func:`triplets.iri.local_id` (strips one of ``urn:uuid:``, ``#_``, ``#``, ``_``)."""
     warnings.warn("rdf_parser.clean_ID is deprecated, use triplets.iri.local_id()",
                   DeprecationWarning, stacklevel=2)
     return local_id(ID)

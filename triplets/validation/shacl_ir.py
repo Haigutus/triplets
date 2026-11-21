@@ -51,7 +51,7 @@ class CompiledShapes:
     graph: object                 # rdflib.Graph — what pyshacl consumes
     ir: pandas.DataFrame          # constraint table — what the vectorized engines consume
     hash: str                     # content hash of the shape sources (any file name; a filtered compile keeps it)
-    sources: tuple = ()           # shape file basenames (report metadata; () for a Graph)
+    sources: tuple = ()           # shape file basenames, sorted, each name once (report metadata; () for a Graph)
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
@@ -98,7 +98,7 @@ def compile_shapes(shapes) -> CompiledShapes:
     duplicates do not matter).
     """
     content, sources = _content_hash(shapes), _source_names(shapes)
-    key = (content, frozenset(sources))   # the names too: a compile reports them, so it is never shared between names
+    key = (content, sources)   # the names too: a compile reports them, so it is never shared between names
     if key in _COMPILE_CACHE:
         logger.debug("shapes compile cache hit: %s", content[:12])
         return _COMPILE_CACHE[key]
@@ -247,12 +247,13 @@ def _paths(shapes):
 
 
 def _source_names(shapes):
-    """Shape file basenames for report metadata, as given."""
+    """Shape file basenames for report metadata: sorted, each name once — the order and
+    repeats of the given paths do not matter."""
     import rdflib
 
     if isinstance(shapes, rdflib.Graph):
         return ()
-    return tuple(os.path.basename(str(path)) for path in _paths(shapes))
+    return tuple(sorted({os.path.basename(str(path)) for path in _paths(shapes)}))
 
 
 def _load_shapes(shapes):

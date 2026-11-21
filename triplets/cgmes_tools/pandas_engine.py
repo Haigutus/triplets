@@ -21,7 +21,7 @@ from uuid import uuid4
 from lxml import etree
 from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
-from triplets._header import PROFILE_KEYS, PROFILE_URL_MAP, REFERENCE_KEYS, HEADER_TYPES
+from triplets._header import PROFILE_KEYS, PROFILE_URL_MAP, REFERENCE_KEYS, HEADER_TYPES, distribution_labels
 from triplets.parser import parse as load_all_to_dataframe
 
 import logging
@@ -167,7 +167,8 @@ def get_filename_from_metadata(meta_data, file_type="xml", filename_mask=default
 
     Notes
     -----
-    - Removes 'Model.' prefix from metadata keys for compatibility with string formatting.
+    - Removes the 'Model.' prefix from metadata keys for compatibility with string formatting;
+      a key without a prefix ('keyword') keeps its name.
     - Converts 'scenarioTime' to datetime and 'version' to integer before formatting.
     - Uses the provided filename_mask to construct the filename.
 
@@ -183,7 +184,7 @@ def get_filename_from_metadata(meta_data, file_type="xml", filename_mask=default
     entity_and_area_separator = "-"
 
     # Remove Model. from dictionary as python string format can't use . in variable name
-    meta_data = {key.split(".")[1]:meta_data[key] for key in meta_data}
+    meta_data = {key.rpartition(".")[2]: meta_data[key] for key in meta_data}
 
     # DateTime fields from text to DateTime
     DateTime_fields = ["scenarioTime"]#, 'created']
@@ -329,8 +330,8 @@ def update_FullModel_from_filename(data, parser=get_metadata_from_filename, upda
     """
     additional_meta_list = []
 
-    # For each instance that has label, as label contains the filename
-    for label in data.query("KEY == 'label'").itertuples():
+    # For each instance with a Distribution label: it holds the filename
+    for label in distribution_labels(data).itertuples():
         # Parse metadata from filename to dictionary
         metadata = parser(label.VALUE)
 
@@ -367,7 +368,7 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
     """
     list_of_updates = []
 
-    for _, label in data.query("KEY == '{}'".format(filename_key)).iterrows():
+    for _, label in distribution_labels(data, filename_key).iterrows():
         # Get metadata
         metadata = get_metadata_from_FullModel(data.query("INSTANCE_ID == '{}'".format(label.INSTANCE_ID)))
         # Get new filename
@@ -563,7 +564,7 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
     """
     hints = data.loc[data["KEY"].isin(profile_keys) & data["VALUE"].notna() & (data["VALUE"] != ""), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "HEADER_ID"})
     types = data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "VALUE"]].drop_duplicates("ID").rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"})
-    labels = data.loc[data["KEY"] == "label", ["INSTANCE_ID", "VALUE"]].drop_duplicates("INSTANCE_ID").rename(columns={"VALUE": "label"})
+    labels = distribution_labels(data)[["INSTANCE_ID", "VALUE"]].drop_duplicates("INSTANCE_ID").rename(columns={"VALUE": "label"})
     return hints.merge(types, on="HEADER_ID", how="left").merge(labels, on="INSTANCE_ID", how="left")[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]]
 
 
@@ -759,8 +760,7 @@ def _render_graph_html(title, nodes, edges, options):
 
 def _instance_filenames(data):
     """Map INSTANCE_ID -> source filename (no path). Distribution objects store it under KEY 'label'."""
-    distributions = data[(data["KEY"] == "Type") & (data["VALUE"] == "Distribution")]["ID"]
-    labels = data[(data["KEY"] == "label") & data["ID"].isin(distributions)]
+    labels = distribution_labels(data)
     return {instance_id: os.path.basename(str(path)) for instance_id, path in zip(labels["INSTANCE_ID"], labels["VALUE"])}
 
 

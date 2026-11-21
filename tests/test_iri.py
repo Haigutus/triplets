@@ -337,6 +337,9 @@ LOCAL_CASES = [
     ("local_id", "_" + UUID, UUID),
     ("local_id", "urn:uuid:_x", "_x"),                       # exactly one prefix
     ("local_id", "#__x", "_x"),
+    ("local_id", "#x", "x"),                                 # rdf:resource="#x" references rdf:ID="x"
+    ("local_id", "#", "#"),                                  # the document itself: nothing follows the "#"
+    ("local_id", "##c", "#c"),
     ("local_id", "http://example.org/ns#g", "http://example.org/ns#g"),
     ("local_id", "plain", "plain"),
     ("local_value", None, None),
@@ -436,6 +439,7 @@ VALUE_KIND_CASES = [
     ("http://ex.org/m#b", "reference", "http://ex.org/m#b"),                   # node: namespace not restorable
     ("urn:uuid:" + UUID, "reference", UUID),
     ("#_" + UUID, "reference", UUID),
+    ("#plain", "reference", "plain"),
     ("http://ex.org/m#b", None, "b"),                                          # guess: http + "#" → a name
     ("http://example.org/profile/EQ/3.0", None, "http://example.org/profile/EQ/3.0"),   # guess: "/" only → whole
     ("urn:example:thing", None, "urn:example:thing"),
@@ -727,6 +731,7 @@ PARSE_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
   </cim:Breaker>
   <nc:Thing rdf:ID="_abc">
     <nc:Thing.ref rdf:resource="urn:uuid:{uuid}"/>
+    <nc:Thing.plain rdf:resource="#plain"/>
     <dcterms:issued>2024-01-01T00:00:00Z</dcterms:issued>
   </nc:Thing>
   <voc:Dataset rdf:about="urn:uuid:_d">

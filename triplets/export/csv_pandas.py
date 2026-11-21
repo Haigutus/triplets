@@ -7,6 +7,7 @@ import logging
 
 from io import BytesIO
 
+from triplets._header import distribution_labels
 from triplets.tools import triplets_to_tableviews
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
             output.seek(0)
             exported_files.append(output)
     else:
-        labels = data.query("KEY == 'label'")
+        labels = distribution_labels(data)
         exported_files = []
         for _, label in labels.iterrows():
             instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]

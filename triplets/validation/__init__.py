@@ -57,7 +57,7 @@ from ..iri import CIM_NS, load_rdf_map
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_ir import _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
-from .schema_ir import _source as _schema_source
+from .schema_ir import schema_name
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
 from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
@@ -429,7 +429,7 @@ def _schema_metadata(compiled, rdf_map, engine_name, started, data, table_name, 
         "creator": f"triplets {triplets.__version__}",
         "source": _source_labels(data, table_name=table_name),
         # the entry point's own argument: the compile below it was handed the loaded dict
-        "references": [_schema_source(rdf_map)],
+        "references": [schema_name(rdf_map)],
         "compiled_hash": compiled.hash,
         "language": "rdfs",
         "profiles": sections,

@@ -8,6 +8,8 @@ dictionary-encoded), builds the XML tree via pugixml C++ DOM, then
 serializes. String data flows from Arrow buffers through C++ string_views
 into pugixml nodes.
 """
+from itertools import chain, count
+
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 from libcpp.memory cimport shared_ptr
@@ -97,13 +99,20 @@ cdef extern from *:
         std::string language;    // xml:lang tag of a literal, or ""
         bool is_ref;             // true if has attrib (resource/ID)
         bool needs_enum_lookup;  // true if value_prefix was empty on a ref
+        int unbound;             // index of the tag's unbound namespace until the tag gets its prefix, else -1
     };
+
+    // Absolute IRI already: the native mirror of triplets.iri.is_iri (URI_PREFIXES).
+    static inline bool is_iri(const std::string& text) {
+        return text.rfind("http://", 0) == 0 || text.rfind("https://", 0) == 0 || text.rfind("urn:", 0) == 0;
+    }
 
     // Class definition resolved at setup time
     struct ClassDef {
         std::string tag;         // "cim:ACLineSegment"
         std::string id_attr;     // "rdf:ID"
         std::string id_prefix;   // "_"
+        int unbound;             // index of the tag's unbound namespace until the tag gets its prefix, else -1
     };
     """
     cdef cppclass string_writer(xml_writer):
@@ -124,11 +133,15 @@ cdef extern from *:
         string language
         cbool is_ref
         cbool needs_enum_lookup
+        int unbound
+
+    cbool is_iri(const string& text)
 
     cdef cppclass ClassDef:
         string tag
         string id_attr
         string id_prefix
+        int unbound
 
 
 # std::string_view (minimal — declared by hand, not via a Cython stdlib pxd)
@@ -175,6 +188,11 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         columns, optionally dictionary-encoded (any index width)
     rdf_map : dict
     namespace_map : dict
+        prefix → namespace, declared on the root; the prefix "" or None is the
+        default namespace. A namespace it leaves unbound is written under a
+        generated prefix (rdf for the RDF namespace, else ns0, ns1, … in order
+        of first use), declared on the root. An attribute takes no default
+        namespace: it gets a generated prefix too.
     instance_rdf_map : dict
     file_name : str
     class_KEY : str
@@ -216,31 +234,43 @@ def generate_xml_from_arrow(arrow_table_or_batch,
     cdef int64_t n = batch.num_rows
     cdef int64_t i
 
-    # Build reverse namespace map
+    # namespace → prefix; "" is the default namespace, kept only for a namespace without another prefix
     cdef dict uri_to_prefix = {}
     for prefix, uri in namespace_map.items():
-        uri_to_prefix[uri] = prefix
+        if prefix or uri not in uri_to_prefix:
+            uri_to_prefix[uri] = prefix or ""
 
-    def _make_prefixed(ns, local_name):
-        if ns is None:
-            return local_name
-        p = uri_to_prefix.get(ns)
-        return f"{p}:{local_name}" if p else local_name
+    # A namespace without a usable prefix in the map gets a generated one when a name is
+    # written with it (rdf for the RDF namespace, else ns0, ns1, …), declared on the root.
+    RDF_NS = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    cdef dict generated = {}           # namespace → generated prefix, in order of first use
 
-    # rdf:about / rdf:Description by the prefix the map binds to the RDF namespace
-    rdf_prefix = uri_to_prefix.get("http://www.w3.org/1999/02/22-rdf-syntax-ns#") or "rdf"
-    cdef string rdf_about_attr = f"{rdf_prefix}:about".encode('utf-8')
-    cdef string rdf_datatype_attr = f"{rdf_prefix}:datatype".encode('utf-8')
+    def _generated_prefix(ns):
+        if ns not in generated:
+            taken = {*namespace_map, *generated.values()}
+            names = chain(("rdf",) if ns == RDF_NS else (), map("ns{}".format, count()))
+            generated[ns] = next(name for name in names if name not in taken)
+        return generated[ns]
+
+    def _element_prefix(ns):
+        """The prefix an element of *ns* is written with: "" for the default namespace or none."""
+        return _generated_prefix(ns) if ns and ns not in uri_to_prefix else uri_to_prefix.get(ns, "")
+
+    def _attribute_name(ns, local_name):
+        """``prefix:local_name`` — an attribute is never in the default namespace."""
+        return f"{uri_to_prefix.get(ns) or _generated_prefix(ns)}:{local_name}" if ns else local_name
+
+    # the RDF names (rdf:RDF, rdf:about, rdf:datatype, rdf:Description) share the attribute prefix
+    cdef string rdf_about_attr = _attribute_name(RDF_NS, "about").encode('utf-8')
+    cdef string rdf_datatype_attr = _attribute_name(RDF_NS, "datatype").encode('utf-8')
+    rdf_description = _attribute_name(RDF_NS, "Description")
     key_datatypes = key_datatypes or {}
     key_languages = key_languages or {}
 
     def _parse_attrib(full_attrib):
         if full_attrib.startswith("{"):
             ns_end = full_attrib.index("}")
-            ns = full_attrib[1:ns_end]
-            local = full_attrib[ns_end + 1:]
-            p = uri_to_prefix.get(ns)
-            return f"{p}:{local}" if p else local
+            return _attribute_name(full_attrib[1:ns_end], full_attrib[ns_end + 1:])
         return full_attrib
 
     # Pre-build C++ ClassDef and TagDef lookup maps
@@ -253,18 +283,37 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
     cdef ClassDef cd
     cdef TagDef td
+    cdef list unbound = []             # namespaces of the definitions that wait for a generated prefix
+
+    def _tag(ns, local_name):
+        """(tag, index in *unbound* or -1): a tag of an unbound namespace is the local name
+        until its first use, which gives it the generated prefix."""
+        if ns and ns not in uri_to_prefix:
+            if ns not in unbound:
+                unbound.append(ns)
+            return local_name.encode('utf-8'), unbound.index(ns)
+        prefix = uri_to_prefix.get(ns)
+        return (f"{prefix}:{local_name}" if prefix else local_name).encode('utf-8'), -1
 
     for key, defn in instance_rdf_map.items():
         if not isinstance(defn, dict):
             continue
         if defn.get("type") == "Class":
-            cd.tag = _make_prefixed(defn["namespace"], key).encode('utf-8')
+            cd.tag, cd.unbound = _tag(defn["namespace"], key)
             cd.id_attr = _parse_attrib(defn["attrib"]["attribute"]).encode('utf-8')
             cd.id_prefix = defn["attrib"]["value_prefix"].encode('utf-8')
             class_defs_idx[key] = class_defs_vec.size()
             class_defs_vec.push_back(cd)
         elif defn.get("namespace"):
-            td.tag = _make_prefixed(defn["namespace"], key).encode('utf-8')
+            # as a Type VALUE: a name the schema gives a namespace but no Class entry (an enumeration
+            # value as rdf:type) — that namespace, and the ID form of an undefined class
+            cd.tag, cd.unbound = _tag(defn["namespace"], key)
+            cd.id_attr = rdf_about_attr
+            cd.id_prefix = b"urn:uuid:"
+            class_defs_idx[key] = class_defs_vec.size()
+            class_defs_vec.push_back(cd)
+            # as a KEY
+            td.tag, td.unbound = _tag(defn["namespace"], key)
             attrib = defn.get("attrib")
             td.text_prefix = defn.get("text", "").encode('utf-8')
             td.datatype = (key_datatypes.get(key) or "").encode('utf-8')
@@ -297,9 +346,10 @@ def generate_xml_from_arrow(arrow_table_or_batch,
         comment_bytes = comment.encode('utf-8')
         doc.append_child(node_comment).set_value(<const char*>comment_bytes)
 
-    rdf_root = doc.append_child(b"rdf:RDF")
+    cdef bytes root_tag = _attribute_name(RDF_NS, "RDF").encode('utf-8')
+    rdf_root = doc.append_child(<const char*>root_tag)
     for prefix, uri in namespace_map.items():
-        ns_attr_name = f"xmlns:{prefix}".encode('utf-8')
+        ns_attr_name = (f"xmlns:{prefix}" if prefix else "xmlns").encode('utf-8')
         uri_bytes = uri.encode('utf-8')
         rdf_root.append_attribute(<const char*>ns_attr_name).set_value(<const char*>uri_bytes)
 
@@ -311,6 +361,7 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
     # Temp C++ strings for reading Arrow data
     cdef string s_id, s_key, s_value, s_combined, s_tag
+    undefined_prefix = None            # of undefined_namespace, resolved at the first undefined name
     cdef string_view sv_id, sv_key, sv_value
     cdef bytes class_key_bytes = class_KEY.encode('utf-8')
     cdef const char* class_key_ptr = class_key_bytes
@@ -335,18 +386,26 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
         if py_cd_idx is not None:
             cd_idx = <int>py_cd_idx
+            if class_defs_vec[cd_idx].unbound >= 0:
+                s_tag = f"{_generated_prefix(unbound[class_defs_vec[cd_idx].unbound])}:".encode('utf-8')
+                class_defs_vec[cd_idx].tag = s_tag + class_defs_vec[cd_idx].tag
+                class_defs_vec[cd_idx].unbound = -1
             obj_node = rdf_root.append_child(class_defs_vec[cd_idx].tag.c_str())
-            # Build id value: prefix + id
-            s_combined = class_defs_vec[cd_idx].id_prefix
-            s_combined.append(s_id)
-            obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
+            if is_iri(s_id):                              # an absolute IRI is the ID itself: rdf:about, no prefix
+                obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_id.c_str())
+            else:                                         # the schema's attribute: prefix + id
+                s_combined = class_defs_vec[cd_idx].id_prefix
+                s_combined.append(s_id)
+                obj_node.append_attribute(class_defs_vec[cd_idx].id_attr.c_str()).set_value(s_combined.c_str())
         elif export_undefined:
             # rdf:Description is "no shorthand type", not a class: written back as rdf:Description
             py_class = s_value.decode('utf-8')      # "Description": mirror of triplets.iri.DESCRIPTION_TYPE
-            s_tag = (f"{rdf_prefix}:Description" if py_class == "Description"
-                     else _make_prefixed(undefined_namespace, py_class)).encode('utf-8')
+            if undefined_prefix is None:
+                undefined_prefix = _element_prefix(undefined_namespace)
+            s_tag = (rdf_description if py_class == "Description"
+                     else f"{undefined_prefix}:{py_class}" if undefined_prefix else py_class).encode('utf-8')
             obj_node = rdf_root.append_child(s_tag.c_str())
-            s_combined.assign(b"urn:uuid:")
+            s_combined.assign(b"" if is_iri(s_id) else b"urn:uuid:")
             s_combined.append(s_id)
             obj_node.append_attribute(rdf_about_attr.c_str()).set_value(s_combined.c_str())
         else:
@@ -384,7 +443,9 @@ def generate_xml_from_arrow(arrow_table_or_batch,
 
             # the value (and whether the row is written at all) is decided BEFORE the
             # element is appended — an undefined enum value must not leave an empty element
-            if tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
+            if tag_defs_vec[td_idx].is_ref and is_iri(s_value):
+                s_combined.clear()                        # an absolute IRI is the reference itself
+            elif tag_defs_vec[td_idx].is_ref and tag_defs_vec[td_idx].needs_enum_lookup:
                 py_val = s_value.decode('utf-8')
                 enum_def = instance_rdf_map.get(py_val)
                 enum_ns = enum_def.get("namespace") if isinstance(enum_def, dict) else None
@@ -399,6 +460,10 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                 s_combined = tag_defs_vec[td_idx].text_prefix
             s_combined.append(s_value)
 
+            if tag_defs_vec[td_idx].unbound >= 0:
+                s_tag = f"{_generated_prefix(unbound[tag_defs_vec[td_idx].unbound])}:".encode('utf-8')
+                tag_defs_vec[td_idx].tag = s_tag + tag_defs_vec[td_idx].tag
+                tag_defs_vec[td_idx].unbound = -1
             attr_node = store.append_child_to(<int>py_store_idx, tag_defs_vec[td_idx].tag.c_str())
             if tag_defs_vec[td_idx].is_ref:
                 attr_node.append_attribute(tag_defs_vec[td_idx].attr_name.c_str()).set_value(s_combined.c_str())
@@ -409,7 +474,9 @@ def generate_xml_from_arrow(arrow_table_or_batch,
                 if not tag_defs_vec[td_idx].language.empty():
                     attr_node.append_attribute(b"xml:lang").set_value(tag_defs_vec[td_idx].language.c_str())
         elif export_undefined:
-            s_tag = _make_prefixed(undefined_namespace, py_key).encode('utf-8')
+            if undefined_prefix is None:
+                undefined_prefix = _element_prefix(undefined_namespace)
+            s_tag = (f"{undefined_prefix}:{py_key}" if undefined_prefix else py_key).encode('utf-8')
             attr_node = store.append_child_to(<int>py_store_idx, s_tag.c_str())
             attr_node.append_child(node_pcdata).set_value(s_value.c_str())
             # key_datatypes / key_languages span all schema profiles: an undefined KEY of this instance can still be annotated
@@ -421,6 +488,11 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             if py_language:
                 language_bytes = py_language.encode('utf-8')
                 attr_node.append_attribute(b"xml:lang").set_value(<const char*>language_bytes)
+
+    for uri, prefix in generated.items():
+        ns_attr_name = f"xmlns:{prefix}".encode('utf-8')
+        uri_bytes = uri.encode('utf-8')
+        rdf_root.append_attribute(<const char*>ns_attr_name).set_value(<const char*>uri_bytes)
 
     # Serialize
     cdef string_writer writer

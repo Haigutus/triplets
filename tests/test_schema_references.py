@@ -1,10 +1,13 @@
 """Reference types (triplets.validation.validate_schema_references): each source
 instance's associations against the referenced objects in the source and target
 instances, with the valid classes from the source and target profiles."""
+import json
+
 import pandas
 import pytest
 
-from triplets.validation import compile_references, enrich, validate_schema_references
+from triplets.validation import (compile_references, concat_violations, enrich, validate_schema_references,
+                                 validate_shacl)
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -173,6 +176,32 @@ def test_compiled_references_cache():
         compile_references(SCHEMA, ["SV"], ["TP"], severity="Error")
     assert set(compiled.ir["component"]) == {"triplets:range", "triplets:missing"}
     assert compiled.ir["params"].iloc[0] == ["TopologicalNode"]
+
+
+def test_schema_file_name_is_the_callers(tmp_path):
+    """references names the file this call was given, never the one that filled
+    the compile cache — through validate_schema_references and through a direct
+    compile; the content has one compiled_hash under any name, so a concat counts
+    its shapes once."""
+    first, second = tmp_path / "first.json", tmp_path / "second.json"
+    for path in (first, second):
+        path.write_text(json.dumps(SCHEMA))
+    data = frame([("sv1", "Type", "SvVoltage", "sv"), ("sv1", "SvVoltage.TopologicalNode", "tn1", "sv"),
+                  ("tn1", "Type", "TopologicalNode", "tp")])
+    compiled_hash = compile_references(SCHEMA, ["SV"], ["TP"]).hash
+    for rdf_map, name in ((first, "first.json"), (SCHEMA, "rdf_map"), (str(second), "second.json")):
+        meta = validate_schema_references(data, rdf_map, ["sv"], ["SV"], ["tp"], ["TP"],
+                                          engine="pandas").attrs["validation"]
+        assert meta["references"] == [name]
+        assert meta["compiled_hash"] == compiled_hash       # one loaded dict, one compile
+    runs = [validate_shacl(data, compile_references(rdf_map, ["SV"], ["TP"]), engine="pandas")
+            for rdf_map in (second, first, SCHEMA)]
+    metas = [run.attrs["validation"] for run in runs]
+    assert [meta["references"] for meta in metas] == [["second.json"], ["first.json"], ["rdf_map"]]
+    assert {meta["compiled_hash"] for meta in metas} == {compiled_hash}
+    merged = concat_violations(runs).attrs["validation"]
+    assert merged["references"] == ["second.json", "first.json", "rdf_map"]
+    assert (merged["node_shapes"], merged["constraints"]) == (metas[0]["node_shapes"], metas[0]["constraints"])
 
 
 def test_accessor():

@@ -307,10 +307,12 @@ def _range(comparison, description):
 
 
 def _in(context, rule):
-    """Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""
+    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
+    text; the datatype is ignored."""
     rows = context.path_rows(rule)
     allowed = {str(value) for value in rule.params}
-    local = iri_pandas.local_value(rows["PATH_VALUE"].astype(str))
+    values = rows["PATH_VALUE"].astype(str)
+    local = values.mask(iri_pandas.is_iri(values), iri_pandas.local_value(values))
     bad = ~local.isin(allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")

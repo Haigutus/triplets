@@ -19,6 +19,8 @@ rdf_map_scope. Import-light on purpose: stdlib only.
 
 from .iri import _root_entries, _sections, absolute_datatype, prefixes
 from .iri import load_rdf_map  # noqa: F401 — re-exported for the export engines
+from .iri import TYPE_KEY
+from ._engine_detect import flavor
 
 # Profile identity a header may declare, in priority order: old FullModel
 # header messageType, new dcat:Dataset keyword, then the URI fields
@@ -180,3 +182,18 @@ def _merge_entry(name, merged, found, notes, bound):
         merged["values"] = list(dict.fromkeys(value for each in values for value in each))
         notes["relaxed_constraints"].append(
             f"{name}: enumeration values united ({' + '.join(section for section, _ in found)})")
+
+
+def distribution_labels(data, label_key="label"):
+    """The *label_key* rows of the ``Distribution`` objects, in the frame's own flavor (pandas
+    or polars) — the source file name the parsers write for each instance. A ``label`` row
+    of any other object is data, and a null label is no label."""
+    if flavor(data) == "polars":
+        import polars
+        key, value = polars.col("KEY").cast(polars.Utf8), polars.col("VALUE").cast(polars.Utf8)
+        distributions = data.filter((key == TYPE_KEY) & (value == "Distribution"))["ID"]
+        return data.filter((key == label_key) & value.is_not_null() & polars.col("ID").is_in(distributions.implode()))
+    labels = data.loc[(data["KEY"] == label_key) & data["VALUE"].notna()]
+    owners = data.loc[data["ID"].isin(labels["ID"])]              # the few labelled objects: one ID pass
+    distributions = owners.loc[(owners["KEY"] == TYPE_KEY) & (owners["VALUE"] == "Distribution"), "ID"]
+    return labels.loc[labels["ID"].isin(distributions)]

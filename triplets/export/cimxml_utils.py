@@ -4,41 +4,54 @@
 # -------------------------------------------------------------------------------
 import uuid
 import logging
+from itertools import chain, count
 
 from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
 from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for the cimxml engines
     PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index, merge_sections, profile_sections)
-from triplets.iri import _sections
+from triplets.iri import RDF_NS, TYPE_KEY, _sections
 
 logger = logging.getLogger(__name__)
 
 
 
-def _values_for_key(instance_data, key):
-    """VALUEs of rows with the given KEY (pandas or polars frame), nulls dropped."""
+HEADER_KEYS = (*PROFILE_KEYS, "label")
+
+
+def _header_rows(instance_data):
+    """``(ID, KEY, VALUE)`` of the rows resolve_instance_config reads — the profile keys and
+    ``label`` — in one pass over the instance (pandas or polars frame), nulls dropped."""
     if flavor(instance_data) == "polars":
         import polars
-        values = instance_data.filter(polars.col("KEY") == key)["VALUE"].to_list()
-    else:
-        values = instance_data.loc[instance_data["KEY"] == key, "VALUE"].tolist()
-    return [value for value in values if value is not None]
+        rows = instance_data.filter(polars.col("KEY").is_in(HEADER_KEYS)).select("ID", "KEY", "VALUE")
+        return rows.filter(polars.col("VALUE").is_not_null()).rows()
+    rows = instance_data.loc[instance_data["KEY"].isin(HEADER_KEYS), ["ID", "KEY", "VALUE"]]
+    return list(rows.loc[rows["VALUE"].notna()].itertuples(index=False, name=None))
 
 
-def _instance_profile_hints(instance_data):
+def _instance_profile_hints(header_rows):
     """Profile references the instance header may carry, in priority order:
     old header messageType, new dcat:Dataset keyword, then the URI fields
     (both can repeat — e.g. multiple Model.profile rows)."""
-    hints = []
-    for key in PROFILE_KEYS:
-        hints.extend(str(value) for value in _values_for_key(instance_data, key))
-    return hints
+    return [str(value) for profile_key in PROFILE_KEYS for _, key, value in header_rows if key == profile_key]
 
 
-def _first_value(instance_data, key):
-    """VALUE of the first row with the given KEY, or None."""
-    values = _values_for_key(instance_data, key)
-    return values[0] if values else None
+def _distribution_label(instance_data, header_rows):
+    """``label`` of the instance's ``Distribution`` object (the source file name the parsers
+    write), or None — a ``label`` row of any other object is data, not the file name."""
+    labels = [(object_id, value) for object_id, key, value in header_rows if key == "label"]
+    if not labels:
+        return None
+    labelled = [object_id for object_id, _ in labels]      # few objects: one ID pass finds their types
+    if flavor(instance_data) == "polars":
+        import polars
+        distributions = instance_data.filter(polars.col("ID").is_in(labelled) & (polars.col("KEY") == TYPE_KEY)
+                                             & (polars.col("VALUE") == "Distribution"))["ID"].to_list()
+    else:
+        owners = instance_data.loc[instance_data["ID"].isin(labelled)]
+        distributions = owners.loc[(owners["KEY"] == TYPE_KEY) & (owners["VALUE"] == "Distribution"), "ID"].tolist()
+    return next((value for object_id, value in labels if object_id in distributions), None)
 
 
 def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
@@ -47,7 +60,8 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     Returns
     -------
     tuple (file_name, namespace_map, instance_rdf_map)
-        - file_name : from the instance 'label' (source filename) or a new UUID
+        - file_name : the ``label`` of the instance's ``Distribution`` object (source filename),
+          or a new ``<uuid>.xml``
         - namespace_map : given > instance NamespaceMap > schema ProfileNamespaceMap
         - instance_rdf_map : every profile section the instance header declares, merged
           (:func:`triplets._header.merge_sections`; a class concrete in any of them is
@@ -60,10 +74,10 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
     if not namespace_map:
         namespace_map, xml_base = get_namespace_map(instance_data)
 
-    # Filename is kept under label
-    file_name = _first_value(instance_data, "label") or f"{uuid.uuid4()}.xml"
+    header_rows = _header_rows(instance_data)
+    file_name = _distribution_label(instance_data, header_rows) or f"{uuid.uuid4()}.xml"
 
-    hints = _instance_profile_hints(instance_data)
+    hints = _instance_profile_hints(header_rows)
     sections = profile_sections(hints, rdf_map)
     if not sections and _sections(rdf_map):
         logger.warning("%s: header %s matches none of the schema profiles %s — no class or key is defined, "
@@ -83,3 +97,27 @@ def resolve_instance_config(instance_data, rdf_map, namespace_map=None):
         namespace_map = (rdf_map[sections[0]] if sections else rdf_map).get("ProfileNamespaceMap")
 
     return file_name, namespace_map, instance_rdf_map
+
+
+def declared_namespaces(namespace_map, instance_rdf_map, export_undefined, undefined_namespace):
+    """The prefix → namespace map an instance is written with (both cimxml engines).
+
+    - ``export_undefined``: *undefined_namespace* is bound to ``triplets`` unless the map
+      binds it already (e.g. CIM100 keeps its own prefix).
+    - A class without a namespace (a ``Class`` entry with ``"namespace": ""``) is only in
+      no namespace while no default namespace is declared: with an entry that has an empty
+      namespace the map's default namespace (prefix ``""`` or ``None``) is left out, and
+      the engines write its names under a generated prefix.
+    - The RDF namespace is bound to a prefix that is not empty: ``rdf`` when the map leaves
+      it out or has it only as the default namespace, else the first free ``ns0``, ``ns1``, ….
+    """
+    namespace_map = dict(namespace_map or {})
+    if any(isinstance(entry, dict) and "namespace" in entry and not entry["namespace"]
+           for entry in instance_rdf_map.values()):
+        namespace_map = {prefix: uri for prefix, uri in namespace_map.items() if prefix}
+    if export_undefined and undefined_namespace not in namespace_map.values():
+        namespace_map["triplets"] = undefined_namespace
+    if not any(prefix and uri == RDF_NS for prefix, uri in namespace_map.items()):
+        names = chain(("rdf",), map("ns{}".format, count()))
+        namespace_map[next(name for name in names if name not in namespace_map)] = RDF_NS
+    return namespace_map

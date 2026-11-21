@@ -250,9 +250,15 @@ def _range(comparison, description):
     return builder
 
 
+def _in_form(column):
+    """The form sh:in compares: an IRI's local id, any other value as it is."""
+    return polars.when(iri_polars.is_iri(column)).then(iri_polars.local_value(column)).otherwise(polars.col(column))
+
+
 def _in(context, rule):
-    """Value's lexical form (an IRI's local id) against each member's text; the datatype is ignored."""
-    local = iri_polars.local_value("PATH_VALUE")
+    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
+    text; the datatype is ignored."""
+    local = _in_form("PATH_VALUE")
     allowed = [str(value) for value in rule.params]
     plan = context.path_rows(rule).filter(~local.is_in(allowed))
     return _emit(plan, rule, f"value is not one of {sorted(allowed)}")
@@ -564,7 +570,7 @@ def _batch_in(context, rules):
         "SOURCE_SHAPE": [rule.shape_id for rule in rules for _ in rule.params],
         "_LOCAL": [str(value) for rule in rules for value in rule.params],
     })
-    local = iri_polars.local_value("VALUE")
+    local = _in_form("VALUE")
     plan = (_batch_path_rows(context, rules_frame)
             .with_columns(local.alias("_LOCAL"))
             .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_LOCAL"], how="anti"))

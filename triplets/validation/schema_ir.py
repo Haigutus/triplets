@@ -62,7 +62,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False, sev
         The severity of every rule.
     """
     _require_severity(severity)
-    schema, source = load_rdf_map(rdf_map), _source(rdf_map)
+    schema, source = load_rdf_map(rdf_map), schema_name(rdf_map)
     sections = scope_sections(schema, rdf_map_scope)
     content = f"schema|{_digest(schema)}|{sections}|undefined={report_undefined_keys}|severity={severity}"
     key = (content, source)
@@ -104,7 +104,7 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
         The severity of every rule.
     """
     _require_severity(severity)
-    schema, source = load_rdf_map(rdf_map), _source(rdf_map)
+    schema, source = load_rdf_map(rdf_map), schema_name(rdf_map)
     sources = scope_sections(schema, rdf_map_scope)
     targets = scope_sections(schema, target_rdf_map_scope) if target_rdf_map_scope else []
     if sources is None and targets:
@@ -151,7 +151,7 @@ def _digest(schema):
     return hashlib.sha256(json.dumps(schema, sort_keys=True, default=str).encode()).hexdigest()
 
 
-def _source(rdf_map):
+def schema_name(rdf_map):
     """The schema file name the compile reports — in the cache key, not in the hash: a compile is never
     shared between names, and one content has one hash under any name."""
     return "rdf_map" if isinstance(rdf_map, dict) else os.path.basename(str(rdf_map))

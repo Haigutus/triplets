@@ -79,11 +79,17 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
 
 
 def _lines(subjects, predicates, objects, graphs):
-    """Term columns → ``s p o g .\n`` lines as UTF-8 bytes, joined in Arrow
-    (one C++ pass). A row with no
-    graph carries ``.`` in *graphs* and comes out as an N-Triples line."""
-    import pyarrow
-    import pyarrow.compute
+    """Term columns → ``s p o g .\n`` lines as UTF-8 bytes. A row with no graph carries
+    ``.`` in *graphs* and comes out as an N-Triples line. Joined in Arrow (one C++ pass);
+    in pandas on an install without pyarrow."""
+    try:
+        import pyarrow
+        import pyarrow.compute
+    except ImportError:                                   # core install: pandas and lxml only
+        quads = subjects + " " + predicates + " " + objects + " " + graphs
+        quads = quads.where((graphs == ".").to_numpy(), quads + " .")
+        return ("\n".join(quads) + "\n").encode()
+
     arrays = [pyarrow.array(column, type=pyarrow.string()) for column in (subjects, predicates, objects, graphs)]
     arrays = [array.combine_chunks() if isinstance(array, pyarrow.ChunkedArray) else array
               for array in arrays]

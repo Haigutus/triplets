@@ -9,6 +9,8 @@ from io import BytesIO
 
 import polars as pl
 
+from triplets._header import distribution_labels
+
 logger = logging.getLogger(__name__)
 
 
@@ -54,7 +56,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
             output.seek(0)
             exported_files.append(output)
     else:
-        labels = data.filter(pl.col("KEY") == "label")
+        labels = distribution_labels(data)
         exported_files = []
         for row in labels.iter_rows(named=True):
             instance_data = data.filter(pl.col("INSTANCE_ID") == row["INSTANCE_ID"])
