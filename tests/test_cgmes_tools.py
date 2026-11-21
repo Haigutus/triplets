@@ -439,6 +439,7 @@ LABELLED = [
     ("fm", "Type", "FullModel", "i1"), ("fm", "Model.scenarioTime", "2024-01-01T00:30:00Z", "i1"),
     ("fm", "Model.processType", "1D", "i1"), ("fm", "Model.modelingEntity", "ELERING", "i1"),
     ("fm", "Model.messageType", "EQ", "i1"), ("fm", "Model.version", "1", "i1"),
+    ("fm", "keyword", "EQ", "i1"),                                                # hybrid header: a key without "Model."
 ]
 
 
@@ -461,6 +462,13 @@ def test_loaded_profiles_label_is_the_distribution_label(labelled):
 def test_update_filename_rewrites_only_the_distribution_label(labelled):
     updated = cgmes_tools.update_filename_from_FullModel(labelled)
     assert _labels(updated) == {"g1": "A name", "d1": "20240101T0030Z_1D_ELERING_EQ_001.xml"}
+
+
+def test_filename_from_metadata_with_a_key_without_a_prefix():
+    metadata = {"Model.scenarioTime": "2024-01-01T00:30:00Z", "Model.processType": "1D", "Model.modelingEntity": "ELERING",
+                "Model.messageType": "EQ", "Model.version": "1", "keyword": "EQ"}
+    assert cgmes_tools.get_filename_from_metadata(metadata) == "20240101T0030Z_1D_ELERING_EQ_001.xml"
+    assert cgmes_tools.get_filename_from_metadata(metadata, filename_mask="{keyword}_{version:03d}") == "EQ_001.xml"
 
 
 def test_update_fullmodel_reads_only_the_distribution_label(labelled):

@@ -581,6 +581,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`sh:in` in the pandas, polars and DuckDB engines compares a VALUE that is not an IRI as
   it is.** The VALUE was shortened like an ID first, so a literal `_2` — or `#1` — did not
   match the member `"_2"` / `"#1"` and was reported; pyshacl accepts it.
+- **`cgmes_tools.get_filename_from_metadata` accepts a metadata key without a prefix**
+  (`keyword` on a FullModel header extended with the Dataset keys): it raised
+  `IndexError`, also through `update_filename_from_FullModel` (pandas and polars). Such a
+  key keeps its name and can be used in the `filename_mask`.
 - **`cgmes_tools.validate_by_header` reports the schema file name.** The run metadata
   `references` held `"rdf_map"` for a schema given as a path; they hold the file name, as
   with `validate_schema`, and `"rdf_map"` for a dict. A run where no instance resolves a

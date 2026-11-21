@@ -167,7 +167,8 @@ def get_filename_from_metadata(meta_data, file_type="xml", filename_mask=default
 
     Notes
     -----
-    - Removes 'Model.' prefix from metadata keys for compatibility with string formatting.
+    - Removes the 'Model.' prefix from metadata keys for compatibility with string formatting;
+      a key without a prefix ('keyword') keeps its name.
     - Converts 'scenarioTime' to datetime and 'version' to integer before formatting.
     - Uses the provided filename_mask to construct the filename.
 
@@ -183,7 +184,7 @@ def get_filename_from_metadata(meta_data, file_type="xml", filename_mask=default
     entity_and_area_separator = "-"
 
     # Remove Model. from dictionary as python string format can't use . in variable name
-    meta_data = {key.split(".")[1]:meta_data[key] for key in meta_data}
+    meta_data = {key.rpartition(".")[2]: meta_data[key] for key in meta_data}
 
     # DateTime fields from text to DateTime
     DateTime_fields = ["scenarioTime"]#, 'created']
