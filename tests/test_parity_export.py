@@ -384,14 +384,62 @@ def test_cimxml_object_id_iri_replaces_rdf_id():
 
 
 def test_cimxml_type_naming_an_entry_that_is_no_class(cimxml_engine):
-    """A Type VALUE naming a schema entry that is not a Class is an undefined class, and a KEY
-    naming a Class entry an undefined key."""
+    """A Type VALUE naming a schema entry that is not a Class (an enumeration value as rdf:type)
+    is written in that entry's namespace, the rdf:type export_to_nquads writes, with the ID
+    form of an undefined class; a KEY naming a Class entry is an undefined key."""
     rows = [("d1", "Type", "Dataset"), ("d1", "Concept", "x"), ("c1", "Type", "Concept")]
+    dataset = (f"{{{DCAT}}}Dataset", [(f"{{{RDF_NS}}}about", "urn:uuid:d1")], "")
     concept = ("{http://www.w3.org/2004/02/skos/core#}Concept", [(f"{{{RDF_NS}}}about", "urn:uuid:c1")], "")
-    assert _flat_export(rows, cimxml_engine) == [concept]
+    assert _flat_export(rows, cimxml_engine) == [dataset, concept]
     assert _flat_export(rows, cimxml_engine, export_undefined=True) == [
-        ("{http://triplets#}Dataset", [(f"{{{RDF_NS}}}about", "urn:uuid:d1")], ""),
-        ("{http://triplets#}Concept", [], "x"), concept]
+        dataset, ("{http://triplets#}Concept", [], "x"), concept]
+    data = pandas.DataFrame([(*row, "i1") for row in rows], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    quads = export.export_to_nquads(data, rdf_map=FLAT_SCHEMA, engine="pandas", export_to_memory=True,
+                                    export_undefined=False).getvalue().decode()
+    assert quads.splitlines() == [
+        f"<urn:uuid:d1> <{RDF_NS}type> <{DCAT}Dataset> <urn:uuid:i1> .",
+        f"<urn:uuid:c1> <{RDF_NS}type> <http://www.w3.org/2004/02/skos/core#Concept> <urn:uuid:i1> ."]
+
+
+def test_cimxml_rdf_prefix_on_another_namespace_and_class_namespace_unbound(cimxml_engine):
+    """The rdf prefix bound to another namespace and the class namespace bound to none: the ID
+    attribute is still in the RDF namespace."""
+    rows = [("c1", "Type", "Concept"), ("c1", "broader", "c2")]
+    assert _flat_export(rows, cimxml_engine, namespace_map={"rdf": "http://other#"}) == [
+        ("{http://www.w3.org/2004/02/skos/core#}Concept", [(f"{{{RDF_NS}}}about", "urn:uuid:c1")], ""),
+        ("{http://www.w3.org/2004/02/skos/core#}broader", [(f"{{{RDF_NS}}}resource", "urn:uuid:c2")], "")]
+
+
+PLAIN_IDS = f"""<rdf:RDF xmlns:rdf="{RDF_NS}" xmlns:cim="{CIM100}" xmlns:md="http://iec.ch/TC57/61970-552/ModelDescription/1#">
+  <md:FullModel rdf:about="urn:uuid:m1">
+    <md:Model.profile>http://iec.ch/TC57/ns/CIM/CoreEquipment-EU/3.0</md:Model.profile>
+  </md:FullModel>
+  <cim:Substation rdf:ID="SS1"><cim:IdentifiedObject.name>S1</cim:IdentifiedObject.name></cim:Substation>
+  <cim:VoltageLevel rdf:about="#VL1"><cim:VoltageLevel.Substation rdf:resource="#SS1"/></cim:VoltageLevel>
+</rdf:RDF>
+"""
+
+
+def test_cimxml_round_trip_of_ids_without_underscore(tmp_path, cimxml_engine):
+    """rdf:ID="SS1", rdf:about="#VL1" and rdf:resource="#SS1" parse to the IDs SS1 / VL1 and a
+    reference to SS1, on every parser engine, and the export parses back to the same rows."""
+    source = tmp_path / "plain_ids.xml"
+    source.write_text(PLAIN_IDS)
+    objects = {("SS1", "Type", "Substation"), ("SS1", "IdentifiedObject.name", "S1"),
+               ("VL1", "Type", "VoltageLevel"), ("VL1", "VoltageLevel.Substation", "SS1")}
+
+    def rows(data):
+        return set(data[["ID", "KEY", "VALUE"]].itertuples(index=False, name=None))
+
+    for parser in ("python_lxml_pandas", "cython_pugixml_arrow"):
+        if parser == "cython_pugixml_arrow":
+            pytest.importorskip("triplets.parser.cython_pugixml_arrow")
+        data = triplets.parse(str(source), engine=parser, return_type="pandas")
+        assert objects <= rows(data)
+        file, = export.export_to_cimxml(data, rdf_map=RDF_MAP, engine=cimxml_engine, export_type="xml_per_instance",
+                                        export_to_memory=True)
+        assert b'rdf:ID="_SS1"' in file.getvalue() and b'rdf:resource="#_SS1"' in file.getvalue()
+        assert objects <= rows(triplets.parse(file, engine=parser, return_type="pandas"))
 
 
 def test_cimxml_name_without_a_namespace_under_a_default_namespace(cimxml_engine):
@@ -414,6 +462,15 @@ def test_cimxml_file_name_is_the_distribution_label(cimxml_engine):
                                                 export_to_memory=True)
         assert first.name == "out/x.rdf"
         assert uuid.UUID(second.name.removesuffix(".xml")) and second.name.endswith(".xml")
+
+
+def test_cimxml_null_distribution_label_is_no_label(cimxml_engine):
+    """A Distribution label without a VALUE names nothing: the file gets <uuid>.xml."""
+    for dtype in (object, "str"):
+        data = pandas.DataFrame([("d1", "Type", "Distribution", "i1"), ("d1", "label", None, "i1"),
+                                 ("b1", "Type", "Breaker", "i1")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"]).astype(dtype)
+        file, = export.export_to_cimxml(data, engine=cimxml_engine, export_type="xml_per_instance", export_to_memory=True)
+        assert uuid.UUID(file.name.removesuffix(".xml"))
 
 
 def test_cimxml_unsupported_export_type_raises():

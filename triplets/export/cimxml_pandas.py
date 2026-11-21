@@ -210,11 +210,18 @@ def generate_xml(instance_data,
         # Get class export definition
         class_def = instance_rdf_map.get(class_name, None)
 
-        if isinstance(class_def, dict) and class_def.get("type") == "Class":   # any other entry of that name is no class
+        if isinstance(class_def, dict) and class_def.get("type") == "Class":
 
             class_namespace = class_def["namespace"]
             id_name = class_def["attrib"]["attribute"]
             id_value_prefix = class_def["attrib"]["value_prefix"]
+
+        elif isinstance(class_def, dict) and class_def.get("namespace"):
+            # a name the schema gives a namespace but no Class entry (an enumeration value as rdf:type):
+            # that namespace, as export_to_nquads writes it, and the ID form of an undefined class
+            class_namespace = class_def["namespace"]
+            id_name = f"{{{RDF_NS}}}about"
+            id_value_prefix = UUID_PREFIX
 
         else:
             logger.debug("Definition missing for class: {} with {}: ".format(class_name, ID))

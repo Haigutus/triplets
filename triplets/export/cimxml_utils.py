@@ -4,12 +4,13 @@
 # -------------------------------------------------------------------------------
 import uuid
 import logging
+from itertools import chain, count
 
 from triplets.tools import get_namespace_map
 from triplets._engine_detect import flavor
 from triplets._header import (  # noqa: F401 — load_rdf_map re-exported for the cimxml engines
     PROFILE_KEYS, PROFILE_URL_MAP, load_rdf_map, _profile_identity_index, merge_sections, profile_sections)
-from triplets.iri import TYPE_KEY, _sections
+from triplets.iri import RDF_NS, TYPE_KEY, _sections
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,10 @@ def _header_rows(instance_data):
     ``label`` — in one pass over the instance (pandas or polars frame), nulls dropped."""
     if flavor(instance_data) == "polars":
         import polars
-        rows = instance_data.filter(polars.col("KEY").is_in(HEADER_KEYS)).select("ID", "KEY", "VALUE").rows()
-    else:
-        rows = instance_data.loc[instance_data["KEY"].isin(HEADER_KEYS), ["ID", "KEY", "VALUE"]].itertuples(
-            index=False, name=None)
-    return [row for row in rows if row[2] is not None]
+        rows = instance_data.filter(polars.col("KEY").is_in(HEADER_KEYS)).select("ID", "KEY", "VALUE")
+        return rows.filter(polars.col("VALUE").is_not_null()).rows()
+    rows = instance_data.loc[instance_data["KEY"].isin(HEADER_KEYS), ["ID", "KEY", "VALUE"]]
+    return list(rows.loc[rows["VALUE"].notna()].itertuples(index=False, name=None))
 
 
 def _instance_profile_hints(header_rows):
@@ -104,10 +104,12 @@ def declared_namespaces(namespace_map, instance_rdf_map, export_undefined, undef
 
     - ``export_undefined``: *undefined_namespace* is bound to ``triplets`` unless the map
       binds it already (e.g. CIM100 keeps its own prefix).
-    - A name without a namespace (a schema entry with ``"namespace": ""``) is only in no
-      namespace while no default namespace is declared: with such an entry the map's
-      default namespace (prefix ``""`` or ``None``) is left out, and the engines write its
-      names under a generated prefix.
+    - A class without a namespace (a ``Class`` entry with ``"namespace": ""``) is only in
+      no namespace while no default namespace is declared: with an entry that has an empty
+      namespace the map's default namespace (prefix ``""`` or ``None``) is left out, and
+      the engines write its names under a generated prefix.
+    - The RDF namespace is bound to a prefix that is not empty: ``rdf`` when the map leaves
+      it out or has it only as the default namespace, else the first free ``ns0``, ``ns1``, ….
     """
     namespace_map = dict(namespace_map or {})
     if any(isinstance(entry, dict) and "namespace" in entry and not entry["namespace"]
@@ -115,4 +117,7 @@ def declared_namespaces(namespace_map, instance_rdf_map, export_undefined, undef
         namespace_map = {prefix: uri for prefix, uri in namespace_map.items() if prefix}
     if export_undefined and undefined_namespace not in namespace_map.values():
         namespace_map["triplets"] = undefined_namespace
+    if not any(prefix and uri == RDF_NS for prefix, uri in namespace_map.items()):
+        names = chain(("rdf",), map("ns{}".format, count()))
+        namespace_map[next(name for name in names if name not in namespace_map)] = RDF_NS
     return namespace_map

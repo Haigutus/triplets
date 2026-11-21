@@ -305,6 +305,14 @@ def generate_xml_from_arrow(arrow_table_or_batch,
             class_defs_idx[key] = class_defs_vec.size()
             class_defs_vec.push_back(cd)
         elif defn.get("namespace"):
+            # as a Type VALUE: a name the schema gives a namespace but no Class entry (an enumeration
+            # value as rdf:type) — that namespace, and the ID form of an undefined class
+            cd.tag, cd.unbound = _tag(defn["namespace"], key)
+            cd.id_attr = rdf_about_attr
+            cd.id_prefix = b"urn:uuid:"
+            class_defs_idx[key] = class_defs_vec.size()
+            class_defs_vec.push_back(cd)
+            # as a KEY
             td.tag, td.unbound = _tag(defn["namespace"], key)
             attrib = defn.get("attrib")
             td.text_prefix = defn.get("text", "").encode('utf-8')
