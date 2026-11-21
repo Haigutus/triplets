@@ -186,9 +186,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile's identity (section keys, each field as a list in scope order).
   `rdf_map_entries` (and the flat maps on it) skip ProfileMetadata. Nothing in `triplets.validation` reads
   instance headers.
-  - `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True)`
-    — SHACL; the scoped profiles give typed literals, nodeKind and class
-    inheritance. The `inheritance` flag stays on `validate_shacl` and
+  - `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=False)`
+    — SHACL; the scoped profiles give typed literals, nodeKind and, with
+    `inheritance=True`, class inheritance. The `inheritance` flag stays on `validate_shacl` and
     `validate_schema_references`; `attrs["validation"]["inheritance"]` says
     whether it was applied.
   - `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)`
@@ -220,7 +220,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its pairs (the IR is not fanned out); pyshacl gets the same edges as
   `rdfs:subClassOf` in `ont_graph` (recorded parent IRIs as is,
   `https://cim.ucaiug.io/ns#IdentifiedObject` for NC). `inheritance=False`
-  matches the exact `rdf:type`. Schema class rules never widen: each Class
+  (the `validate_shacl` default) matches the exact `rdf:type`. Schema class rules never widen: each Class
   entry already lists its inherited attributes. Identical findings are
   reported once on every engine (a property shape on both a parent and a
   child node shape, the same triple in two instance files).
@@ -255,6 +255,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`validate_shacl` defaults to `inheritance=False`** — `sh:targetClass` and `sh:class`
+  match the exact `rdf:type`, as plain SHACL does on a data graph without
+  `rdfs:subClassOf` (CIM files carry none, and the ENTSO-E shapes list concrete classes).
+  The default was `True`: a run with an `rdf_map` also matched instances of subclasses
+  from the scoped profiles' `inheritance` lists. Pass `inheritance=True` for that
+  behaviour; a caller that relied on the old default gets fewer findings on abstract
+  class targets and more `sh:class` findings on subclass references.
+  `validate_schema_references` keeps `inheritance=True`: a reference to a subclass of
+  the range class conforms.
 - **`export_to_excel` and `export_to_csv` (pandas) write every VALUE as its text**, so
   `cim-spreadsheet` CIM XML → Excel → CIM XML keeps the lexical form of numbers. A column
   that held only numbers was converted to numbers first: `1.0` came back as `1`,

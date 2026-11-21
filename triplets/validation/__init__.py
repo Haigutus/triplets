@@ -109,7 +109,7 @@ def get_engine(name: str = "auto"):
 
 
 def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=None, engine="auto", lexical=True,
-                   undefined_namespace=CIM_NS, inheritance=True, deactivated_shapes=None, abort_on_first=False,
+                   undefined_namespace=CIM_NS, inheritance=False, deactivated_shapes=None, abort_on_first=False,
                    **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
@@ -148,12 +148,16 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     undefined_namespace : str, default CIM100
         Namespace for names the schema does not declare (every name without
         an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
-    inheritance : bool, default True
+    inheritance : bool, default False
+        False matches the exact ``rdf:type`` only: plain SHACL reads
+        ``rdfs:subClassOf`` from the data graph, and CIM files carry none. True:
         ``sh:targetClass`` and ``sh:class`` also match instances of subclasses,
         from the scoped profiles' ``inheritance`` lists
         (:func:`~triplets.validation.schema_scope.class_ancestors`; pyshacl: as
-        ``rdfs:subClassOf`` in ``ont_graph``). False matches the exact
-        ``rdf:type`` only. No effect without an rdf_map.
+        ``rdfs:subClassOf`` in ``ont_graph``). The ancestor map is one per run,
+        built from all profiles in ``rdf_map_scope``: same-named Class entries
+        union their ``inheritance`` lists, and the closure goes only through
+        ancestors that have a Class entry in the scope. No effect without an rdf_map.
     deactivated_shapes : shape IRI or iterable of them, optional
         The shapes to switch off for this run — replaces the set the graph
         declares (``compiled.deactivated``): None = the declared set, ``[]`` =

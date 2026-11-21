@@ -13,7 +13,7 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 
 | Function | Checks | Runs |
 |----------|--------|------|
-| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, lexical=True, inheritance=True, deactivated_shapes=None, abort_on_first=False)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision, the value space of `sh:lessThan` / `sh:lessThanOrEquals` operands and class inheritance | once over the scoped data |
+| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, lexical=True, inheritance=False, deactivated_shapes=None, abort_on_first=False)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision, the value space of `sh:lessThan` / `sh:lessThanOrEquals` operands and, with `inheritance=True`, class inheritance | once over the scoped data |
 | `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False, severity="Violation")` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
 | `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True, severity="Violation")` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
 
@@ -69,6 +69,13 @@ for 1–2 keys (NC).
 
 ### Class inheritance (`schema_scope.class_ancestors`)
 
+`validate_shacl` matches the exact `rdf:type` by default (`inheritance=False`):
+plain SHACL reads `rdfs:subClassOf` from the data graph, CIM files carry none,
+and the ENTSO-E shapes list concrete classes. `inheritance=True` widens
+`sh:targetClass` and `sh:class` through the schema; `validate_schema_references`
+has its own `inheritance=True` default for the range check. The map is one per
+run, built from all profiles in `rdf_map_scope`:
+
 `class_ancestors(rdf_map, rdf_map_scope)` → `{class: ancestor IRIs}`: the
 same-named Class entries of the scoped profiles union their `inheritance`
 lists, and the relation is closed only through ancestors that have a Class
@@ -85,10 +92,10 @@ parents of a class it mentions. Every engine gets this one map:
   like `rdf:type` in the data graph (schema namespace, else
   `undefined_namespace`).
 
-So the engines agree by construction. Each profile is its own world: NC SSI's
+So the engines agree by construction (with `inheritance=True`). Each profile is its own world: NC SSI's
 `ACLineSegment` list stops at `Equipment`, and SSI has no IdentifiedObject
 attributes — it reaches `IdentifiedObject` only when a scoped profile (ER) has
-an `Equipment` entry of its own. `inheritance=False` matches the exact
+an `Equipment` entry of its own. `inheritance=False` (the default) matches the exact
 `rdf:type` on every engine (pyshacl without `ont_graph`). Only `sh:targetClass`
 (`target_by="Type"`) and `sh:class` widen; KEY / VALUE / ID targets pick exactly
 what they name, a SPARQL target exactly what its query selects in the data
@@ -861,7 +868,7 @@ from triplets.export_schema import schemas
 data = pandas.read_RDF(["grid.zip"])
 
 # validate against a shapes file (format auto-detected by extension) — empty = conforms;
-# the scoped profiles type the literals and give the class inheritance
+# the scoped profiles type the literals (and, with inheritance=True, give the class inheritance)
 rdf_map = schemas.ENTSOE_CGMES_3_0_0_552_ED1
 violations = data.shacl.validate_shacl("shapes.ttl", rdf_map=rdf_map, rdf_map_scope=["EQ"])
 

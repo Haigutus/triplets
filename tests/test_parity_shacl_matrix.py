@@ -5,7 +5,7 @@ triplets:lexicalForm Warnings. Known divergences are strict xfails per (case, en
 in XFAIL; cases the engines deliberately skip are the SKIPPED group.
 
 Adding a case: one CASES entry — (shape Turtle appended to PREFIX, triplet rows) or
-(shape, rows, validate_shacl kwargs).
+(shape, rows, validate_shacl kwargs over DEFAULTS: the toy schema, inheritance on).
 """
 import functools
 
@@ -694,6 +694,10 @@ def compiled(name):
     return triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + shape, format="turtle"))
 
 
+# every case runs with the toy schema and its class tree, unless the case says otherwise
+DEFAULTS = {"rdf_map": SCHEMA, "rdf_map_scope": "*", "inheritance": True}
+
+
 def frame(rows):
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
@@ -701,7 +705,7 @@ def frame(rows):
 def run(name, engine, **extra):
     """The case's canonical rows on *engine*."""
     _, rows, *rest = CASES[name]
-    kwargs = {"rdf_map": SCHEMA, "rdf_map_scope": "*", **(rest[0] if rest else {}), **extra}
+    kwargs = {**DEFAULTS, **(rest[0] if rest else {}), **extra}
     return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
 
 

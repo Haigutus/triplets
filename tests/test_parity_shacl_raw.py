@@ -39,7 +39,7 @@ from triplets.iri import load_rdf_map
 from triplets.validation.schema_scope import scoped_rdf_map
 
 from _parity import LEXICAL_ALLOWANCE
-from test_parity_shacl_matrix import B, CASES, CIM, PREFIX, SCHEMA, SKIPPED, TRIO, XFAIL, frame
+from test_parity_shacl_matrix import B, CASES, CIM, DEFAULTS, PREFIX, SCHEMA, SKIPPED, TRIO, XFAIL, frame
 
 SH = rdflib.Namespace("http://www.w3.org/ns/shacl#")
 UUID = "urn:uuid:"
@@ -167,7 +167,7 @@ def synthetic(shape, rows, kwargs):
                 rdflib.Graph()) if "data_scope" in kwargs else dataset)
     shapes = rdflib.Graph().parse(data=PREFIX + shape, format="turtle")
     compiled = triplets.validation.compile(clone(shapes))
-    ontology = None if kwargs.get("inheritance") is False else subclass_edges(rdf_map)
+    ontology = subclass_edges(rdf_map) if kwargs.get("inheritance") else None
     return pyshacl_rows(data, shapes, ontology), *engine_rows(frame(rows), compiled, **kwargs)
 
 
@@ -181,7 +181,7 @@ def matrix_cases():
 @pytest.mark.parametrize("case", matrix_cases())
 def test_matrix_raw(case):
     shape, rows, *rest = {**CASES, **SKIPPED}[case]
-    kwargs = {"rdf_map": SCHEMA, "rdf_map_scope": "*", **(rest[0] if rest and isinstance(rest[0], dict) else {})}
+    kwargs = {**DEFAULTS, **(rest[0] if rest and isinstance(rest[0], dict) else {})}
     kwargs.pop("deactivated_shapes", None)
     assert compare(*synthetic(shape, rows, kwargs)) == (set(), set())
 
@@ -191,7 +191,7 @@ def test_skip_excuses_only_its_component():
     them missing on our side, they are pyshacl-only rows nothing declares."""
     shape = (f"{B} sh:in ( <urn:uuid:b1> ) ; sh:closed true ;"
              " sh:ignoredProperties ( rdf:type cim:IdentifiedObject.name ) .")
-    reference, ours, meta = synthetic(shape, TRIO, {"rdf_map": SCHEMA, "rdf_map_scope": "*"})
+    reference, ours, meta = synthetic(shape, TRIO, dict(DEFAULTS))
     closed = {row for row in reference if row[3] == "closed"}
     assert closed and compare(reference, ours, meta) == (set(), set())
     assert compare(reference, ours - closed, meta) == (set(), closed)
@@ -243,5 +243,5 @@ def test_real_data_raw(shapes_path, data_path, rdf_map, cim, rdfs):
     compiled = triplets.validation.compile(clone(shape_file(shapes_path)))
     shapes = clone(shape_file(shapes_path))
     reference = pyshacl_rows(dataset, shapes, vocabulary(rdfs, cim))
-    ours = engine_rows(data, compiled, rdf_map=rdf_map, rdf_map_scope=["EQ"])
+    ours = engine_rows(data, compiled, rdf_map=rdf_map, rdf_map_scope=["EQ"], inheritance=True)
     assert compare(reference, *ours) == (set(), set())

@@ -941,7 +941,7 @@ def test_abstract_target_walks_type_index(engine):
     graph.parse(data=PREFIX + shape, format="turtle")
     bare = triplets.validation.validate_shacl(data, graph, engine=engine)
     assert violating(bare, "sh:minCount") == set()
-    bound = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    bound = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=True)
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
     # IR stays one row per constraint — walk is in the Type index, not a fan-out
     compiled = triplets.validation.compile(graph)
@@ -959,7 +959,7 @@ def test_abstract_target_keeps_direct_equipment_type_rows(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    bound = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    bound = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=True)
     assert violating(bound, "sh:minCount") == {("b1", None), ("e1", None)}
 
 
@@ -990,7 +990,7 @@ def test_sh_class_accepts_subclasses_via_index(engine):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    v = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    v = triplets.validation.validate_shacl(data, graph, engine=engine, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=True)
     assert violating(v, "sh:class") == {("b2", "sub1")}
 
 
@@ -1464,7 +1464,7 @@ def test_shape_on_parent_and_child_reports_once(engine_name):
 
 @pytest.mark.parametrize("engine_name", ENGINES)
 def test_inheritance_off_matches_exact_type(engine_name):
-    """inheritance=False: sh:targetClass Equipment no longer reaches a Breaker."""
+    """inheritance=False, the default: sh:targetClass Equipment does not reach a Breaker."""
     pytest.importorskip(engine_name)
     shape = """cim:EqShape a sh:NodeShape ; sh:targetClass cim:Equipment ;
         sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."""
@@ -1472,11 +1472,15 @@ def test_inheritance_off_matches_exact_type(engine_name):
     import rdflib
     graph = rdflib.Graph()
     graph.parse(data=PREFIX + shape, format="turtle")
-    on = triplets.validation.validate_shacl(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    on = triplets.validation.validate_shacl(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=True)
     off = triplets.validation.validate_shacl(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=False)
     assert violating(on, "sh:minCount") == {("b1", None)}
     assert violating(off, "sh:minCount") == set()
     assert off.attrs["validation"]["inheritance"] is False
+    default = triplets.validation.validate_shacl(data, graph, engine=engine_name, rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    assert violating(default, "sh:minCount") == set() and default.attrs["validation"]["inheritance"] is False
+    import inspect
+    assert inspect.signature(triplets.validation.validate_shacl).parameters["inheritance"].default is False
 
 
 # NC-style bundle: SSI's ACLineSegment list stops at Equipment; Breaker's EQ list
@@ -1518,7 +1522,7 @@ def test_inheritance_follows_the_scoped_profiles(engine_name, instance_type, rdf
     pytest.importorskip(engine_name)
     data = pandas.DataFrame([("a1", "Type", instance_type, "eq")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
     v = triplets.validation.validate_shacl(data, io_shapes(), engine=engine_name, rdf_map=SCOPED_SCHEMA,
-                                     rdf_map_scope=rdf_map_scope)
+                                     rdf_map_scope=rdf_map_scope, inheritance=True)
     assert violating(v, "sh:minCount") == ({("a1", None)} if reached else set())
 
 
@@ -1541,7 +1545,7 @@ def test_inheritance_metadata_says_whether_it_was_applied():
     assert triplets.validation.validate_shacl(data, io_shapes(), engine="pandas").attrs["validation"][
         "inheritance"] is False                                     # no rdf_map: nothing applied
     applied = triplets.validation.validate_shacl(data, io_shapes(), engine="pandas", rdf_map=SCOPED_SCHEMA,
-                                                 rdf_map_scope="*")
+                                                 rdf_map_scope="*", inheritance=True)
     assert applied.attrs["validation"]["inheritance"] is True
 
 
@@ -1578,7 +1582,7 @@ def test_pyshacl_ont_graph_abstract_target():
     graph.parse(data=PREFIX + shape, format="turtle")
     bare = triplets.validation.validate_shacl(data, graph, engine="pyshacl")
     assert violating(bare, "sh:minCount") == set()
-    bound = triplets.validation.validate_shacl(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA, rdf_map_scope="*")
+    bound = triplets.validation.validate_shacl(data, graph, engine="pyshacl", rdf_map=TOY_SCHEMA, rdf_map_scope="*", inheritance=True)
     assert violating(bound, "sh:minCount") == {("b1", None), ("d1", None)}
 
 
