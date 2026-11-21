@@ -581,6 +581,10 @@ united, differing values kept as the list of distinct values):
 | `aborted` | True when `abort_on_first` met a Violation; the report may then be partial |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
+| `source_shapes` | `{shape id: N-Triples text}` — the defining triples (CBD) of each violated shape, blank-node labels as in `SOURCE_SHAPE`; `{}` for a schema run. Read by the SHACL report only (`shacl_report.shape_triples(text)` gives the graph) |
+
+Every value is a plain Python value (str, number, bool, None, list, dict):
+pandas copies `attrs` at every frame operation, and the copy stays cheap.
 
 The coverage keys turn the compile/engine warnings into data: a report that
 says "0 violations" also says whether every shape actually ran. Empty coverage
@@ -628,7 +632,7 @@ semantics), but every message entry is column-driven — drop a column
 enrichment itself is opt-in.
 
 The SHACL report additionally **embeds the violated shapes' defining triples**
-(CBD, stamped by `validate_shacl()` into the run metadata), so `sh:sourceShape` is
+(CBD, stamped by `validate_shacl()` into the run metadata as `source_shapes`), so `sh:sourceShape` is
 never an empty blank node — the `sh:in` list and every other constraint
 parameter are machine-recoverable from the report alone. SARIF carries the
 located line as the native `region.snippet.text`. All of this happens in the

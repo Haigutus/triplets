@@ -19,7 +19,7 @@ import triplets
 
 from triplets.export_schema import schemas
 
-from _parity import canon_violations
+from _parity import canon_violations, is_plain
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -728,3 +728,23 @@ def test_skipped(case, engine):
     meta = violations.attrs["validation"]
     if note:
         assert any(note in entry for entry in meta["skipped_shapes"] + meta["skipped_components"])
+
+
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_run_metadata_is_plain(engine):
+    """attrs["validation"] holds builtin values only — the violated shapes' definitions
+    as text — and the SHACL report embeds the same definitions, blank nodes included."""
+    import rdflib
+    from rdflib.compare import isomorphic
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    case = "class"
+    violations = triplets.validation.validate_shacl(frame(CASES[case][1]), compiled(case), engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*")
+    meta = violations.attrs["validation"]
+    assert len(violations) and meta["source_shapes"] and is_plain(violations.attrs)
+    report = triplets.validation.shacl_report.violations_to_report_graph(violations)
+    for shape in violations["SOURCE_SHAPE"].unique():   # an anonymous property shape
+        node = rdflib.BNode(shape)
+        assert (None, rdflib.URIRef("http://www.w3.org/ns/shacl#sourceShape"), node) in report
+        assert isomorphic(report.cbd(node), compiled(case).graph.cbd(node))

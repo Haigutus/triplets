@@ -207,7 +207,7 @@ def _run(violations, group, sources, source_root):
         # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
                        if key not in ("started_at", "generated_at", "creator",
-                                      "source_shapes")   # in-memory graphs, SHACL report only
+                                      "source_shapes")   # shape triples, SHACL report only
                        and value is not None} or None,
         "results": results,
     })

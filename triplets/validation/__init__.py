@@ -288,19 +288,20 @@ def _expected(violations, ir):
             zip(violations["SOURCE_SHAPE"], violations["KEY"], violations["VIOLATION_TYPE"])]
 
 
-def _source_shape_graphs(violations, compiled):
-    """{shape id: rdflib CBD graph} of the violated shapes — the SHACL report
-    embeds these so sh:sourceShape is never an empty node (term identity is
-    preserved: the CBD's blank nodes ARE the compiled graph's, so they align
-    with the report's sh:sourceShape labels). sh:deactivated as the run used it."""
-    graphs = {}
+def _source_shapes(violations, compiled):
+    """{shape id: N-Triples text} of the violated shapes' definitions (CBD) — the
+    SHACL report embeds these so sh:sourceShape is never an empty node. Text, so
+    the frame's attrs stay plain values; the blank-node labels in it are the
+    compiled graph's, the ones SOURCE_SHAPE names (shacl_report.shape_triples
+    reads them back unchanged). sh:deactivated as the run used it."""
+    texts = {}
     if compiled.graph is None:           # schema-compiled IR — no shapes graph to embed
-        return graphs
+        return texts
     for shape in set(violations["SOURCE_SHAPE"].dropna().astype(str)):
         cbd = compiled.graph.cbd(_term(shape))
         if len(cbd):
-            graphs[shape] = _mark_switched_off(cbd, compiled)
-    return graphs
+            texts[shape] = _mark_switched_off(cbd, compiled).serialize(format="nt")
+    return texts
 
 
 def _message_sources(violations, ir):
@@ -524,9 +525,9 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "skipped_shapes": skipped_shapes,
         "relaxed_constraints": list(notes["relaxed_constraints"]),
         "skipped_components": skipped_components,
-        # rdflib graphs, in-memory only — the SHACL report embeds them;
-        # SARIF properties and the csv/excel sidecars skip this key
-        "source_shapes": _source_shape_graphs(violations, compiled),
+        # the violated shapes' definitions as N-Triples — the SHACL report embeds
+        # them; SARIF properties and the csv/excel sidecars skip this key
+        "source_shapes": _source_shapes(violations, compiled),
     }
 
 

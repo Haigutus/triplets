@@ -84,6 +84,23 @@ _COMPONENT_MAP = {
 }
 
 
+class _SameLabels(dict):
+    """The N-Triples parser's blank-node map (``bnode_context``) that keeps every label."""
+
+    def get(self, label, default=None):
+        return label
+
+
+def shape_triples(text, graph=None):
+    """A shape definition of the run metadata (``source_shapes``: N-Triples text) →
+    its triples in *graph* (a new one by default), the blank-node labels kept:
+    they are the ones SOURCE_SHAPE names."""
+    import rdflib
+
+    graph = rdflib.Graph() if graph is None else graph
+    return graph.parse(data=text, format="nt", bnode_context=_SameLabels())
+
+
 def report_to_violations(report_graph, shapes_graph=None):
     """ValidationReport rdflib graph → violations DataFrame (single columnar pass).
 
@@ -235,12 +252,11 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.bind("prov", prov)
     graph.bind("dcterms", dcterms)
 
-    # embed the violated shapes' definitions (CBD graphs stamped by
-    # validate_shacl()) so sh:sourceShape is never an empty blank node — the
-    # constraint parameters (sh:in list, sh:minCount, ...) are IN the report
-    for shape_graph in meta.get("source_shapes", {}).values():
-        for triple in shape_graph:
-            graph.add(triple)
+    # embed the violated shapes' definitions (CBD, stamped by validate_shacl())
+    # so sh:sourceShape is never an empty blank node — the constraint
+    # parameters (sh:in list, sh:minCount, ...) are IN the report
+    for text in meta.get("source_shapes", {}).values():
+        shape_triples(text, graph)
 
     language = run_language(violations)
 
@@ -462,7 +478,7 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
 def _meta_rows(meta):
     """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out; an
     empty list keeps one blank row so "none" is stated, not implied.
-    source_shapes (in-memory rdflib graphs) belongs to the SHACL report only."""
+    source_shapes (the shapes' triples) belongs to the SHACL report only."""
     return [(key, item) for key, value in meta.items() if key != "source_shapes"
             for item in ((value or ("",)) if isinstance(value, (list, tuple)) else (value,))]
 

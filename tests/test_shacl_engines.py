@@ -1412,7 +1412,8 @@ def test_report_shapes_carry_the_run_flags(engine_name):
         assert findings(v) == {("b1", "sh:closed")}
         shapes = v.attrs["validation"]["source_shapes"]
         assert set(shapes) == {CIM + "BreakerShape"}
-        cbd = shapes[CIM + "BreakerShape"]
+        assert isinstance(shapes[CIM + "BreakerShape"], str)        # N-Triples, blank-node labels kept
+        cbd = triplets.validation.shacl_report.shape_triples(shapes[CIM + "BreakerShape"])
         assert {str(shape) for shape, _ in cbd.subject_objects(deactivated)} == flagged
         assert {name, description} <= {str(node) for node in cbd.subjects()}
     assert len(list(compiled.graph.subject_objects(deactivated))) == 1   # the compiled graph is untouched

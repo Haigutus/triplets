@@ -102,6 +102,19 @@ def canon_violations(violations):
     return set(frame.astype(object).where(frame.notna(), None).itertuples(index=False, name=None))
 
 
+PLAIN_TYPES = (str, int, float, bool, type(None), list, dict, tuple)
+
+
+def is_plain(value):
+    """Only builtin values, by exact type (an rdflib term or a numpy scalar subclasses
+    str / float), all the way down — what pandas deep-copies with ``attrs`` at every operation."""
+    if type(value) not in PLAIN_TYPES:
+        return False
+    if isinstance(value, dict):
+        return all(is_plain(key) and is_plain(item) for key, item in value.items())
+    return not isinstance(value, (list, tuple)) or all(map(is_plain, value))
+
+
 def frames_equal(a, b):
     fa, fb = canon_frame(a), canon_frame(b)
     if fa is None or fb is None:

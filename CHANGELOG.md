@@ -556,6 +556,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **The run metadata is plain values: operations on a violations frame no longer
+  deep-copy rdflib graphs.** `attrs["validation"]["source_shapes"]` held one
+  `rdflib.Graph` per violated shape, which pandas deep-copies with `attrs` at every
+  frame and column operation (55 to 115 ms each on a run with 82 violated shapes). It
+  now holds the same definitions as N-Triples text per shape id
+  (`triplets.validation.shacl_report.shape_triples(text)` reads one back, blank-node
+  labels kept); the SHACL report embeds the same triples as before.
 - **SHACL report: `sh:value` has the term kind of the data**, by the schema entry type of
   the KEY (`rdf_map=` on `export_to_shacl_report` / `violations_to_report_graph`): the
   referenced object's IRI for an Association (`<urn:uuid:…>`, an absolute IRI as it is),
