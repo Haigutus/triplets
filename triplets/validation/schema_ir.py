@@ -31,6 +31,8 @@ import json
 import logging
 import os
 
+from urllib.parse import quote
+
 import pandas
 
 from .._header import _PROPERTY_TYPES
@@ -177,8 +179,9 @@ def _associations(sections, entries):
 def _shape_prefix(sections):
     """Shape-id namespace of a scope: one per scope, so findings of different
     scopes never share a shape (SARIF groups by shape); the local name is the
-    class (``Breaker`` / ``Breaker.IdentifiedObject.name``)."""
-    return SCHEMA_SHAPES + "".join(f":{section}" for section in sections or ()) + "#"
+    class (``Breaker`` / ``Breaker.IdentifiedObject.name``). ``:`` and ``#`` separate
+    the parts, so a section name is percent-encoded (``EQ#1`` → ``EQ%231``)."""
+    return SCHEMA_SHAPES + "".join(f":{quote(section, safe='')}" for section in sections or ()) + "#"
 
 
 def _class_meta(sections, entries):

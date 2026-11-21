@@ -743,7 +743,9 @@ their namespace (`urn:triplets:schema:EQ:OP:SC#Breaker.IdentifiedObject.name`),
 so findings of different scopes never share a rule; the SARIF ruleId is the scope, the
 shape's local name and the constraint
 (`EQ:OP:SC:Breaker.IdentifiedObject.name/xsd:minOccurs`; `Breaker.IdentifiedObject.name/xsd:minOccurs`
-without a scope).
+without a scope), with the profile names sorted: `rdf_map_scope=["OP", "EQ"]` and
+`["EQ", "OP"]` are one rule (the shape id keeps the given order). `:` and `#` separate
+the parts of a schema shape id; a section name is percent-encoded in it.
 The same vectorized engines run everything (plans cached per compiled
 schema); the pyshacl engine refuses schema-compiled IR. **Results do not
 masquerade as SHACL**: constraint language `"rdfs"`, violation types

@@ -23,7 +23,7 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, REFERENCED_OBJECT, enrich
 from .locations import LOCATION_COLUMNS, check_source_root, locate_missing, relative_sources
-from .shacl_report import SCHEMA_SHAPES, UNEXPORTED, _expand, message_prefix, profile_names, profile_text, run_language
+from .shacl_report import SCHEMA_SHAPES, SCHEMA_SHAPE_STARTS, UNEXPORTED, _expand, message_prefix, profile_names, profile_text, run_language
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -245,11 +245,13 @@ def _samples(records):
 def _shape_name(shape, shared=()):
     """The shape part of a ruleId, from the shape IRI alone: its local name; a schema
     shape keeps its scope, so one class and key checked under two scopes are two rules
-    (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` → ``EQ:OP:Breaker.Switch.open``).
+    (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` → ``EQ:OP:Breaker.Switch.open``) —
+    the profile names sorted, so the order of ``rdf_map_scope`` makes no other rule.
     A local name in *shared* — one that several shapes have — gets eight hex digits of
     the IRI's SHA-1 (``AllowedClasses-property-1f0c9a2e``)."""
-    if shape.startswith(SCHEMA_SHAPES):
-        return shape.removeprefix(SCHEMA_SHAPES).replace("#", ":").lstrip(":")
+    if shape.startswith(SCHEMA_SHAPE_STARTS):
+        scope, _, name = shape.removeprefix(SCHEMA_SHAPES).partition("#")
+        return ":".join((*sorted(filter(None, scope.split(":"))), name))
     name = split_iri(shape)[1]
     return f"{name}-{hashlib.sha1(shape.encode('utf-8')).hexdigest()[:8]}" if name in shared else name
 

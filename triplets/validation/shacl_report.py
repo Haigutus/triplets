@@ -22,8 +22,10 @@ from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS,
 logger = logging.getLogger(__name__)
 
 VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"]
-# SOURCE_SHAPE of a schema finding: ``urn:triplets:schema[:<profile>…]#<Class>[.<KEY>]``
+# SOURCE_SHAPE of a schema finding: ``urn:triplets:schema[:<profile>…]#<Class>[.<KEY>]`` —
+# ``:`` and ``#`` separate, so a profile name is percent-encoded (schema_ir._shape_prefix)
 SCHEMA_SHAPES = "urn:triplets:schema"
+SCHEMA_SHAPE_STARTS = (SCHEMA_SHAPES + ":", SCHEMA_SHAPES + "#")   # with a scope, without one
 
 
 def run_language(violations):
@@ -34,7 +36,7 @@ def run_language(violations):
     if language:
         return language
     shapes = violations["SOURCE_SHAPE"].dropna().astype(str)
-    return "rdfs" if len(shapes) and shapes.str.startswith(SCHEMA_SHAPES).all() else "shacl"
+    return "rdfs" if len(shapes) and shapes.str.startswith(SCHEMA_SHAPE_STARTS).all() else "shacl"
 
 
 def has_violation(violations):

@@ -266,7 +266,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is the scope, the shape's local name and the constraint:
   `EMTIOP:ACLineSegment.ACLineSegment.r/xsd:type`, `EQ:OP:SC:Breaker.IdentifiedObject.name/xsd:minOccurs`,
   `Breaker.IdentifiedObject.name/xsd:minOccurs`. It is the same for the same scope in every
-  run, and one class and key checked under two scopes are two rules. A one-profile scope
+  run, in any order of `rdf_map_scope` (the ruleId sorts the profile names; `SOURCE_SHAPE`
+  keeps the given order), and one class and key checked under two scopes are two rules.
+  `:` and `#` separate the parts of the shape id, so a section name is percent-encoded in
+  it (`EQ#1` → `EQ%231`); only an id that starts with `urn:triplets:schema:` or
+  `urn:triplets:schema#` is a schema shape. A one-profile scope
   keeps its 0.2.0 ruleId; a scope of several profiles had one rule per profile in 0.2.0, so
   its GitHub code scanning alerts close and re-open once on upgrade. A consumer that
   parses `SOURCE_SHAPE` or `properties.sourceShape` reads the new form.

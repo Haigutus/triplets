@@ -1001,3 +1001,24 @@ def test_rule_ids_of_shapes_sharing_a_name_do_not_depend_on_the_findings():
     assert rule_ids(bare) == expected
     document = build_sarif(violations)
     assert "shared_shape_names" not in document["runs"][0]["properties"]
+
+
+def test_schema_rule_id_does_not_follow_the_scope_order():
+    """The ruleId sorts the profile names of the scope; a section name with a separator
+    is percent-encoded in the shape id; a shape id that only starts like the schema
+    namespace is a SHACL shape."""
+    schema = {name: {"ACLineSegment": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                                       "parameters": ["IdentifiedObject.name"]},
+                     "IdentifiedObject.name": {"type": "Attribute", "xsd:minOccours": "1", "xsd:maxOccours": "1",
+                                               "xsd:type": "xsd:string"}} for name in ("OP", "EQ#1")}
+    ids = set()
+    for scope in (["OP", "EQ#1"], ["EQ#1", "OP"]):
+        violations = triplets.validation.validate_schema(frame(1), schema, rdf_map_scope=scope, engine="pandas")
+        assert set(violations["SOURCE_SHAPE"]) == {
+            "urn:triplets:schema:" + ":".join(name.replace("#", "%23") for name in scope) + "#ACLineSegment.IdentifiedObject.name"}
+        ids |= set(rule_ids(violations).values())
+    assert ids == {"EQ%231:OP:ACLineSegment.IdentifiedObject.name/xsd:minOccurs"}
+    other = violations.assign(SOURCE_SHAPE="urn:triplets:schemaX#MyShape")
+    other.attrs = {}
+    run = build_sarif(other)["runs"][0]
+    assert run["tool"]["driver"]["name"] == "triplets-shacl" and run["tool"]["driver"]["rules"][0]["id"] == "MyShape/xsd:minOccurs"
