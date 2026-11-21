@@ -15,9 +15,9 @@ import numpy
 import pandas
 
 from .locations import check_source_root, locate_missing, relative_sources
-from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
-                   XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
-                   namespaces, split_iri)
+from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS, TYPE_KEY,
+                   XSD_NS, CIM_NS, absolute_id, absolute_key, absolute_name, absolute_value, decode_iri, is_iri,
+                   load_rdf_map, local_id, local_key, local_value, namespaces, split_iri, value_types)
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +176,14 @@ def violations_to_report_graph(violations, report_source=None, report_references
     report_to_violations; KEYs expand through the export schema namespaces —
     ``rdf_map`` — ``undefined_namespace`` for names it lacks, unless already URIs).
 
+    ``sh:value`` has the term kind the schema entry type of the KEY gives it
+    (:func:`~triplets.iri.absolute_value`): the IRI of the referenced object for
+    an Association, the enumeration value IRI for an Enumeration, the class IRI
+    for ``Type`` (also without ``rdf_map``), a plain literal with the VALUE text
+    for an Attribute and for a KEY the schema does not define. A reference
+    VALUE that is a schema name is that name's IRI: the class a
+    ``( association rdf:type )`` path reports.
+
     A result carries several plain-text ``sh:resultMessage``\ s when the frame
     has the context/location columns: the engine message, the shape and
     schema descriptions (context.enrich) and the source position
@@ -209,7 +217,16 @@ def violations_to_report_graph(violations, report_source=None, report_references
         creator = f"{creator} (engine: {meta['engine']})"
 
     schema_namespaces = namespaces(rdf_map)
+    schema_value_types = value_types(rdf_map)
     expand = lambda value: _expand(value, schema_namespaces, undefined_namespace)  # noqa: E731
+
+    def value_term(key, value):
+        if key != TYPE_KEY and schema_value_types.get(key) not in ("reference", "enum"):
+            return rdflib.Literal(value)
+        if value in schema_namespaces:
+            return rdflib.URIRef(absolute_name(value, schema_namespaces))
+        return rdflib.URIRef(absolute_value(key, value, schema_namespaces, schema_value_types,
+                                            undefined_namespace=undefined_namespace)[1])
     sh = rdflib.Namespace(SH_NS)
     prov = rdflib.Namespace(PROV_NS)
     dcterms = rdflib.Namespace(DCTERMS_NS)
@@ -250,7 +267,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
         if pandas.notna(row.KEY):
             graph.add((result, sh.resultPath, rdflib.URIRef(expand(row.KEY))))
         if pandas.notna(row.VALUE):
-            graph.add((result, sh.value, rdflib.Literal(row.VALUE)))
+            graph.add((result, sh.value, value_term(row.KEY, row.VALUE)))
         if pandas.notna(row.VIOLATION_TYPE):
             graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(expand(row.VIOLATION_TYPE))))
         for message in _messages(row, language):
@@ -401,7 +418,10 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         Plain labels — not the shapes object ``to_sarif(shapes=)`` takes.
         Default: the shape file names from ``violations.attrs["validation"]``.
     rdf_map : dict or str, optional
-        Export schema — ``sh:resultPath`` KEYs expand to their profile namespace.
+        Export schema — ``sh:resultPath`` KEYs expand to their profile namespace,
+        and ``sh:value`` of an Association / Enumeration KEY is an IRI (the
+        referenced object, the enumeration value); without it every value but
+        a ``Type`` is a plain literal (see violations_to_report_graph).
     undefined_namespace : str, default CIM100
         Namespace for KEYs the schema does not declare (every KEY without one).
     source_root : str or Path, optional

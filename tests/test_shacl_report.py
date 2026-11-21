@@ -87,6 +87,43 @@ def test_blank_node_result_path_resolves_through_the_shapes_graph():
     assert list(report_to_violations(report)["KEY"]) == [str(path)]
 
 
+def test_value_term_kind_follows_the_schema_entry_type():
+    """sh:value is the node the data has: an IRI for a reference, an enumeration value and a
+    class; a literal for an attribute (also one that reads like a UUID) and for an undefined KEY."""
+    import rdflib
+    cim = "http://iec.ch/TC57/CIM100#"
+    uuid = "00000000-0000-4000-8000-000000000001"
+    rdf_map = {"Bay": {"type": "Class", "namespace": cim},
+               "Equipment.EquipmentContainer": {"type": "Association", "namespace": cim},
+               "Breaker.kind": {"type": "Enumeration", "namespace": cim},
+               "BreakerKind.air": {"type": "EnumerationValue", "namespace": cim},
+               "IdentifiedObject.mRID": {"type": "Attribute", "namespace": cim, "xsd:type": "xsd:string"}}
+    values = [("Equipment.EquipmentContainer", uuid), ("Equipment.EquipmentContainer", "http://example.org/bay"),
+              ("Equipment.EquipmentContainer", "Bay"),                    # ( association rdf:type ) path
+              ("Breaker.kind", "BreakerKind.air"), ("IdentifiedObject.mRID", uuid), ("Extension.ref", uuid),
+              ("Type", "Bay")]
+    violations = pandas.DataFrame([("b1", key, value, "sh:class", "m", "Violation", None) for key, value in values],
+                                  columns=VIOLATION_COLUMNS)
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+
+    def terms(**kwargs):
+        graph = violations_to_report_graph(violations, **kwargs)
+        return {(str(graph.value(result, sh.resultPath)).removeprefix(cim), value)
+                for result, value in graph.subject_objects(sh.value)}
+
+    literals = {(key, rdflib.Literal(value)) for key, value in values}
+    assert terms() == literals - {("Type", rdflib.Literal("Bay"))} | {(str(rdflib.RDF.type), rdflib.URIRef(cim + "Bay"))}
+    assert terms(rdf_map=rdf_map) == {
+        ("Equipment.EquipmentContainer", rdflib.URIRef(f"urn:uuid:{uuid}")),
+        ("Equipment.EquipmentContainer", rdflib.URIRef("http://example.org/bay")),
+        ("Equipment.EquipmentContainer", rdflib.URIRef(cim + "Bay")),
+        ("Breaker.kind", rdflib.URIRef(cim + "BreakerKind.air")),
+        ("IdentifiedObject.mRID", rdflib.Literal(uuid)), ("Extension.ref", rdflib.Literal(uuid)),
+        (str(rdflib.RDF.type), rdflib.URIRef(cim + "Bay"))}
+    back = report_to_violations(violations_to_report_graph(violations, rdf_map=rdf_map))
+    pandas.testing.assert_frame_equal(_canon(back), _canon(violations))
+
+
 def test_report_graph_shape():
     import rdflib
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")

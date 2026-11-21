@@ -866,7 +866,8 @@ violations.shacl.to_sarif(path="report.sarif", sources=[f"{repository}/models/gr
 violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
 # rdf_map= expands sh:resultPath KEYs to their profile namespace
-# (undefined_namespace for KEYs it lacks)
+# (undefined_namespace for KEYs it lacks) and writes sh:value of a reference
+# or an enumeration KEY as an IRI (a plain literal without it)
 violations.shacl.to_shacl_report(path="report.ttl", rdf_map=rdf_map)
 
 # tabular exports with the same metadata: CSV writes a report_meta.csv
