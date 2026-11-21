@@ -1,6 +1,7 @@
 """Tests for the SARIF 2.1.0 exporter (triplets.validation.sarif)."""
 import io
 import json
+import re
 
 from pathlib import Path
 from urllib.parse import quote
@@ -1027,3 +1028,31 @@ def test_schema_rule_id_does_not_follow_the_scope_order():
     other.attrs = {}
     run = build_sarif(other)["runs"][0]
     assert run["tool"]["driver"]["name"] == "triplets-shacl" and run["tool"]["driver"]["rules"][0]["id"] == "MyShape/xsd:minOccurs"
+
+
+ANONYMOUS = SHAPE + """
+[] a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:closed true ; sh:ignoredProperties ( rdf:type ) .
+"""
+
+
+def test_rule_ids_of_anonymous_shapes_are_the_same_in_every_parse():
+    """A blank-node shape has a new label at every parse; its ruleId is made of the named
+    shape above it and its path, or of a digest of its definition, on every engine."""
+    import rdflib
+    data = frame(2)
+    data.loc[len(data)] = (data["ID"][0], "IdentifiedObject.aliasName", "a", "g1")
+    runs = []
+    for engine in ("pandas", "polars", "pyshacl", "pandas"):
+        pytest.importorskip(engine)
+        compiled = triplets.validation.compile(rdflib.Graph().parse(
+            data="@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> ." + ANONYMOUS, format="turtle"))
+        runs.append(triplets.validation.validate_shacl(data, compiled, engine=engine, lexical=False))
+    labels = [set(run["SOURCE_SHAPE"]) for run in runs]
+    assert not labels[0] & labels[3]                                   # one engine, two parses: other labels
+    ids = [sorted(rule_ids(run).values()) for run in runs]
+    assert ids[0] == ids[1] == ids[2] == ids[3] and len(ids[0]) == 3
+    assert ids[0][:2] == ["NameShape.Conductor.length/sh:minCount", "NameShape.IdentifiedObject.name/sh:minCount"]
+    assert re.fullmatch(r"shape-[0-9a-f]{8}/sh:closed", ids[0][2])
+    joined = build_sarif(triplets.validation.concat_violations([runs[0], runs[3]]))["runs"][0]
+    assert sorted(rule["id"] for rule in joined["tool"]["driver"]["rules"]) == ids[0]      # two parses, one rule each
+    assert "anonymous_shapes" not in joined["properties"]

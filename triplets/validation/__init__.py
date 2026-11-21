@@ -57,7 +57,7 @@ from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, load_rdf_map, split_iri
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
-from .shacl_ir import MESSAGE_VARIABLE, _mark_switched_off, _term
+from .shacl_ir import MESSAGE_VARIABLE, _is_iri, _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_ir import schema_name
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
@@ -543,6 +543,7 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "relaxed_constraints": list(notes["relaxed_constraints"]),
         "skipped_components": skipped_components,
         "shared_shape_names": _shared_shape_names(compiled),
+        "anonymous_shapes": _anonymous_shapes(violations, compiled),
         # the violated shapes' definitions as N-Triples — the SHACL report embeds
         # them; SARIF properties and the csv/excel sidecars skip this key
         "source_shapes": _source_shapes(violations, compiled),
@@ -556,6 +557,38 @@ def _shared_shape_names(compiled):
     shapes = (compiled.base or compiled).ir["shape_id"].dropna().unique()
     names = Counter(split_iri(shape)[1] for shape in shapes)
     return sorted(name for name, count in names.items() if count > 1)
+
+
+def _anonymous_shapes(violations, compiled):
+    """{blank-node label: stable id} of the violated shapes without an IRI — the label
+    is new at every parse, the stable id is what the SARIF ruleId is made of: the
+    nearest named shape above it and its path (``…#BreakerShape.IdentifiedObject.name``);
+    a shape without a path, or with no named shape above it, takes eight hex digits of
+    the SHA-1 of its canonical definition instead of the path."""
+    labels = {shape for shape in violations["SOURCE_SHAPE"].dropna().astype(str) if not _is_iri(shape)}
+    if not labels or compiled.graph is None:
+        return {}
+    ir = (compiled.base or compiled).ir
+    rows = ir.loc[ir["shape_id"].isin(labels)].drop_duplicates("shape_id").set_index("shape_id")
+    stable = {}
+    for label in sorted(labels):
+        lineage = rows.at[label, "shapes"] if label in rows.index else ()
+        lineage = lineage[:lineage.index(label)] if label in lineage else ()   # the shapes above it
+        path = rows.at[label, "path"] if label in rows.index else None
+        named = next((shape for shape in reversed(lineage) if _is_iri(shape)), "urn:triplets:shape")
+        stable[label] = f"{named}.{path}" if isinstance(path, str) and named != "urn:triplets:shape" \
+            else f"{named}-{_definition_digest(compiled.graph, label)}"
+    return stable
+
+
+def _definition_digest(graph, label):
+    """Eight hex digits of the SHA-1 of a blank-node shape's definition (CBD), its
+    blank nodes labelled canonically: the same for the same Turtle in every parse."""
+    import hashlib
+    from rdflib.compare import to_canonical_graph
+
+    lines = sorted(to_canonical_graph(graph.cbd(_term(label))).serialize(format="nt").splitlines())
+    return hashlib.sha1("\n".join(lines).encode("utf-8")).hexdigest()[:8]
 
 
 def _iso(moment):

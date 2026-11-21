@@ -161,9 +161,12 @@ def _run(violations, group, sources, source_root):
     meta = {**meta, **names}
     language = run_language(violations)
     # one rule per ruleId: the schema shapes of one scope given in two orders are one rule
-    shared = _shared_names(frame["SOURCE_SHAPE"], meta.get("shared_shape_names"))
+    # (and an anonymous shape parsed twice: its stable id, not its blank-node label, names the rule)
+    stable = meta.get("anonymous_shapes") or {}
+    shapes = frame["SOURCE_SHAPE"].map(lambda shape: stable.get(shape, shape))
+    shared = _shared_names(shapes, meta.get("shared_shape_names"))
     groups = {}
-    for (shape, constraint), rows in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False):
+    for (shape, constraint), rows in frame.groupby([shapes, "VIOLATION_TYPE"], dropna=False, sort=False):
         groups.setdefault(_rule_id(shape, constraint, shared), []).extend(rows.to_dict("records"))
 
     rules, results = [], []

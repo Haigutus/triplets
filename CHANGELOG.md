@@ -566,6 +566,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **SARIF ruleIds of anonymous shapes are the same in every parse.** The ruleId of a
+  shape without an IRI (`sh:property [ … ]`) was its blank-node label
+  (`n3f…b1/sh:minCount`), new at every parse of the shapes, so every run opened new alerts
+  and closed the old ones. It is now the nearest named shape above it and its path
+  (`BreakerShape.IdentifiedObject.name/sh:minCount`), or eight hex digits of the SHA-1 of
+  the shape's definition where there is no path or no named shape above
+  (`attrs["validation"]["anonymous_shapes"]` maps the labels). Named shapes keep their
+  ruleIds; `SOURCE_SHAPE` and `properties.sourceShape` keep the label.
 - **`engine="pyshacl"` no longer crashes on a shape pyshacl gives up on.** pyshacl returns
   its `ValidationFailure` in place of the report (a `sh:sparql` query it does not accept),
   and the run ended in `AttributeError: 'ValidationFailure' object has no attribute
