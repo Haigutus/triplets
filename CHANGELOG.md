@@ -41,13 +41,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [#150](https://github.com/Haigutus/triplets/issues/150)).
 - **SARIF rule tags** — `rules[].properties.tags`: the constraint language (`shacl` /
   `rdfs`), the constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
-  rule's findings, distinct, at most 10 (what GitHub keeps); GitHub code scanning filters
+  rule's findings, distinct, at most 10 (what GitHub keeps: the profiles after the first
+  8 of a rule get no tag); a `PROFILE` cell is a list of section keys or the text a csv /
+  Excel export writes (`EQ, OP`), with the same tags; GitHub code scanning filters
   alerts by tag ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **SARIF configuration notifications for what a run did not evaluate** — one
   `invocations[0].toolConfigurationNotifications` entry (level `warning`) per
   `skipped_shapes` item (`descriptor.id` `triplets/skippedShape`) and per
   `skipped_components` item (`triplets/skippedComponent`), the reason or component name
-  as the message; the run property bag keeps both lists. A run without timestamps but
+  as the message; each kind the run has is declared in `tool.driver.notifications`
+  with a `shortDescription`; the run property bag keeps both lists. A run without timestamps but
   with skipped entries gets an invocation too. GitHub code scanning does not display
   invocation notifications; SARIF viewers do
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
@@ -55,27 +58,33 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `to_shacl_report`** (also `build_sarif`, `violations_to_report_graph`) — a file name
   that is an absolute path under that directory is written relative to it, with forward
   slashes. Every other name is written as given: a relative path, a path outside the
-  directory, a zip member. The rule covers every file name of the export: `SOURCE_URI`
+  directory, a file in a zip (`grid.zip/models/grid.xml`). The rule covers every file name of the export: `SOURCE_URI`
   (SARIF `artifactLocation.uri`, the SHACL report's `[context_location]` message), the
   `INSTANCE_LABEL` fallback location and the run metadata's `source` / `references`
   (SARIF run `properties`, whole-file fallback locations, rule help; SHACL
   `dcterms:source` / `dcterms:references`). `references` of a validation run are file
   names without directories, so they stay as they are; an absolute `report_references=`
-  is written relative. No name is joined with the working directory. The comparison is
-  lexical (symlinks are not resolved). Absolute names outside the directory are named in
-  one logged warning. Default `None` writes the names as given
+  is written relative. No name is joined with the working directory. Symlinks are
+  resolved in the directory and in the names before they compare. Absolute names outside the directory are named in
+  one logged warning. A `source_root` that is not a directory raises `ValueError`.
+  Default `None` writes the names as given
   ([#94](https://github.com/Haigutus/triplets/issues/94)).
 - **The referenced object as a SARIF related location** — for a reference finding
   (`sh:class`, reference `rdfs:range` / `triplets:range`, `triplets:missing`) whose referenced
   object is in the data and located in the sources, the SARIF result carries `relatedLocations[{id,
   message, logicalLocations, physicalLocation}]` (the `TARGET` text as the message, the
-  definition line, `source_root=` applies) and the `[context_message]` line links it as
+  definition line — the first `rdf:ID` / `rdf:about` element with its id in read order:
+  the plain files of `sources=` as given, then the members of the zips — `source_root=`
+  applies) and the `[context_message]` line links it as
   `referenced object [<id>](1) found — …` (SARIF 2.1.0 §3.11.6; an id holding `[`, `]` or `\`
-  stays unlinked); grouped results carry one per distinct referenced object of their samples.
+  stays unlinked); the logical location is `Type/id`; grouped results carry one per
+  referenced object their `[context_message]` line shows (three at most), each linked.
   A related location needs a located referenced object — `sources=` on the export, or `locate`
   after `enrich`: GitHub code scanning rejects an upload with a related location that has no
-  file position. A dangling reference gets none. New enrichment column
-  `TARGET_ID` (`enrich` with `data=`: the referenced object's id when it is in the data) and
+  file position. A dangling reference gets none. `data_scope=` on `export_to_sarif` /
+  `to_sarif` keeps the export's enrichment to the instances the run saw, as on `enrich`. New
+  enrichment columns `TARGET_ID` and `TARGET_TYPE` (`enrich` with `data=`: the referenced
+  object's id and Type when it is in the data) and
   location columns `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` (`locate_violations`, the same
   single pass; only referenced objects in the data are searched). The `TARGET` text in the
   frame, csv / Excel and the SHACL report is unchanged
@@ -233,6 +242,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **A file in a zip is named `<zip file name>/<member name>` in validation results**
+  (`grid.zip/models/grid.xml`; the zip's name without directories, the inner zip's for a
+  zip in a zip): `SOURCE_URI` / `TARGET_URI` from `locate` and from `sources=` on the
+  SARIF and SHACL report exports, `INSTANCE_LABEL` from `enrich`, and the run's `source`
+  (`attrs["validation"]`, SARIF run `properties`, `dcterms:source`) — one name per file
+  in one report. It was the member name alone, which reads as a path of the repository
+  and, with `source_root=`, could name another file there. The `label` row of the
+  parsed data is unchanged; the zip's name is read from its `belongsToContainer` row.
+  Two zips with the same file name and member give the same name.
 - **`iri.key_types(rdf_map)` returns name → dict**: `{"type": …}` plus `stereotype` /
   `rdf:type` where the entry has them (previously name → type string). For example,
   `key_types(rdf_map)["DateTimeStamp"]` is
@@ -495,6 +513,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **An open file handle in `sources=` is read from its start by every locate pass**
+  (`locate`, `to_sarif`, `to_shacl_report`) — a seekable handle is rewound before it is
+  read. Before, the second pass over one handle read nothing: a second export had no line
+  positions, without an error. A file-like source that gives no bytes (a stream that cannot
+  be rewound, in its second pass) is named in a logged warning.
 - **SARIF / SHACL report / CSV / Excel: a `PROFILE` cell holding a numpy array** (e.g. a
   list column after a polars → pandas conversion) is read as its profiles — before, an
   array of length 0 or ≥ 2 raised `ValueError` and a 1-element array was written as

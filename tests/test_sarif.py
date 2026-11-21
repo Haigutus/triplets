@@ -419,8 +419,9 @@ def test_tool_name_per_language():
 
 def test_skipped_entries_as_configuration_notifications():
     """One warning notification per skipped shape / component on
-    invocations[0]; the run property bag keeps the lists; no timestamps still
-    gives a valid invocation (executionSuccessful)."""
+    invocations[0], each kind the run has declared with a title in
+    tool.driver.notifications; the run property bag keeps the lists; no
+    timestamps still gives a valid invocation (executionSuccessful)."""
     meta = {"skipped_shapes": ["A: datatype conflict", "profile XX: no schema"],
             "skipped_components": ["sh:qualifiedValueShape"]}
     run = build_sarif(bare([None], language="rdfs", **meta))["runs"][0]
@@ -432,12 +433,18 @@ def test_skipped_entries_as_configuration_notifications():
         {"descriptor": {"id": "triplets/skippedComponent"}, "level": "warning",
          "message": {"text": "sh:qualifiedValueShape"}}]}]
     assert run["properties"] == {"language": "rdfs", **meta}
+    assert run["tool"]["driver"]["notifications"] == [
+        {"id": "triplets/skippedShape", "shortDescription": {"text": "Shape not evaluated"}},
+        {"id": "triplets/skippedComponent", "shortDescription": {"text": "Constraint component not evaluated"}}]
 
     timed = build_sarif(bare([None], generated_at="2026-01-01T00:00:00+00:00",
                              skipped_shapes=["A"], skipped_components=[]))["runs"][0]["invocations"][0]
     assert list(timed) == ["executionSuccessful", "endTimeUtc", "toolConfigurationNotifications"]
     assert len(timed["toolConfigurationNotifications"]) == 1
-    assert "invocations" not in build_sarif(bare([None], skipped_shapes=[], skipped_components=[]))["runs"][0]
+    one_kind = build_sarif(bare([None], skipped_shapes=["A"], skipped_components=[]))["runs"][0]
+    assert [descriptor["id"] for descriptor in one_kind["tool"]["driver"]["notifications"]] == ["triplets/skippedShape"]
+    clean = build_sarif(bare([None], skipped_shapes=[], skipped_components=[]))["runs"][0]
+    assert "invocations" not in clean and "notifications" not in clean["tool"]["driver"]
 
 
 def test_profile_cells_as_tags_and_text():
@@ -449,11 +456,24 @@ def test_profile_cells_as_tags_and_text():
     tags = lambda violations: build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
     assert tags(bare([numpy.array(["EQ"], dtype=object), ["OP", None, ""], ("SC",), "SSH", ""])) \
         == ["shacl", "sh:minCount", "EQ", "OP", "SC", "SSH"]
+    assert tags(bare(["EQ, OP", " OP,SC ,", "EQ,  SSH"])) == ["shacl", "sh:minCount", "EQ", "OP", "SC", "SSH"]
     assert profile_text(numpy.array(["EQ", "OP"], dtype=object)) == "EQ, OP"
     assert profile_text(numpy.array([], dtype=object)) is None
     assert profile_text(["EQ", None]) == "EQ"
     assert profile_text(["EQ", "OP"]) == profile_text(("EQ", "OP")) == profile_text("EQ, OP") == "EQ, OP"
     assert profile_text(None) is profile_text(float("nan")) is profile_text([]) is profile_text("") is None
+
+
+def test_tags_equal_after_csv_and_excel_round_trip():
+    """A frame written to csv or Excel and read back holds its profiles as text
+    ("EQ, OP"): the export gives the tags of the direct export."""
+    pytest.importorskip("openpyxl")
+    violations = bare([["EQ", "OP"], ["OP", "SC"], None])
+    tags = lambda frame: build_sarif(frame)["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
+    for read_back in (pandas.read_csv(violations.shacl.to_csv(export_to_memory=True)[0]),
+                      pandas.read_excel(violations.shacl.to_excel(export_to_memory=True), sheet_name="violations")):
+        assert read_back["PROFILE"].tolist()[:2] == ["EQ, OP", "OP, SC"]
+        assert tags(read_back) == tags(violations) == ["shacl", "sh:minCount", "EQ", "OP", "SC"]
 
 
 def file_names(document):
@@ -533,6 +553,7 @@ def test_source_root_outside_names_one_warning(tmp_path, caplog):
     data, violations = parsed_run(tmp_path / "repo", model)
     enriched = violations.shacl.enrich(data=data)
     root = tmp_path / "elsewhere"
+    root.mkdir()
 
     with caplog.at_level("WARNING", logger="triplets.validation.locations"):
         document = build_sarif(enriched, sources=[model], source_root=root)
@@ -540,6 +561,62 @@ def test_source_root_outside_names_one_warning(tmp_path, caplog):
     assert file_names(document) == {model}
     assert [record.getMessage() for record in caplog.records] \
         == [f"1 file name(s) outside source_root {root} keep their names: {model}"] * 2
+
+
+def test_zip_member_has_one_name_in_the_log(tmp_path):
+    """A file parsed from a zip is <zip file name>/<member name> in every place of
+    the log — located by sources=, from the label alone, the run's source list —
+    with source_root too: not the name of the repository file that has the
+    member's own name. The run's source is the same on every data flavor."""
+    import zipfile
+    root = tmp_path / "repo"
+    data, _ = parsed_run(root, str(root / "models" / "grid.xml"))          # the repository's own models/grid.xml
+    archive = str(root / "grid.zip")
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("models/grid.xml", XML)
+    shapes = str(root / "shapes" / "shapes.ttl")
+    data = pandas.read_RDF([archive])
+    violations = data.shacl.validate_shacl(shapes, engine="pandas")
+    assert violations.attrs["validation"]["source"] == ["grid.zip/models/grid.xml"]
+    enriched = violations.shacl.enrich(data=data)
+    assert set(enriched["INSTANCE_LABEL"]) == {"grid.zip/models/grid.xml"}
+
+    for group in (True, False):
+        for sources in (None, [archive]):
+            document = build_sarif(enriched, group=group, sources=sources, source_root=root)
+            assert file_names(document) == {"grid.zip/models/grid.xml"}
+    null_id = build_sarif(enriched.assign(ID=None, INSTANCE_LABEL=None), source_root=root)   # the run's first source
+    assert file_names(null_id) == {"grid.zip/models/grid.xml"}
+
+    polars = pytest.importorskip("polars")
+    frame = polars.from_pandas(data.astype(str))
+    assert frame.shacl.validate_shacl(shapes, engine="polars").attrs["validation"]["source"] \
+        == ["grid.zip/models/grid.xml"]
+    duckdb = pytest.importorskip("duckdb")
+    connection = duckdb.connect()
+    connection.register("triplets", data.astype(str))
+    assert triplets.validation.validate_shacl(connection, shapes, engine="duckdb").attrs["validation"]["source"] \
+        == ["grid.zip/models/grid.xml"]
+
+
+def test_source_root_must_be_a_directory(tmp_path):
+    """source_root naming no directory — a path that does not exist, a file —
+    raises ValueError in both exports, with or without names to write, naming
+    the path as given, before the data or the sources are read (the source
+    that does not exist is never opened)."""
+    import re
+    model = str(tmp_path / "repo" / "models" / "grid.xml")
+    data, violations = parsed_run(tmp_path / "repo", model)
+    absent = [str(tmp_path / "absent.xml")]
+    for source_root in (tmp_path / "absent", model, "absent/../absent"):
+        message = re.escape(f"source_root is not a directory: {source_root}")
+        for frame in (violations, violations.iloc[:0]):
+            with pytest.raises(ValueError, match=message):
+                build_sarif(frame, sources=absent, source_root=source_root)
+            with pytest.raises(ValueError, match=message):
+                frame.shacl.to_sarif(data=data, sources=absent, source_root=source_root, export_to_memory=True)
+            with pytest.raises(ValueError, match=message):
+                frame.shacl.to_shacl_report(sources=absent, source_root=source_root, export_to_memory=True)
 
 
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -625,14 +702,15 @@ def context_message(result):
     return next(line for line in result["message"]["text"].split("\n") if line.startswith("[context_message] "))
 
 
-def logical(ref):
-    return [{"fullyQualifiedName": ref, "name": ref, "kind": "object"}]
+def logical(ref, object_type="Substation"):
+    """The logical location of a referenced object: Type/id, the id alone without a Type."""
+    return [{"fullyQualifiedName": f"{object_type}/{ref}" if object_type else ref, "name": ref, "kind": "object"}]
 
 
 def test_related_location_per_row(tmp_path):
     """Per row with sources=: the referenced object found in the data and in the
     sources is relatedLocations[0] — id 1, the TARGET as its message (Type and name),
-    the id as its logical location, its definition line — linked from
+    Type/id as its logical location, its definition line — linked from
     [context_message] by its leading id; source_root applies. A dangling reference
     has no related location, its line no link."""
     violations, xml = references(tmp_path)
@@ -684,8 +762,8 @@ def test_related_locations_grouped(tmp_path):
 
 def test_related_locations_grouped_mixed_and_many(tmp_path):
     """One group with a dangling and a found reference: only the found one is a related
-    location and linked. More than three distinct: three lines shown, each linked, the
-    related locations go on past 3 (one per distinct referenced object of the samples)."""
+    location and linked. More than three distinct: three lines shown, each linked, and
+    a related location for those three only — every related location is linked."""
     violations, xml = class_findings(tmp_path, ["ghost", "s1"], found=["s1"])
     mixed = build_sarif(violations, sources=[xml])["runs"][0]["results"][0]
     assert [(related["id"], related["logicalLocations"]) for related in mixed["relatedLocations"]] \
@@ -698,7 +776,7 @@ def test_related_locations_grouped_mixed_and_many(tmp_path):
     many = build_sarif(violations, sources=[xml])["runs"][0]["results"][0]
     assert [(related["id"], related["logicalLocations"], related["physicalLocation"]["region"]["startLine"])
             for related in many["relatedLocations"]] == [(index + 1, logical(f"s{index}"), index + 3)
-                                                         for index in range(5)]
+                                                         for index in range(3)]
     assert context_message(many) == ("[context_message] referenced object [s0](1) found — Substation; "
                                      "referenced object [s1](2) found — Substation; "
                                      "referenced object [s2](3) found — Substation; … (5 distinct)")
@@ -736,6 +814,29 @@ def test_related_location_when_located_before_enriched(tmp_path):
     assert json.loads(through_exporter.read()) == expected
 
 
+def test_open_file_handle_is_read_again(tmp_path):
+    """One open file handle as the source of every pass: locate, then the export
+    that locates the referenced objects, then a second export — each reads the
+    file from its start, and the log is the one the path gives (the handle's
+    name is the path)."""
+    violations, data, xml = reference_run(tmp_path)
+    expected = build_sarif(triplets.validation.enrich(violations, data=data, rdf_map=REFERENCE_SCHEMA),
+                           group=False, sources=[xml])
+    assert by_id(expected)["b2"]["relatedLocations"][0]["physicalLocation"]["region"]["startLine"] == 4
+
+    with open(xml, "rb") as handle:
+        located = violations.shacl.locate(sources=[handle])
+        assert located["SOURCE_LINE"].notna().all()
+        through_exporter = located.shacl.to_sarif(data=data, rdf_map=REFERENCE_SCHEMA, group=False,
+                                                  sources=[handle], export_to_memory=True)
+        assert json.loads(through_exporter.read()) == expected
+
+        for _ in range(2):                             # two exports of a frame not located
+            export = violations.shacl.to_sarif(data=data, rdf_map=REFERENCE_SCHEMA, group=False,
+                                               sources=[handle], export_to_memory=True)
+            assert json.loads(export.read()) == expected
+
+
 def test_locate_pass_keeps_source_columns_on_the_frame(tmp_path):
     """SOURCE_* columns on the frame are not located again by sources= — hand-stamped
     ones stay, a row stamped as not located keeps its whole-file fallback (b4 is
@@ -754,6 +855,19 @@ def test_locate_pass_keeps_source_columns_on_the_frame(tmp_path):
     located = triplets.validation.locate_violations(violations, [xml])     # nothing lacks: the sources are not read
     assert build_sarif(located, group=False, sources=[str(tmp_path / "absent.xml")]) \
         == build_sarif(located, group=False)
+
+
+def test_related_location_needs_a_target_text_and_type_is_optional(tmp_path):
+    """A related location is the one the [context_message] line links: a frame carrying
+    TARGET_ID and TARGET_URI but no TARGET text (not what enrich writes) has no line
+    and no related location. Without TARGET_TYPE the logical location is the id alone."""
+    violations, xml = references(tmp_path)
+    for group in (True, False):
+        document = build_sarif(violations.assign(TARGET=None), group=group, sources=[xml])
+        assert "relatedLocations" not in json.dumps(document) and "[context_message]" not in json.dumps(document)
+    untyped = by_id(build_sarif(violations.drop(columns=["TARGET_TYPE"]), group=False, sources=[xml]))["b2"]
+    assert untyped["relatedLocations"][0]["logicalLocations"] == logical("sub1", object_type=None)
+    assert context_message(untyped).startswith("[context_message] referenced object [sub1](1) found")
 
 
 def test_related_location_id_with_brackets_is_not_linked(tmp_path):

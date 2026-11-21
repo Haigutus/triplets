@@ -18,13 +18,16 @@ from .._engine_detect import flavor
 from ..iri import TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
+from .locations import member_name
 from .shacl_report import VIOLATION_COLUMNS
 
 logger = logging.getLogger(__name__)
 
+REFERENCED_OBJECT = "referenced object "       # + its id: how the TARGET text of a reference finding starts
+
 ENRICHMENT_COLUMNS = [
     "TARGET",                                     # data: what the finding found (reference, duplicates)
-    "TARGET_ID",                                  # data: the referenced object found (reference findings)
+    "TARGET_ID", "TARGET_TYPE",                   # data: the referenced object found (reference findings)
     "INSTANCE_ID", "INSTANCE_LABEL",              # data: which instance / file
     "OBJECT_TYPE", "OBJECT_NAME",                 # data: what the object is
     "SHAPE_NAME", "SHAPE_DESCRIPTION",            # shapes IR: sh:name / sh:description
@@ -41,8 +44,8 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
     violations : DataFrame from validate_shacl / validate_schema / validate_schema_references.
     data : triplet DataFrame, arrow or DuckDB connection, optional
         Source data — fills TARGET (the referenced object found, or not; the
-        duplicate values of a maximum-count finding), TARGET_ID (the id of a
-        reference finding's referenced object found in the data), INSTANCE_ID /
+        duplicate values of a maximum-count finding), TARGET_ID / TARGET_TYPE (the
+        id and Type of a reference finding's referenced object found in the data), INSTANCE_ID /
         INSTANCE_LABEL (the parsed file name) / OBJECT_TYPE / OBJECT_NAME. An
         object present in several instances is attributed to its first
         occurrence. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
@@ -162,7 +165,8 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
 
     - reference checks (``sh:class``, ``triplets:range`` — presented ``rdfs:range`` —
       and ``triplets:missing``; VALUE = the ref): the target's id, Type and name, or
-      the fact that it does not exist — a found target's id also in TARGET_ID;
+      the fact that it does not exist — a found target's id and Type also in
+      TARGET_ID and TARGET_TYPE;
     - valueType rows (``via_type``): the found type (the id is not carried);
     - ``sh:maxCount`` / ``xsd:maxOccurs``: the actual duplicate values.
 
@@ -170,7 +174,7 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
     ``triplets:range`` or the schema (*value_kinds*) declares its KEY an Association —
     an enumeration's ``rdfs:range`` is not.
     """
-    for column in ("TARGET", "TARGET_ID"):
+    for column in ("TARGET", "TARGET_ID", "TARGET_TYPE"):
         violations[column] = pandas.Series(None, index=violations.index, dtype=object)
     if violations.empty:
         return
@@ -194,16 +198,41 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
         def describe_reference(ref):
             found = types.get(ref)
             if found is None:
-                return f"referenced object {ref} not found in the data"
+                return f"{REFERENCED_OBJECT}{ref} not found in the data"
             name = names.get(ref)
-            return f'referenced object {ref} found — {found}' + (f' "{name}"' if name else "")
+            return f'{REFERENCED_OBJECT}{ref} found — {found}' + (f' "{name}"' if name else "")
 
         refs = violations.loc[of_class, "VALUE"].astype(str)
         violations.loc[of_class, "TARGET"] = refs.map(describe_reference)
-        violations.loc[of_class, "TARGET_ID"] = refs.where(refs.map(types.get).notna())
+        violations.loc[of_class, "TARGET_ID"] = refs.map(lambda ref: ref if ref in types else None)
+        violations.loc[of_class, "TARGET_TYPE"] = refs.map(types.get)
     if over_count.any():
         violations.loc[over_count, "TARGET"] = _found_values(
             violations.loc[over_count, ["ID", "KEY"]], data, table_name)
+
+
+def file_names(data, table_name="triplets"):
+    """{INSTANCE_ID: file name} from the data's Distribution meta rows (any input
+    flavor): the ``label`` (the parser convention), and for a file read from a
+    zip ``<zip file name>/<label>`` (its ``belongsToContainer`` row) — the name
+    the locate pass gives the same file (locations.member_name)."""
+    keys, columns = ("label", "belongsToContainer"), ["ID", "KEY", "VALUE", "INSTANCE_ID"]
+    kind = flavor(data)
+    if kind == "duckdb":
+        rows = data.execute(f"SELECT {', '.join(columns)} FROM {table_name} "
+                            f"WHERE KEY IN ('label', 'belongsToContainer')").fetchall()
+    elif kind == "polars":
+        rows = data.filter(data["KEY"].is_in(keys)).select(columns).rows()
+    else:   # pandas — and pyarrow through its arrow-backed pandas view
+        if kind == "pyarrow":
+            data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+        rows = list(data.loc[data["KEY"].isin(keys), columns].itertuples(index=False, name=None))
+    containers = {identifier: value for identifier, key, value, _ in rows if key == "belongsToContainer"}
+    names = {}
+    for identifier, key, value, instance in rows:
+        if key == "label" and value:
+            names.setdefault(str(instance), member_name(containers.get(identifier), value))
+    return names
 
 
 def _name_map(data, table_name="triplets"):
@@ -279,13 +308,7 @@ def _add_instance_context(violations, data):
         pandas.Series(instances[first].values, index=identifier[first]))
 
     # The parsed file name lives on the per-instance Distribution meta object
-    # (KEY="label" — the parser convention). TODO: exact code locations
-    # (line/region inside the source XML) would extend this path once the
-    # parser records them.
-    labels = data[data["KEY"] == "label"]
-    violations["INSTANCE_LABEL"] = violations["INSTANCE_ID"].map(
-        pandas.Series(labels["VALUE"].values, index=labels["INSTANCE_ID"].astype(str))
-        .groupby(level=0).first())
+    violations["INSTANCE_LABEL"] = violations["INSTANCE_ID"].map(file_names(data))
 
     for column, key in (("OBJECT_TYPE", TYPE_KEY), ("OBJECT_NAME", "IdentifiedObject.name")):
         rows = data[data["KEY"] == key]
