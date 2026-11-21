@@ -102,10 +102,12 @@ Features
 
 Notes
 -----
-- Every value is written as text and read back as text, so it returns as written,
-  numbers included (``1.0``, ``8e-5``, ``1.0712249999999999``): a number is a text
-  cell in Excel. A cell that is edited into a number cell is read as Excel stores
-  the number (``1.0`` -> ``1``, 15 significant digits).
+- Every value is written as text and read back as text, so it returns as written:
+  numbers (``1.0``, ``8e-5``, ``1.0712249999999999``), the texts ``NaN``, ``NA``,
+  ``null``, ``None`` and ``N/A``, and a text that starts with ``=`` (a text cell in
+  Excel, not a formula). A number is a text cell in Excel. A cell that is edited
+  into a number cell is read as Excel stores the number (``1.0`` -> ``1``, 15
+  significant digits).
 - An empty value is an empty cell, and an empty cell is no value: it is not
   written back.
 - Excel limits sheet names to 31 characters. Longer class names (e.g.
@@ -140,6 +142,10 @@ from uuid import uuid4
 from ..export import export_to_cimxml
 from ..parser import parse
 from ..parser.utils import RDF_XML_SUFFIXES
+
+# read options of every csv / excel cell: only an empty cell is no value — the texts
+# pandas reads as missing by default (NA, NaN, null, None, N/A, nan, …) are values
+TEXT_CELLS = {"keep_default_na": False, "na_values": [""]}
 from ..tools import filter_triplets_by_type, tableviews_to_triplets
 from . import add_common_arguments, excluded_types
 
@@ -368,14 +374,14 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                     if filename.endswith('.csv'):
                         sheet_name = os.path.basename(filename)[:-4]
                         csv_content = zf.read(filename).decode('utf-8')
-                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0, dtype=str)
+                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0, dtype=str, **TEXT_CELLS)
         elif os.path.isdir(input_path):
             # Read from directory
             for filename in os.listdir(input_path):
                 if filename.endswith('.csv'):
                     sheet_name = filename[:-4]
                     csv_path = os.path.join(input_path, filename)
-                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0, dtype=str)
+                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0, dtype=str, **TEXT_CELLS)
         else:
             raise ValueError(f"CSV format requires a directory or ZIP file, got: {input_path}")
 
@@ -481,10 +487,10 @@ def _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets=None, triplet
             logging.warning(f"Sheet '{s}' not found in Excel file, skipping")
 
     if valid_sheets:
-        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0, dtype=str))
+        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0, dtype=str, **TEXT_CELLS))
 
     if triplets_sheet and triplets_sheet in excel_obj.sheet_names:
-        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet, dtype=str)
+        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet, dtype=str, **TEXT_CELLS)
         _extract_raw_triplets(triplet_df, triplets_sheet, raw_triplets)
 
 

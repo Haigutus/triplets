@@ -177,3 +177,21 @@ def test_round_trip_with_metadata_writes_to_label(source, reference):
     cim_spreadsheet.cim_to_spreadsheet(relative, "model.xlsx")  # Python API keeps the metadata
     cim_spreadsheet.spreadsheet_to_cim("model.xlsx", "out", rdf_map=RDF_MAP, zip_output=False)
     assert triples([str(Path("out") / relative)]) == reference
+
+
+@pytest.mark.parametrize("fmt, spreadsheet", [("excel", "model.xlsx"), ("csv", "csv")])
+def test_round_trip_keeps_texts_that_read_as_missing_or_formula(tmp_path, monkeypatch, fmt, spreadsheet):
+    """NaN is a legal xsd:float text and NA a legal name: only an empty cell is no value;
+    a text starting with = is a text cell, not a formula."""
+    import pandas
+    monkeypatch.chdir(tmp_path)
+    texts = ["NaN", "NA", "null", "None", "N/A", "nan", "=1+2", "INF"]
+    rows = [(f"00000000-0000-0000-0000-{n:012d}", key, value, "i1") for n, text in enumerate(texts)
+            for key, value in (("Type", "ACLineSegment"), ("IdentifiedObject.name", text))]
+    data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data.export_to_cimxml(rdf_map=None, export_type="xml_per_instance", export_base_path=str(tmp_path))
+    (model,) = [path.name for path in tmp_path.glob("*.xml")]   # relative: to-cim writes the label under out
+    cim_spreadsheet.cim_to_spreadsheet(model, spreadsheet, format=fmt, zip_output=False)
+    cim_spreadsheet.spreadsheet_to_cim(spreadsheet, "out", format=fmt, zip_output=False)
+    back = triplets.parse([str(path) for path in Path("out").glob("*.xml")])
+    assert sorted(back.loc[back["KEY"] == "IdentifiedObject.name", "VALUE"]) == sorted(texts)

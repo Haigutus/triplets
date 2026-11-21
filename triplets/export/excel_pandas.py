@@ -14,6 +14,25 @@ from triplets.tools import triplets_to_tableviews
 logger = logging.getLogger(__name__)
 
 
+def _write_sheets(output, tableviews, apply_formatting):
+    """One sheet per tableview into *output*. Every value is a text cell: openpyxl
+    writes a text that starts with ``=`` as a formula, which reads back as no value."""
+    from openpyxl.utils import get_column_letter
+
+    with pandas.ExcelWriter(output, engine='openpyxl') as writer:
+        for class_type, class_data in tableviews.items():
+            class_data.to_excel(writer, sheet_name=class_type)
+            sheet = writer.sheets[class_type]
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.data_type == "f":
+                        cell.data_type = "s"
+            if apply_formatting:
+                for i in range(1, len(class_data.columns) + 2):
+                    sheet.column_dimensions[get_column_letter(i)].width = 38
+                sheet.freeze_panes = 'B2'
+
+
 def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True):
     """Export triplet data to Excel file(s), with each type on a separate sheet.
 
@@ -47,15 +66,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         output = BytesIO()
         output.name = filename
 
-        with pandas.ExcelWriter(output, engine='openpyxl') as writer:
-            for class_type, class_data in tableviews.items():
-                class_data.to_excel(writer, sheet_name=class_type)
-                if apply_formatting:
-                    from openpyxl.utils import get_column_letter
-                    sheet = writer.sheets[class_type]
-                    for i in range(1, len(class_data.columns) + 2):
-                        sheet.column_dimensions[get_column_letter(i)].width = 38
-                    sheet.freeze_panes = 'B2'
+        _write_sheets(output, tableviews, apply_formatting)
 
         output.seek(0)
 
@@ -82,15 +93,7 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
             output = BytesIO()
             output.name = file_name
 
-            with pandas.ExcelWriter(output, engine='openpyxl') as writer:
-                for class_type, class_data in tableviews.items():
-                    class_data.to_excel(writer, sheet_name=class_type)
-                    if apply_formatting:
-                        from openpyxl.utils import get_column_letter
-                        sheet = writer.sheets[class_type]
-                        for i in range(1, len(class_data.columns) + 2):
-                            sheet.column_dimensions[get_column_letter(i)].width = 38
-                        sheet.freeze_panes = 'B2'
+            _write_sheets(output, tableviews, apply_formatting)
 
             output.seek(0)
             exported_files.append(output)

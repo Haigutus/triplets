@@ -561,6 +561,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`cim-spreadsheet` keeps the values pandas reads as missing, and texts that start with
+  `=`.** A VALUE `NaN` (a legal `xsd:float`), `NA`, `null`, `None`, `N/A` or `nan` was
+  dropped on the way back from CSV and Excel, and a VALUE `=1+2` was written to Excel as
+  a formula and lost. Only an empty cell is no value now (the CLI reads with
+  `keep_default_na=False, na_values=[""]`), and `export_to_excel` writes every value as a
+  text cell.
 - **SARIF ruleIds of shapes that share a local name no longer depend on the findings.**
   Shapes of one local name in different namespaces (`AllowedClasses-property` of each
   profile) got a counter in order of appearance (`AllowedClasses-property/sh:in-11`), so
