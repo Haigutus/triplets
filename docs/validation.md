@@ -572,7 +572,9 @@ conforms** — identical across all engines:
 
 plus `EXPECTED` (what the constraint requires, worded from the rule) and
 `MESSAGE_SOURCE` (authored `sh:message` or engine text) — both from the rules
-alone — and, for the schema validations, `PROFILE` (the list of scoped
+alone —, on a frame with `sh:sparql` findings `VALUE_KIND` (the term kind of a
+`?value` binding, which no schema entry gives: `name`, `reference` or `literal`;
+empty on other rows — the SHACL report writes `sh:value` by it) and, for the schema validations, `PROFILE` (the list of scoped
 section keys, `["EQ", "OP", "SC"]`; the reports format it for display). What
 a finding found in the data (`TARGET`) is added by `enrich`.
 
@@ -940,8 +942,10 @@ violations.shacl.to_sarif(path="report.sarif", sources=[f"{repository}/models/gr
 # with report_source=/report_references=
 violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
-# rdf_map= expands sh:resultPath KEYs to their profile namespace
-# (undefined_namespace for KEYs it lacks) and writes sh:value of a reference
+# sh:resultPath is the violated shape's own sh:path (a sequence, inverse or
+# alternative path as its blank node, embedded with the shape); without it
+# rdf_map= expands the KEY to its profile namespace
+# (undefined_namespace for KEYs it lacks). rdf_map= writes sh:value of a reference
 # or an enumeration KEY as an IRI (a plain literal without it), the terms
 # export_to_nquads writes; report_to_violations(graph, rdf_map=rdf_map) reads
 # them back as the VALUEs they were (without rdf_map it guesses: an http IRI

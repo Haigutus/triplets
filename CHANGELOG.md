@@ -576,6 +576,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **SHACL report `sh:resultPath` is the shape's own path** (sequence, inverse, alternative, …) as pyshacl writes it, not the path's first predicate.
+- **SHACL report `sh:value` of a `sh:sparql` result has the `?value` binding's term kind** (new `VALUE_KIND` column): a node on an `rdf:type` path is `urn:uuid:…`, not a class IRI; an inverse path's value is the node.
 - **`engine="pyshacl"` reports a reference or class of another namespace whole**, as the
   other engines do: VALUE `http://example.org/ns#vl1`, where the bridge read `vl1`. With
   an `rdf_map` it reads `sh:value` back exactly (`report_to_violations(rdf_map=…)`);

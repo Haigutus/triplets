@@ -490,7 +490,10 @@ def _sparql_query_text(rule, focus_ids):
 
 def _sparql_violations(rule, result):
     """Each SELECT result row is one violation: $this = focus node, ?value = value,
-    the sh:message with the row's variables filled in (``_solution_messages``)."""
+    the sh:message with the row's variables filled in (``_solution_messages``).
+    VALUE_KIND keeps the term kind of ?value, which no schema entry gives: ``name``
+    (an IRI shortened to its local name), ``reference`` (a node IRI, ``local_id``)
+    or ``literal``."""
     if result is None or len(result) == 0 or "this" not in result.columns:
         return _empty()
     result = result[result["this"].notna()]   # a row without a focus node is no violation
@@ -499,6 +502,11 @@ def _sparql_violations(rule, result):
     focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
     values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
     violations = _frame(rule, focus, values, "sparql constraint violated")
+    if values is not None:
+        terms = result["value"].astype(str)
+        kinds = numpy.where(~iri_pandas.is_iri(terms), "literal",
+                            numpy.where(values != _shorten(terms, iri_pandas.local_id), "name", "reference"))
+        violations["VALUE_KIND"] = pandas.Series(kinds).where(violations["VALUE"].notna())
     if rule.message and MESSAGE_VARIABLE.search(rule.message):
         violations["MESSAGE"] = _solution_messages(rule.message, result, node_level=rule.path is None)
     return violations

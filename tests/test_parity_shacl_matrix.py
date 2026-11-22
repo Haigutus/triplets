@@ -424,6 +424,10 @@ CASES = {
         cim:P a sh:NodeShape ; sh:targetClass cim:Substation ; sh:property [ sh:path cim:IdentifiedObject.name ;
             sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} c={?c}" ; sh:select "SELECT $this ?c WHERE { $this rdf:type ?c }" ] ] .""",
         TRIO),
+    # the ?value of a check on rdf:type is whatever the query binds: a class, a node
+    "sparql_constraint_type_values": (prop("sh:path rdf:type ; sh:sparql [ sh:prefixes cim: ; sh:select "
+                                           "'SELECT $this ?value WHERE { { $this $PATH ?value } UNION "
+                                           "{ $this cim:Equipment.EquipmentContainer ?value } }' ]"), TRIO),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
     # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has
@@ -439,6 +443,12 @@ CASES = {
     "path_inverse_class": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; "
                            "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:class cim:Switch ] .",
                            TRIO + obj("x1", "Bay", (CONT, "bay1"))),
+    # the value nodes of an inverse rdf:type / enumeration path are the instances
+    "path_inverse_type_class": ("cim:V a sh:NodeShape ; sh:targetNode cim:Bay ; "
+                                "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:class cim:Substation ] .", TRIO),
+    "path_inverse_enum_class": ("cim:V a sh:NodeShape ; sh:targetNode cim:SwitchKind.breaker ; "
+                                "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:class cim:Bay ] .",
+                                TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
     # forward and inverse rules on one KEY in one component: the container's count and the breaker's
     "path_inverse_and_forward_maxCount": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay, cim:Substation ; "
                                           "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; "
