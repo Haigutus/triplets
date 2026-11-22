@@ -325,11 +325,18 @@ def violations_to_report_graph(violations, report_source=None, report_references
         value = getattr(row, column, None)
         return None if value is None or pandas.isna(value) else value
 
+    def own_path(row):
+        """The shape's sh:path node when the row's KEY is that path (or no KEY decides it),
+        else None — sh:closed reports another property it found; with its flags."""
+        path, (key, inverse, via_type) = shape_path(row.SOURCE_SHAPE)
+        own = path is not None and key in (None, local_key(row.KEY))
+        return (path, inverse, via_type) if own else (None, False, False)
+
     def value_kind(row):
-        """The frame's VALUE_KIND (a sh:sparql ?value), else what the shape's path and
-        the schema entry of the KEY give (``literal`` for a KEY the schema lacks)."""
+        """What the shape's own path (``own_path``) and the schema entry of the KEY give
+        (``literal`` for a KEY the schema lacks)."""
         key = local_key(row.KEY)                      # a KEY given as an IRI has the entry of its name
-        _, (_, inverse, via_type) = shape_path(row.SOURCE_SHAPE)
+        _, inverse, via_type = own_path(row)
         if inverse:                                   # the values of an inverse path are subjects: nodes
             return REFERENCE
         if via_type or key == TYPE_KEY:               # ( association rdf:type ): the VALUE is the object's class
@@ -378,9 +385,8 @@ def violations_to_report_graph(violations, report_source=None, report_references
         if pandas.notna(row.ID):
             graph.add((result, sh.focusNode, term(row.ID, kind(row, "ID_KIND") or REFERENCE)))
         if pandas.notna(row.KEY):   # the shape's own sh:path (a blank node for a sequence, inverse, … path)
-            path, (key, _, _) = shape_path(row.SOURCE_SHAPE)
-            own = path is not None and key in (None, local_key(row.KEY))   # sh:closed: the predicate found
-            graph.add((result, sh.resultPath, path if own else rdflib.URIRef(expand(row.KEY))))
+            path = own_path(row)[0]                   # else sh:closed: the predicate found
+            graph.add((result, sh.resultPath, path if path is not None else rdflib.URIRef(expand(row.KEY))))
         if pandas.notna(row.VALUE):
             graph.add((result, sh.value, term(row.VALUE, kind(row, "VALUE_KIND") or value_kind(row))))
         if pandas.notna(row.VIOLATION_TYPE):

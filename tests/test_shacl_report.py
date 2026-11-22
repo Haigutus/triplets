@@ -694,6 +694,28 @@ def test_enriched_report_values_and_paths(tmp_path, engine):
                        ("ClosedConstraintComponent", rdflib.URIRef(cim + "IdentifiedObject.name"), rdflib.Literal("S1"))}
 
 
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
+def test_closed_finding_value_has_its_own_property_kind(engine):
+    """sh:closed on an inverse-path property shape reports another property of a value
+    node: its sh:value has that property's term kind (a name literal), not the node kind
+    of the shape's inverse path."""
+    import rdflib
+    pytest.importorskip(engine)
+    shapes = rdflib.Graph().parse(format="turtle", data="""
+@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:S a sh:NodeShape ; sh:targetClass cim:Substation ;
+    sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:closed true ;
+                  sh:ignoredProperties ( rdf:type cim:Equipment.EquipmentContainer ) ] .""")
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "Equipment.EquipmentContainer", "sub1", "i1"),
+                             ("b1", "IdentifiedObject.name", "B1", "i1"), ("sub1", "Type", "Substation", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_shacl(data, shapes, engine=engine)
+    assert violations[["KEY", "VALUE", "VIOLATION_TYPE"]].values.tolist() == [["IdentifiedObject.name", "B1", "sh:closed"]]
+    graph = violations_to_report_graph(violations)
+    assert list(graph.objects(None, rdflib.URIRef("http://www.w3.org/ns/shacl#value"))) == [rdflib.Literal("B1")]
+
+
 def test_message_source_distinguishes_authored_from_engine(tmp_path):
     """[shacl_message] = the shape's own sh:message verbatim, [engine_message] =
     engine-worded text — stamped by validate_shacl() (MESSAGE_SOURCE)."""
