@@ -87,6 +87,54 @@ def test_blank_node_result_path_resolves_through_the_shapes_graph():
     assert list(report_to_violations(report)["KEY"]) == [str(path)]
 
 
+def test_value_term_kind_follows_the_schema_entry_type():
+    """sh:value is the node the data has: an IRI for a reference, an enumeration value and a
+    class; a literal for an attribute (also one that reads like a UUID) and for an undefined KEY."""
+    import rdflib
+    cim = "http://iec.ch/TC57/CIM100#"
+    uuid = "00000000-0000-4000-8000-000000000001"
+    rdf_map = {"Bay": {"type": "Class", "namespace": cim},
+               "Equipment.EquipmentContainer": {"type": "Association", "namespace": cim},
+               "Breaker.kind": {"type": "Enumeration", "namespace": cim},
+               "BreakerKind.air": {"type": "EnumerationValue", "namespace": cim},
+               "IdentifiedObject.mRID": {"type": "Attribute", "namespace": cim, "xsd:type": "xsd:string"}}
+    values = [("Equipment.EquipmentContainer", uuid), ("Equipment.EquipmentContainer", "http://example.org/bay"),
+              ("Equipment.EquipmentContainer", "http://example.org/ns#bay1"),
+              ("Equipment.EquipmentContainer", "Bay"),                    # an object ID that is also a class name
+              ("Breaker.kind", "BreakerKind.air"), ("IdentifiedObject.mRID", uuid), ("Extension.ref", uuid),
+              ("Type", "Bay"), ("Type", "http://example.org/other#Bay")]
+    violations = pandas.DataFrame([("b1", key, value, "sh:class", "m", "Violation", None) for key, value in values],
+                                  columns=VIOLATION_COLUMNS)
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+
+    def terms(**kwargs):
+        graph = violations_to_report_graph(violations, **kwargs)
+        return {(str(graph.value(result, sh.resultPath)).removeprefix(cim), value)
+                for result, value in graph.subject_objects(sh.value)}
+
+    literals = {(key, rdflib.Literal(value)) for key, value in values}
+    types = {(str(rdflib.RDF.type), rdflib.URIRef(cim + "Bay")),
+             (str(rdflib.RDF.type), rdflib.URIRef("http://example.org/other#Bay"))}
+    assert terms() == {(key, value) for key, value in literals if key != "Type"} | types
+    assert terms(rdf_map=rdf_map) == {
+        ("Equipment.EquipmentContainer", rdflib.URIRef(f"urn:uuid:{uuid}")),
+        ("Equipment.EquipmentContainer", rdflib.URIRef("http://example.org/bay")),
+        ("Equipment.EquipmentContainer", rdflib.URIRef("http://example.org/ns#bay1")),
+        ("Equipment.EquipmentContainer", rdflib.URIRef("urn:uuid:Bay")),      # as export_to_nquads writes the row
+        ("Breaker.kind", rdflib.URIRef(cim + "BreakerKind.air")),
+        ("IdentifiedObject.mRID", rdflib.Literal(uuid)), ("Extension.ref", rdflib.Literal(uuid)), *types}
+    back = report_to_violations(violations_to_report_graph(violations, rdf_map=rdf_map), rdf_map=rdf_map)
+    pandas.testing.assert_frame_equal(_canon(back), _canon(violations))
+
+    # a KEY given as its IRI has the entry of its name; a VALUE that is no text is its text
+    other = pandas.DataFrame([("b1", cim + "Equipment.EquipmentContainer", uuid, "sh:class", "m", "Violation", None),
+                              ("b2", "Equipment.EquipmentContainer", 3, "sh:class", "m", "Violation", None)],
+                             columns=VIOLATION_COLUMNS)
+    graph = violations_to_report_graph(other, rdf_map=rdf_map)
+    assert set(graph.objects(None, sh.value)) == {rdflib.URIRef(f"urn:uuid:{uuid}"), rdflib.URIRef("urn:uuid:3")}
+    assert set(graph.objects(None, sh.resultPath)) == {rdflib.URIRef(cim + "Equipment.EquipmentContainer")}
+
+
 def test_report_graph_shape():
     import rdflib
     sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
@@ -449,6 +497,20 @@ cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     assert [str(item).split("#")[-1] for item in allowed] == ["Bay", "VoltageLevel"]
     # and the human-readable twin
     assert (violations["EXPECTED"] == "one of: Bay, VoltageLevel").all()
+    # a finding of a shape without sh:path (the closed NodeShape), next to the embedded sh:in list: a reference
+    closed = violations.assign(SOURCE_SHAPE="http://iec.ch/TC57/CIM100#BreakerShape", VALUE="s1")
+    both = pandas.concat([violations, closed, closed.assign(SOURCE_SHAPE=None)], ignore_index=True)
+    both.attrs = violations.attrs
+    cim = "http://iec.ch/TC57/CIM100#"
+    values = violations_to_report_graph(both, rdf_map={"Equipment.EquipmentContainer": {"type": "Association", "namespace": cim}})
+    assert sorted(values.objects(None, sh.value)) == [rdflib.URIRef(cim + "Substation")] + [rdflib.URIRef("urn:uuid:s1")] * 2
+    # with the schema, the value of the ( association rdf:type ) path is the class, there and back
+    cim = "http://iec.ch/TC57/CIM100#"
+    rdf_map = {"Substation": {"type": "Class", "namespace": cim},
+               "Equipment.EquipmentContainer": {"type": "Association", "namespace": cim}}
+    typed = violations_to_report_graph(violations, rdf_map=rdf_map)
+    assert list(typed.objects(None, sh.value)) == [rdflib.URIRef(cim + "Substation")]
+    assert list(report_to_violations(typed, rdf_map=rdf_map)["VALUE"]) == ["Substation"]
 
 
 def test_message_source_distinguishes_authored_from_engine(tmp_path):

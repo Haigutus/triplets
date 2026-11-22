@@ -5,7 +5,7 @@ triplets:lexicalForm Warnings. Known divergences are strict xfails per (case, en
 in XFAIL; cases the engines deliberately skip are the SKIPPED group.
 
 Adding a case: one CASES entry — (shape Turtle appended to PREFIX, triplet rows) or
-(shape, rows, validate_shacl kwargs).
+(shape, rows, validate_shacl kwargs over DEFAULTS: the toy schema, inheritance on).
 """
 import functools
 
@@ -19,7 +19,7 @@ import triplets
 
 from triplets.export_schema import schemas
 
-from _parity import canon_violations
+from _parity import canon_violations, is_plain
 
 ENGINES = ["pandas", "polars", "duckdb"]
 CIM = "http://iec.ch/TC57/CIM100#"
@@ -166,6 +166,9 @@ A1, A2, VL, SUB = (f"{n:08d}-0000-0000-0000-000000000000" for n in (1, 2, 71, 72
 SEGMENTS = (obj(A1, "ACLineSegment", (CONT, VL), (NAME, "L1")) + obj(A2, "ACLineSegment", (CONT, SUB))
             + obj(VL, "VoltageLevel") + obj(SUB, "Substation"))
 
+COUNT_CLASSES = """sh:sparql [ sh:prefixes cim: ;
+    sh:message "The class {?class} appears {?value} times in the data graph ({$this}, {?unbound})." ;
+    sh:select "SELECT $this ?class (COUNT(?instance) AS ?value) WHERE { ?instance rdf:type ?class . } GROUP BY $this ?class" ] ] ."""
 HAS_CONTAINER = "SELECT DISTINCT ?this WHERE { ?this rdf:type cim:Breaker ; cim:Equipment.EquipmentContainer ?c . }"
 SHARED = """cim:P a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; {constraint} .
     cim:B a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property cim:P .
@@ -190,6 +193,42 @@ CASES = {
         sh:property [ sh:path rdf:type ; sh:sparql [ a sh:SPARQLConstraint ; sh:message "no name" ;
             sh:select """SELECT $this ?value WHERE { ?value a <http://iec.ch/TC57/CIM100#Breaker> .
                 FILTER NOT EXISTS { ?value <http://iec.ch/TC57/CIM100#IdentifiedObject.name> ?n } }""" ] ] .''', TRIO),
+    # the class as focus node: its instances are the values of the inverse rdf:type path
+    "target_node_class_instances": ("cim:V a sh:NodeShape ; sh:targetNode cim:Bay, cim:Substation, cim:VoltageLevel ; "
+                                    "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 1 ; sh:maxCount 2 ] .",
+                                    TRIO + obj("sub2", "Substation") + obj("sub3", "Substation")),
+    "target_node_class_instances_no_schema": ("cim:V a sh:NodeShape ; sh:targetNode cim:Bay, cim:VoltageLevel ; "
+                                              "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 1 ] .",
+                                              TRIO, NO_SCHEMA),
+    # a class of that name in another namespace has no instance
+    "target_node_class_other_namespace": ("cim:V a sh:NodeShape ; sh:targetNode <http://other.example/ns#Bay> ; "
+                                          "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 1 ] .", TRIO),
+    "target_node_enum_value": ("cim:V a sh:NodeShape ; sh:targetNode cim:SwitchKind.breaker, cim:SwitchKind.fuse ; "
+                               "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:minCount 1 ] .",
+                               TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
+    # the classes and enumeration values in use as focus nodes: the IRIs the VALUEs stand for
+    "target_objects_of_type": ("cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type ; "
+                               f"sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 2 ] ; {NAME_MIN}", TRIO),
+    "target_objects_of_type_no_schema": ("cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type ; "
+                                         "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:maxCount 1 ] .",
+                                         TRIO, NO_SCHEMA),
+    "target_objects_of_enum": ("cim:O a sh:NodeShape ; sh:targetObjectsOf cim:Switch.kind ; "
+                               "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:minCount 2 ] .",
+                               TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq"), ("b2", "Switch.kind", "SwitchKind.breaker", "eq"),
+                                       ("b3", "Switch.kind", "SwitchKind.fuse", "eq")]),
+    # a row without a VALUE names no node
+    "target_objects_of_null_value": (f"cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type, cim:Equipment.EquipmentContainer ; {NAME_MIN}",
+                                     TRIO + [("z1", "Type", None, "eq"), ("b3", CONT, None, "eq")]),
+    "target_objects_of_type_data_scope": ("cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type ; "
+                                          "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 2 ] .",
+                                          TRIO + breaker("x1", instance="other") + obj("l1", "Line", instance="other"),
+                                          {"data_scope": ["eq"]}),
+    # a reference and a class in another namespace stay whole in VALUE, on pyshacl too
+    "value_reference_other_namespace": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:Bay"),
+                                        TRIO + breaker("b4", (CONT, "http://example.org/ns#vl1"))),
+    "value_type_other_namespace": ("cim:A a sh:NodeShape ; sh:targetSubjectsOf rdf:type ; "
+                                   "sh:property [ sh:path rdf:type ; sh:in ( cim:Breaker cim:Bay ) ] .",
+                                   TRIO + obj("t1", "http://other.example/ns#Thing")),
     "target_sparql": (sparql_target(HAS_CONTAINER, NAME_MIN), TRIO),
     "target_sparql_plus_class": (sparql_target(HAS_CONTAINER, f"sh:targetClass cim:Breaker ; {NAME_MIN}"), TRIO),
     "target_sparql_node": (sparql_target(HAS_CONTAINER, "sh:node cim:Named .") + NAMED, TRIO),
@@ -370,6 +409,21 @@ CASES = {
     "sparql_constraint_message": (prop("""sh:path cim:IdentifiedObject.name ;
         sh:sparql [ sh:message "no B1" ;
                     sh:select 'SELECT $this ?value WHERE { $this $PATH ?value . FILTER (str(?value) = "B1") }' ]"""), TRIO),
+    # the APL ClassCount form: one solution per class, told apart by ?class in the message only
+    "sparql_constraint_message_variables": (
+        "cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; sh:property [ sh:path rdf:type ; sh:severity sh:Info ; " + COUNT_CLASSES,
+        TRIO + breaker("b4") + breaker("b5") + obj("vl1", "VoltageLevel") + obj("vl2", "VoltageLevel")
+        + obj("l1", "Line") + obj("l2", "Line") + obj("t1", "Terminal") + obj("j1", "Junction") + obj("bs1", "BusbarSection")
+        + obj("g1", "GeographicalRegion")),
+    # a solution without ?value: the focus node on a node shape, the placeholder as written on a property shape
+    "sparql_constraint_message_unbound_value": (
+        """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} n={?n}" ;
+            sh:select "SELECT $this ?value ?n WHERE { $this rdf:type ?t . OPTIONAL { $this cim:IdentifiedObject.name ?n } OPTIONAL { $this cim:IdentifiedObject.description ?value } }" ] .
+        cim:M a sh:NodeShape ; sh:targetClass cim:Bay ; sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} c={?c}" ;
+            sh:select "SELECT $this ?c WHERE { $this rdf:type ?c }" ] .
+        cim:P a sh:NodeShape ; sh:targetClass cim:Substation ; sh:property [ sh:path cim:IdentifiedObject.name ;
+            sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} c={?c}" ; sh:select "SELECT $this ?c WHERE { $this rdf:type ?c }" ] ] .""",
+        TRIO),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
     # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has
@@ -658,6 +712,10 @@ def compiled(name):
     return triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + shape, format="turtle"))
 
 
+# every case runs with the toy schema and its class tree, unless the case says otherwise
+DEFAULTS = {"rdf_map": SCHEMA, "rdf_map_scope": "*", "inheritance": True}
+
+
 def frame(rows):
     return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
 
@@ -665,7 +723,7 @@ def frame(rows):
 def run(name, engine, **extra):
     """The case's canonical rows on *engine*."""
     _, rows, *rest = CASES[name]
-    kwargs = {"rdf_map": SCHEMA, "rdf_map_scope": "*", **(rest[0] if rest else {}), **extra}
+    kwargs = {**DEFAULTS, **(rest[0] if rest else {}), **extra}
     return canon_violations(triplets.validation.validate_shacl(frame(rows), compiled(name), engine=engine, **kwargs))
 
 
@@ -728,3 +786,137 @@ def test_skipped(case, engine):
     meta = violations.attrs["validation"]
     if note:
         assert any(note in entry for entry in meta["skipped_shapes"] + meta["skipped_components"])
+
+
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_run_metadata_is_plain(engine):
+    """attrs["validation"] holds builtin values only — the violated shapes' definitions
+    as text — and the SHACL report embeds the same definitions, blank nodes included."""
+    import rdflib
+    from rdflib.compare import isomorphic
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    case = "class"
+    violations = triplets.validation.validate_shacl(frame(CASES[case][1]), compiled(case), engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*")
+    meta = violations.attrs["validation"]
+    assert len(violations) and meta["source_shapes"] and is_plain(violations.attrs)
+    report = triplets.validation.shacl_report.violations_to_report_graph(violations)
+    for shape in violations["SOURCE_SHAPE"].unique():   # an anonymous property shape
+        node = rdflib.BNode(shape)
+        assert (None, rdflib.URIRef("http://www.w3.org/ns/shacl#sourceShape"), node) in report
+        assert isomorphic(report.cbd(node), compiled(case).graph.cbd(node))
+
+
+# the objects the parsers add to every file; the namespace IRI is what a dangling-reference query finds
+METADATA = (obj("d1", "Distribution", ("label", "grid/eq.xml"), ("fileName", "eq.xml"))
+            + obj("n1", "NamespaceMap", ("cim", CIM), ("md", "http://iec.ch/TC57/61970-552/ModelDescription/1#")))
+ONLY_MODEL_CLASSES = f"""cim:A a sh:NodeShape ; sh:targetSubjectsOf rdf:type ;
+    sh:property [ sh:path rdf:type ; sh:in ( cim:Breaker cim:Bay ) ] .
+cim:S a sh:NodeShape ; sh:targetClass cim:Bay ; sh:sparql [ sh:prefixes cim: ;
+    sh:select 'SELECT $this ?value WHERE {{ ?value rdf:type ?class . FILTER (?class IN (cim:Distribution, cim:NamespaceMap)) }}' ] .
+cim:T a sh:NodeShape ; sh:target [ a sh:SPARQLTarget ; sh:prefixes cim: ;
+    sh:select 'SELECT DISTINCT ?this WHERE {{ ?this rdf:type ?class }}' ] ; {NAME_MIN}"""
+
+
+@pytest.mark.parametrize("scope", [None, ["eq"]])
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_parser_metadata_is_not_validated(engine, scope):
+    """Distribution and NamespaceMap objects are no focus node, no value node and in no
+    query's graph (targets, sh:in on rdf:type, sh:sparql, SPARQL target); the run still
+    names the file from the Distribution label."""
+    import rdflib
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    shapes = triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + ONLY_MODEL_CLASSES, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(TRIO + METADATA), shapes, engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*", data_scope=scope, lexical=False)
+    assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {
+        ("sub1", "sh:in"), ("b2", "sh:minCount"), ("b3", "sh:minCount"), ("sub1", "sh:minCount")}
+    assert violations.attrs["validation"]["source"] == ["grid/eq.xml"]
+
+
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_sparql_solutions_are_findings_with_their_message(engine):
+    """Nine classes, nine solutions, nine findings: the counts 1 and 2 repeat and
+    only the class in the message tells those solutions apart."""
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    case = "sparql_constraint_message_variables"
+    violations = triplets.validation.validate_shacl(frame(CASES[case][1]), compiled(case), engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*", lexical=False)
+    assert len(violations) == 9 and set(violations["MESSAGE_SOURCE"]) == {"shacl"}
+    assert sorted(violations["VALUE"].astype(str)) == ["1"] * 6 + ["2"] * 2 + ["5"]
+    assert (f"The class {CIM}Breaker appears 5 times in the data graph (urn:uuid:bay1, {{?unbound}})."
+            in set(violations["MESSAGE"]))
+
+
+def test_pyshacl_validation_failure_is_a_note_row():
+    """A query pyshacl does not accept (pre-bound $this missing from a nested SELECT) stops its
+    run: one triplets:validationFailure Violation with pyshacl's reason, no crash; no data Violation."""
+    import rdflib
+    shape = PREFIX + """cim:V a sh:NodeShape ; sh:targetClass cim:Bay ; sh:sparql [ sh:prefixes cim: ; sh:select
+        'SELECT $this ?value WHERE { { SELECT ?class (COUNT(?s) AS ?value) WHERE { ?s rdf:type ?class } GROUP BY ?class } }' ] ."""
+    shapes = triplets.validation.compile(rdflib.Graph().parse(data=shape, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(TRIO), shapes, engine="pyshacl", rdf_map=SCHEMA, rdf_map_scope="*")
+    assert violations[["ID", "VIOLATION_TYPE", "SEVERITY"]].values.tolist() == [[None, "triplets:validationFailure", "Violation"]]
+    assert "pre-bound variables must be selected" in violations["MESSAGE"][0]
+    assert not triplets.validation.has_violation(violations)
+    assert violations.attrs["validation"]["skipped_shapes"] == [violations["MESSAGE"][0]]       # the run is partial
+    import json
+    run = json.loads(violations.shacl.to_sarif(export_to_memory=True).read())["runs"][0]
+    assert "pre-bound" in run["invocations"][0]["toolConfigurationNotifications"][0]["message"]["text"]
+    back = triplets.validation.shacl_report.report_to_violations(
+        triplets.validation.shacl_report.violations_to_report_graph(violations))
+    assert list(back["VIOLATION_TYPE"]) == ["triplets:validationFailure"]
+
+
+DCAT = "http://www.w3.org/ns/dcat#"
+DCAT_SCHEMA = {"MD": {"Dataset": {"type": "Class", "namespace": DCAT}, "Distribution": {"type": "Class", "namespace": DCAT},
+                      "distribution": {"type": "Association", "namespace": DCAT},
+                      "title": attribute("xsd:string"), "license": attribute("xsd:string")}}
+REAL_DISTRIBUTIONS = f"""@prefix dcat: <{DCAT}> .
+cim:D a sh:NodeShape ; sh:targetClass dcat:Distribution ; sh:property [ sh:path cim:license ; sh:minCount 1 ] .
+cim:S a sh:NodeShape ; sh:targetClass dcat:Dataset ;
+    sh:property [ sh:path dcat:distribution ; sh:class dcat:Distribution ; sh:minCount 1 ] ;
+    sh:sparql [ sh:prefixes cim: ; sh:select
+        'SELECT $this ?value WHERE {{ $this <{DCAT}distribution> ?value . FILTER NOT EXISTS {{ ?value ?key ?object }} }}' ] ."""
+
+
+@pytest.mark.parametrize("scope", [None, ["eq"]])
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_distributions_of_the_data_are_validated(engine, scope):
+    """A dcat:Distribution of the data is data: one with other properties than the parser
+    writes, and one with a label only that a Dataset references. The parser's own object,
+    which nothing references, is left out."""
+    import rdflib
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    rows = (obj("ds1", "Dataset", ("title", "ds"), ("distribution", "real1"), ("distribution", "real2"))
+            + obj("real1", "Distribution", ("title", "a manifest entry")) + obj("real2", "Distribution", ("label", "x.xml"))
+            + METADATA)
+    shapes = triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + REAL_DISTRIBUTIONS, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(rows), shapes, engine=engine, rdf_map=DCAT_SCHEMA,
+                                                    rdf_map_scope="*", data_scope=scope, lexical=False)
+    assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {("real1", "sh:minCount"), ("real2", "sh:minCount")}
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_metadata_row_without_id(engine, monkeypatch):
+    """A Type row without an ID does not empty the run (duckdb: no NOT IN over a NULL),
+    and a run that raises leaves no temp object on the connection."""
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    data = frame(TRIO + METADATA + [(None, "Type", "Distribution", "eq")])
+    violations = triplets.validation.validate_shacl(data, compiled("target_class"), engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*")
+    assert set(violations["ID"]) == {"b2", "b3"}
+    if engine == "duckdb":
+        from _parity import make_duckdb
+        connection = make_duckdb(frame(TRIO))
+        from triplets.validation import shacl_duckdb
+        monkeypatch.setattr(shacl_duckdb, "_create_names_table", lambda *args: 1 / 0)
+        with pytest.raises(ZeroDivisionError):
+            triplets.validation.validate_shacl(connection, compiled("target_class"), engine="duckdb", data_scope=["eq"])
+        left = connection.execute("SELECT table_name FROM information_schema.tables WHERE table_name LIKE '_shacl%'").fetchall()
+        assert left == []

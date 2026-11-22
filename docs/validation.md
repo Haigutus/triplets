@@ -13,7 +13,7 @@ any RDF loaded as triplets, CIM or not. Every input has a scope named after it:
 
 | Function | Checks | Runs |
 |----------|--------|------|
-| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, lexical=True, inheritance=True, deactivated_shapes=None, abort_on_first=False)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision, the value space of `sh:lessThan` / `sh:lessThanOrEquals` operands and class inheritance | once over the scoped data |
+| `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, lexical=True, inheritance=False, deactivated_shapes=None, abort_on_first=False)` | SHACL shapes; the scoped profiles give typed literals, the `sh:nodeKind` decision, the value space of `sh:lessThan` / `sh:lessThanOrEquals` operands and, with `inheritance=True`, class inheritance | once over the scoped data |
 | `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False, severity="Violation")` | cardinality, datatypes and enumerations of the scoped profiles (merged); `report_undefined_keys` also reports keys no scoped profile defines for the object's class | per instance in `data_scope` — cardinality never counts another instance's rows |
 | `validate_schema_references(data, rdf_map, data_scope, rdf_map_scope, target_data_scope, target_rdf_map_scope=(), report_missing_targets=True, inheritance=True, severity="Violation")` — `target_data_scope=None` = every instance | the reference type of each association of the source profiles (merged, or a union of several): valid classes from the source and target profiles, referenced objects from the source and target instances | per source instance; findings on source objects only |
 
@@ -69,6 +69,13 @@ for 1–2 keys (NC).
 
 ### Class inheritance (`schema_scope.class_ancestors`)
 
+`validate_shacl` matches the exact `rdf:type` by default (`inheritance=False`):
+plain SHACL reads `rdfs:subClassOf` from the data graph, CIM files carry none,
+and the ENTSO-E shapes list concrete classes. `inheritance=True` widens
+`sh:targetClass` and `sh:class` through the schema; `validate_schema_references`
+has its own `inheritance=True` default for the range check. The map is one per
+run, built from all profiles in `rdf_map_scope`:
+
 `class_ancestors(rdf_map, rdf_map_scope)` → `{class: ancestor IRIs}`: the
 same-named Class entries of the scoped profiles union their `inheritance`
 lists, and the relation is closed only through ancestors that have a Class
@@ -85,10 +92,10 @@ parents of a class it mentions. Every engine gets this one map:
   like `rdf:type` in the data graph (schema namespace, else
   `undefined_namespace`).
 
-So the engines agree by construction. Each profile is its own world: NC SSI's
+So the engines agree by construction (with `inheritance=True`). Each profile is its own world: NC SSI's
 `ACLineSegment` list stops at `Equipment`, and SSI has no IdentifiedObject
 attributes — it reaches `IdentifiedObject` only when a scoped profile (ER) has
-an `Equipment` entry of its own. `inheritance=False` matches the exact
+an `Equipment` entry of its own. `inheritance=False` (the default) matches the exact
 `rdf:type` on every engine (pyshacl without `ont_graph`). Only `sh:targetClass`
 (`target_by="Type"`) and `sh:class` widen; KEY / VALUE / ID targets pick exactly
 what they name, a SPARQL target exactly what its query selects in the data
@@ -97,6 +104,25 @@ query that walks them on pyshacl only — no CGMES target query does). Schema cl
 never widen: each Class entry already lists its inherited attributes.
 Identical findings are reported once (a property shape on both a parent and a
 child node shape, the same triple in two instance files).
+Every solution of a `sh:sparql` constraint is a finding, with the constraint's
+`sh:message` filled in from the solution: `{?name}` / `{$name}` becomes the
+solution's value of that variable (an IRI whole, a literal's text; a variable the
+solution does not bind stays as written, except `{?value}` on a node shape, which
+is the focus node when the solution has no `?value` — pyshacl's forms, tested
+against it). Solutions that differ only in a variable
+other than `?value` stay apart when the message names that variable.
+
+The objects the parsers add to every file — `Distribution` (the file name) and
+`NamespaceMap` (the namespace prefixes), the classes `cim-diff` and
+`cim-spreadsheet` leave out (`triplets.iri.METADATA_TYPES`) — are not model
+content and are never validated. They are told from data by what the parsers
+write: an object of one of the two classes that no row references and, for a
+`Distribution`, that has a `label` and no KEY other than `label`, `fileName` and
+`belongsToContainer`. A `dcat:Distribution` of the data (a manifest entry) has
+other properties or is referenced, and is validated like any object. For the
+parser's objects: on every engine they are no focus node, no value node and not in the
+graph the `sh:sparql` constraints, the SPARQL targets and pyshacl read. The run
+metadata and `enrich` still read the file names from them.
 
 ## Status & known limitations
 
@@ -215,6 +241,21 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   (`iri.REFERENCE_LIKE`: any-case UUID, `scheme://…`, `urn:…`, `Name.attr`, or an
   ID in the data), while the exported graph pyshacl sees uses the stricter export
   rule (absolute IRI or lowercase UUID → IRI) — the two can disagree on such keys.
+  The file's own form is not kept: an `Attribute` whose datatype is a URI is a
+  literal even when the file writes it as `rdf:resource`, so `sh:nodeKind sh:IRI`
+  reports it on every engine, pyshacl included, and the exports write it as text.
+  The NC 2.5 header properties are such entries in the bundled schema
+  (`dcterms:accessRights`, `dcterms:conformsTo`, `dcterms:license`, …: `Attribute`,
+  from the `URI` primitive the upstream RDFS gives them).
+- **Only the local name of an `rdf:resource` / `rdf:type` IRI is kept** by the
+  CIM XML parser ([#240](https://github.com/Haigutus/triplets/issues/240)). A
+  reference into another namespace
+  (`rdf:resource="http://iec.ch/TC57/CIM100#ACDCConverter.targetPpcc"`) parses to
+  the VALUE `ACDCConverter.targetPpcc` and is `urn:uuid:ACDCConverter.targetPpcc`
+  in the exports and in the graph the `sh:sparql` constraints and pyshacl read. A
+  class is its local name too: on polars / pandas / duckdb a class target in
+  another namespace (`cim16:Switch`) matches every class of that local name, while
+  pyshacl sees the class in the namespace the schema gives the name.
 - The duckdb engine streams/spills by design, but a true larger-than-RAM
   validation has not been exercised yet.
 
@@ -259,14 +300,14 @@ registries that consume it are internal.
 | `shape_id` | str | full shape IRI (blank-node id for anonymous property shapes) — becomes `SOURCE_SHAPE` in reports and the join key for `enrich` |
 | `shapes` | tuple[str] | lineage: the shape ids whose switch-off removes the row, outermost first — NodeShape → property shape → `sh:node` target / logical member → the defining shape, then a `sh:sparql` row's constraint node (nested row dicts carry it too) |
 | `target_on` | str | what the shape applies to, read by `target_by`: a Type name, a KEY, an ID or a SPARQL target's query |
-| `target_by` | `"Type"` / `"KEY"` / `"VALUE"` / `"ID"` / `"SPARQL"` | how the rows are picked: `Type` = objects of that Type (`sh:targetClass`; subclasses with `inheritance`); `KEY` = the IDs having that KEY (`sh:targetSubjectsOf`); `VALUE` = the VALUEs under that KEY (`sh:targetObjectsOf` — referenced objects, described in the data or not; literal values too); `ID` = that one ID (`sh:targetNode`; `urn:uuid:` stripped, any other IRI verbatim — it need not occur in the data, the ENTSO-E shapes use a class IRI as the focus of a dataset-wide `sh:sparql`); `SPARQL` = the IDs the target's `sh:select` projects as `?this` (`target_on` = the `PREFIX` header from `sh:prefixes` → `sh:declare` + the select text), resolved per run on `triplets.sparql` |
+| `target_by` | `"Type"` / `"KEY"` / `"VALUE"` / `"ID"` / `"SPARQL"` | how the rows are picked: `Type` = objects of that Type (`sh:targetClass`; subclasses with `inheritance`); `KEY` = the IDs having that KEY (`sh:targetSubjectsOf`); `VALUE` = the VALUEs under that KEY (`sh:targetObjectsOf` — referenced objects, described in the data or not; literal values too; under `Type` or an enumeration KEY the IRI each VALUE stands for, `…CIM100#Bay`, which is the `ID` of its findings); `ID` = that one ID (`sh:targetNode`; `urn:uuid:` stripped, any other IRI verbatim — it need not occur in the data, the ENTSO-E shapes use a class IRI as the focus of a dataset-wide `sh:sparql`; under `sh:inversePath rdf:type` a class IRI — from any target — has its instances as values, and under the inverse of an enumeration KEY an enumeration value IRI the objects holding it; the IRI is the one the local `VALUE` stands for: the name's schema namespace, else `undefined_namespace`); `SPARQL` = the IDs the target's `sh:select` projects as `?this` (`target_on` = the `PREFIX` header from `sh:prefixes` → `sh:declare` + the select text), resolved per run on `triplets.sparql` |
 | `path` | str \| None | the property as one triplet KEY (local name); None for node-level constraints (`sh:closed`, node-level `sh:sparql`, and `sh:node` / `sh:or` / `sh:and` / `sh:xone` / `sh:not` on the NodeShape, which judge the focus) |
 | `inverse` | bool | `sh:inversePath` — engines swap the FOCUS/VALUE direction |
 | `via_type` | bool | the `( assoc rdf:type )` sequence path: the value nodes are the referenced objects' *types* |
 | `component` | str | the dispatch key (`"sh:minCount"`, …) — see the matrix below |
 | `params` | object | component parameter, shape varies (next table) |
 | `severity` | str | local name of `sh:severity`, default `"Violation"` applied at compile time |
-| `message` | str \| None | `sh:message` (several: sorted, newline-joined); engines substitute their own default text when None |
+| `message` | str \| None | `sh:message` (several: sorted, newline-joined); engines substitute their own default text when None; a `sh:sparql` message keeps its `{?name}` placeholders here, filled per solution at run time |
 | `name`, `description` | str \| None | `sh:name`/`sh:description` with parent-NodeShape inheritance — read only by `context.enrich`, never by engines |
 
 `params` per component:
@@ -455,7 +496,14 @@ them too.
   **No query fixing**: constraint queries run exactly as authored. A
   constraint query a strict engine rejects is reported as a
   `triplets:invalidSparql` Warning row naming the shape and is still
-  evaluated on the lenient rdflib engine.
+  evaluated on the lenient rdflib engine. `engine="pyshacl"` stops at the
+  first query pyshacl itself does not accept (its `ValidationFailure`, e.g. a
+  nested SELECT that does not project `$this`) and names no shape: the run
+  returns one `triplets:validationFailure` Violation row with pyshacl's reason,
+  without a focus node or `SOURCE_SHAPE`, and no other pyshacl finding; the
+  reason is also a `skipped_shapes` entry of the run metadata (a SARIF
+  configuration notification), so the run says it is partial. pyshacl reports
+  other causes than a query the same way, hence a type of its own.
 - **SPARQL targets** (`target_by="SPARQL"`) run the same way: each distinct
   target query once per run over the (scoped) data, its `?this` column the
   focus nodes. A target query a strict engine rejects gets the same Warning
@@ -517,7 +565,7 @@ conforms** — identical across all engines:
 | `ID` | focus node (instance UUID, `urn:uuid:` stripped — `triplets.iri.local_id`) |
 | `KEY` | property path (CIM short name, e.g. `IdentifiedObject.name`) |
 | `VALUE` | offending value |
-| `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, `triplets:invalidSparql`, ...) |
+| `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, `triplets:invalidSparql`, `triplets:validationFailure`, ...) |
 | `MESSAGE` | message from the shape |
 | `SEVERITY` | `Violation` / `Warning` / `Info` |
 | `SOURCE_SHAPE` | shape URI that produced the result |
@@ -563,7 +611,9 @@ the returned frame as `violations.attrs["validation"]`. Every report exporter
 reads it, so all formats tell the same story; `concat_violations(frames)`
 joins the frames of several runs of one constraint language and merges their
 metadata (earliest start, latest end, counts once per rule set, lists
-united, differing values kept as the list of distinct values):
+united, differing values kept as the list of distinct values, None is no
+value). A joined frame joins again — the frame of `validate_by_header` is
+one — and the result is the same however the runs are grouped:
 
 | key | meaning |
 |-----|---------|
@@ -581,6 +631,12 @@ united, differing values kept as the list of distinct values):
 | `aborted` | True when `abort_on_first` met a Violation; the report may then be partial |
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
+| `rule_sets` | joined frames only: one `{compiled_hash, deactivated_shapes, node_shapes, constraints}` entry per rule set of the joined runs, which `node_shapes` / `constraints` sum. Not exported (SARIF properties, csv / excel sidecars) |
+| `anonymous_shapes` | `{blank-node label: stable name}` of the violated shapes without an IRI — the shape part of their SARIF ruleIds. Not exported |
+| `source_shapes` | `{shape id: N-Triples text}` — the defining triples (CBD) of each violated shape, blank-node labels as in `SOURCE_SHAPE`; `{}` for a schema run. Read by the SHACL report only (`shacl_report.shape_triples(text)` gives the graph) |
+
+Every value is a plain Python value (str, number, bool, None, list, dict):
+pandas copies `attrs` at every frame operation, and the copy stays cheap.
 
 The coverage keys turn the compile/engine warnings into data: a report that
 says "0 violations" also says whether every shape actually ran. Empty coverage
@@ -628,7 +684,7 @@ semantics), but every message entry is column-driven — drop a column
 enrichment itself is opt-in.
 
 The SHACL report additionally **embeds the violated shapes' defining triples**
-(CBD, stamped by `validate_shacl()` into the run metadata), so `sh:sourceShape` is
+(CBD, stamped by `validate_shacl()` into the run metadata as `source_shapes`), so `sh:sourceShape` is
 never an empty blank node — the `sh:in` list and every other constraint
 parameter are machine-recoverable from the report alone. SARIF carries the
 located line as the native `region.snippet.text`. All of this happens in the
@@ -644,11 +700,30 @@ carries them as newline-separated blocks in one `message.text`, adds
 count in the rule title (`SHACL Line completeness (8×)` — the ruleId stays stable,
 so GitHub alert matching is unaffected).
 
+The ruleId of a SHACL finding is
+`<shape local name>-<8 hex digits of the SHA-1 of the shape IRI>/<constraint>`
+(`ACLineSegment.r-cardinality-3b1f0c9a/sh:minCount`). It is a function of the shape
+IRI alone: the same in every run, parse and engine, in any row order, with or without
+findings of other shapes, for a single run, a joined frame and a frame without run
+metadata. Shapes of one local name in several namespaces (`AllowedClasses-property`
+of each profile) are separate rules.
+
+A shape without an IRI (`sh:property [ … ]`) has a blank-node label that is new at
+every parse, so its ruleId is made of the nearest named shape above it, its path and
+eight hex digits of the SHA-1 of that shape's IRI and its own canonical definition
+(`BreakerShape.IdentifiedObject.name-5c1d07aa/sh:minCount`; `BreakerShape-5c1d07aa/sh:or`
+without a path, `shape-9e41b2c3/sh:closed` with no named shape above). Two anonymous
+shapes of one parent, path and constraint are two rules. The same Turtle gives the
+same ruleIds in every parse and on every engine; the names come from the run metadata
+(`anonymous_shapes`), so a frame without it has the label in the ruleId.
+
 `enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
 `report_source=` / `report_references=` override the stamped values (plain
 labels — distinct from the `sources=` locate pass and the shapes object
 `to_sarif(shapes=)` takes). Frames without the attrs (bare frames,
-`report_to_violations` output) carry no run metadata in SARIF/csv/excel; the
+`report_to_violations` output) carry no run metadata in SARIF/csv/excel, and
+their constraint language is read from the rows (`rdfs` when every
+`SOURCE_SHAPE` is a schema shape, else `shacl`); the
 SHACL report node still gets `prov:generatedAtTime` (export time) and
 `dcterms:creator` — a standard report always says when and by what it was
 written.
@@ -709,7 +784,12 @@ violation carries them as a list in the `PROFILE` column, reports carry
 `[rdfs_profile] EQ, OP, SC` entries, and SARIF alert titles read
 `RDFS <profiles> <Class> <attr> (N×)`. Schema shape ids carry the scope in
 their namespace (`urn:triplets:schema:EQ:OP:SC#Breaker.IdentifiedObject.name`),
-so findings of different scopes never share a rule.
+so findings of different scopes never share a rule; the SARIF ruleId is the scope, the
+shape's local name and the constraint
+(`EQ:OP:SC:Breaker.IdentifiedObject.name/xsd:minOccurs`; `Breaker.IdentifiedObject.name/xsd:minOccurs`
+without a scope), with the profile names sorted: `rdf_map_scope=["OP", "EQ"]` and
+`["EQ", "OP"]` are one rule (the shape id keeps the given order). `:` and `#` separate
+the parts of a schema shape id; a section name is percent-encoded in it.
 The same vectorized engines run everything (plans cached per compiled
 schema); the pyshacl engine refuses schema-compiled IR. **Results do not
 masquerade as SHACL**: constraint language `"rdfs"`, violation types
@@ -813,7 +893,7 @@ from triplets.export_schema import schemas
 data = pandas.read_RDF(["grid.zip"])
 
 # validate against a shapes file (format auto-detected by extension) — empty = conforms;
-# the scoped profiles type the literals and give the class inheritance
+# the scoped profiles type the literals (and, with inheritance=True, give the class inheritance)
 rdf_map = schemas.ENTSOE_CGMES_3_0_0_552_ED1
 violations = data.shacl.validate_shacl("shapes.ttl", rdf_map=rdf_map, rdf_map_scope=["EQ"])
 
@@ -861,7 +941,11 @@ violations.shacl.to_sarif(path="report.sarif", sources=[f"{repository}/models/gr
 violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
 # rdf_map= expands sh:resultPath KEYs to their profile namespace
-# (undefined_namespace for KEYs it lacks)
+# (undefined_namespace for KEYs it lacks) and writes sh:value of a reference
+# or an enumeration KEY as an IRI (a plain literal without it), the terms
+# export_to_nquads writes; report_to_violations(graph, rdf_map=rdf_map) reads
+# them back as the VALUEs they were (without rdf_map it guesses: an http IRI
+# with a "#" loses its namespace)
 violations.shacl.to_shacl_report(path="report.ttl", rdf_map=rdf_map)
 
 # tabular exports with the same metadata: CSV writes a report_meta.csv
@@ -882,7 +966,7 @@ as keyword arguments. Names the schema does not declare (every name without an
 schema-less `cim:` shapes keep working; the same parameter on
 `to_shacl_report`); every
 row is loaded. `abort_on_first=True` stops every engine at the first
-Violation (Warnings and `triplets:invalidSparql` never stop it), for a yes/no
+Violation (Warnings, `triplets:invalidSparql` and `triplets:validationFailure` never stop it), for a yes/no
 gate rather than a full report. Runnable end-to-end demos live in
 `examples/shacl_validation.py` (engine behavior walkthrough) and
 `examples/shacl_reports.py` (uv-runnable: performance engines + both report
@@ -925,9 +1009,21 @@ enrichment pass first (an already-enriched frame is used as-is).
   `occurrenceCount` and the first-3 + last-3 sample instances (all listed
   when ≤ 6). `group=False` emits one result per violation row.
 - The tool is named per constraint language: `tool.driver.name` is
-  `triplets-shacl` for SHACL runs and bare frames, `triplets-rdfs` for schema
+  `triplets-shacl` for SHACL runs, `triplets-rdfs` for schema
   runs (a frame holds one language: `concat_violations` raises on a mix).
-  GitHub code scanning filters alerts by tool.
+  GitHub code scanning filters alerts by tool. A frame without run metadata
+  (`pandas.concat` drops the attrs) is `rdfs` when every `SOURCE_SHAPE` is a
+  schema shape (`urn:triplets:schema…`), else `shacl` — so is a frame that
+  mixes both, which is exported as one SHACL run.
+- **A schema run and a SHACL run in one file**: pass the frames as a list,
+  `triplets.validation.export_to_sarif([schema_violations, shacl_violations], ...)`
+  (also `build_sarif`). The log has one run per frame, in order, each with its
+  own tool name, rules and run metadata; the other arguments apply to every
+  frame. Runs of one language would share a tool name, which GitHub code
+  scanning does not take in one file: two frames of one language raise
+  `ValueError` — join those with `concat_violations` first. An empty frame without
+  run metadata in the list (a clean run whose `attrs` a `pandas.concat` dropped)
+  is left out: it has no run.
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
   rule's findings (the `PROFILE` column — a list of section keys, or the

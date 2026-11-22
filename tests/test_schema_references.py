@@ -83,6 +83,37 @@ def test_missing_targets(engine):
     assert len(quiet) == 0
 
 
+@pytest.mark.parametrize("storage", ["python", "pyarrow"])
+def test_pandas_string_storage(storage):
+    """The pandas engine finds the same with either storage of the ``str`` dtype, and with objects."""
+    if storage == "pyarrow":
+        pytest.importorskip("pyarrow")
+    rows = breaker("b1", "bay1") + breaker("b2", "sub1") + breaker("b3", "ghost") + CONTAINERS
+    with pandas.option_context("mode.string_storage", storage):
+        data = frame(rows)
+        for typed in (data, data.astype(object)):
+            v = validate_schema_references(typed, SCHEMA, ["eq"], ["EQ"], engine="pandas")
+            assert violating(v, "rdfs:range") == {("b2", "sub1")}
+            assert violating(v, "triplets:missing") == {("b3", "ghost")}
+
+
+def test_parsed_frame(tmp_path):
+    """The same findings on a frame as the parser returns it (its own column dtypes)."""
+    import triplets
+    objects = [("Breaker", "b1", "bay1"), ("Breaker", "b2", "sub1"), ("Breaker", "b3", "ghost"),
+               ("Bay", "bay1", None), ("Substation", "sub1", None)]
+    body = "".join(f'<cim:{kind} rdf:ID="_{name}">'
+                   + (f'<cim:Equipment.EquipmentContainer rdf:resource="#_{container}"/>' if container else "")
+                   + f"</cim:{kind}>" for kind, name, container in objects)
+    path = tmp_path / "eq.xml"
+    path.write_text(f'<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="{CIM}">{body}</rdf:RDF>')
+    for parser in ("auto", "python_lxml_pandas"):
+        data = triplets.parse(str(path), engine=parser)
+        v = validate_schema_references(data, SCHEMA, rdf_map_scope=["EQ"], engine="pandas")
+        assert violating(v, "rdfs:range") == {("b2", "sub1")}, data.dtypes
+        assert violating(v, "triplets:missing") == {("b3", "ghost")}, data.dtypes
+
+
 def test_targets_are_looked_up_in_the_target_instances(engine):
     """An SV voltage references a TP node: the node's class comes from the TP
     profile, the node itself from the TP instance."""

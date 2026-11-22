@@ -7,6 +7,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`string_to_number=` on `export_to_excel` and `export_to_csv`** (default `False`: every
+  VALUE is written as its text). `True` writes the columns that hold only numbers as
+  numbers — number cells in Excel, for sums and charts — and does not keep the text form
+  (`1.0` → `1`, `007` → `7`).
+- **One SARIF log for several validation runs** — `export_to_sarif` and `build_sarif` take
+  a list of violations frames and write one run per frame, in order, each with the tool
+  name, rules and run metadata of its own frame:
+  `triplets.validation.export_to_sarif([schema_violations, shacl_violations], data=data)`
+  is one file with a `triplets-rdfs` run and a `triplets-shacl` run. The other arguments
+  apply to every frame; a single frame gives the same log as before. Runs of one
+  constraint language would share a tool name: two frames of one language raise
+  `ValueError`, so join those with `concat_violations` first. An empty frame without run
+  metadata in the list is left out.
 - **`stereotype` and `rdf:type` on every bundled schema entry** — the RDFS source types
   of the entry's object, as lists in source order, deduplicated, and left out when the
   object has none. Covers classes, attributes, associations, enumeration attributes,
@@ -30,7 +43,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`validate_schema(..., severity=)` / `validate_schema_references(..., severity=)`** (and
   `compile_schema` / `compile_references`) — report schema findings as `"Warning"` or `"Info"`
   instead of `"Violation"` (SARIF `warning` / `note`, `sh:resultSeverity`); other values raise
-  `ValueError`, `triplets:lexicalForm` findings stay `Warning`; `validate_by_header` forwards it
+  `ValueError`, `triplets:lexicalForm` findings stay `Warning`; `cgmes_tools.validate_by_header` has the same
+  `severity=` parameter, for both of its runs
   ([#150](https://github.com/Haigutus/triplets/issues/150)).
 - **SARIF `rules[].help`** (text + markdown) — the rule help GitHub shows under an alert:
   the shape's `sh:message`, path and expected value, the schema description with
@@ -173,9 +187,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile's identity (section keys, each field as a list in scope order).
   `rdf_map_entries` (and the flat maps on it) skip ProfileMetadata. Nothing in `triplets.validation` reads
   instance headers.
-  - `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=True)`
-    — SHACL; the scoped profiles give typed literals, nodeKind and class
-    inheritance. The `inheritance` flag stays on `validate_shacl` and
+  - `validate_shacl(data, shapes, rdf_map, data_scope, rdf_map_scope, inheritance=False)`
+    — SHACL; the scoped profiles give typed literals, nodeKind and, with
+    `inheritance=True`, class inheritance. The `inheritance` flag stays on `validate_shacl` and
     `validate_schema_references`; `attrs["validation"]["inheritance"]` says
     whether it was applied.
   - `validate_schema(data, rdf_map, data_scope, rdf_map_scope, report_undefined_keys=False)`
@@ -207,7 +221,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   its pairs (the IR is not fanned out); pyshacl gets the same edges as
   `rdfs:subClassOf` in `ont_graph` (recorded parent IRIs as is,
   `https://cim.ucaiug.io/ns#IdentifiedObject` for NC). `inheritance=False`
-  matches the exact `rdf:type`. Schema class rules never widen: each Class
+  (the `validate_shacl` default) matches the exact `rdf:type`. Schema class rules never widen: each Class
   entry already lists its inherited attributes. Identical findings are
   reported once on every engine (a property shape on both a parent and a
   child node shape, the same triple in two instance files).
@@ -242,6 +256,39 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`validate_shacl` defaults to `inheritance=False`** — `sh:targetClass` and `sh:class`
+  match the exact `rdf:type`, as plain SHACL does on a data graph without
+  `rdfs:subClassOf` (CIM files carry none, and the ENTSO-E shapes list concrete classes).
+  The default was `True`: a run with an `rdf_map` also matched instances of subclasses
+  from the scoped profiles' `inheritance` lists. Pass `inheritance=True` for that
+  behaviour; a caller that relied on the old default gets fewer findings on abstract
+  class targets and more `sh:class` findings on subclass references.
+  `validate_schema_references` keeps `inheritance=True`: a reference to a subclass of
+  the range class conforms.
+- **`export_to_excel` and `export_to_csv` (pandas) write every VALUE as its text**, so
+  `cim-spreadsheet` CIM XML → Excel → CIM XML keeps the lexical form of numbers. A column
+  that held only numbers was converted to numbers first: `1.0` came back as `1`,
+  `522000000.0` as `522000000`, `0.10` as `0.1`, `007` as `7` (716 values of the emtiop
+  IEEE39 case through `.xlsx`). Number cells in the Excel file are now text cells. The
+  polars CSV export already wrote the text. `triplets_to_tableviews` (pandas, polars)
+  takes `string_to_number=` like the DuckDB one; its default stays `True`. It is a keyword
+  on all three, after `multivalue` (DuckDB had `string_to_number, multivalue` by position).
+- **`SOURCE_SHAPE` and the SARIF ruleId of schema findings, against 0.2.0.** `SOURCE_SHAPE`
+  carries the scope in its namespace: `urn:triplets:schema:EMTIOP#ACLineSegment.ACLineSegment.r`
+  (0.2.0: `urn:triplets:schema#EMTIOP:ACLineSegment.ACLineSegment.r`), every profile of a
+  merged scope in order (`urn:triplets:schema:EQ:OP:SC#Breaker.IdentifiedObject.name`), no
+  profile without a scope (`urn:triplets:schema#Breaker.IdentifiedObject.name`). The ruleId
+  is the scope, the shape's local name and the constraint:
+  `EMTIOP:ACLineSegment.ACLineSegment.r/xsd:type`, `EQ:OP:SC:Breaker.IdentifiedObject.name/xsd:minOccurs`,
+  `Breaker.IdentifiedObject.name/xsd:minOccurs`. It is the same for the same scope in every
+  run, in any order of `rdf_map_scope` (the ruleId sorts the profile names; `SOURCE_SHAPE`
+  keeps the given order), and one class and key checked under two scopes are two rules.
+  `:` and `#` separate the parts of the shape id, so a section name is percent-encoded in
+  it (`EQ#1` → `EQ%231`); only an id that starts with `urn:triplets:schema:` or
+  `urn:triplets:schema#` is a schema shape. A one-profile scope
+  keeps its 0.2.0 ruleId; a scope of several profiles had one rule per profile in 0.2.0, so
+  its GitHub code scanning alerts close and re-open once on upgrade. A consumer that
+  parses `SOURCE_SHAPE` or `properties.sourceShape` reads the new form.
 - **`rdf:resource="#x"` references `rdf:ID="x"`** — `iri.local_id` strips one of
   `urn:uuid:`, `#_`, `#`, `_` (longest first), where a bare `#` stayed: a file whose IDs
   have no underscore (`rdf:ID="SS1"`, `rdf:resource="#SS1"`) parsed to the ID `SS1` and
@@ -514,7 +561,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Export-schema `xsd:type` comes from the RDFS.** `cim_rdfs_to_json`
   follows each CIMDatatype `.value` to an XSD `rdfs:range` (IEC 61970-501 Ed2)
   or to a Primitive (`Area.value` → `Float`); `cgmes_data_types_map` now lists
-  only Primitives. All bundles regenerated and checked against the published
+  only Primitives (17 names, was 38): a consumer that looked up a CIMDatatype in it
+  (`Voltage`, `Susceptance`, `PU`, …) gets no type and no error, so its schema entries
+  lose `xsd:type` and their datatype checks without a message. All bundles regenerated and checked against the published
   SHACL `sh:datatype`; changed types:
   - `Decimal`, `Money` → `xsd:decimal` (was `xsd:float`)
   - `MonthDay` → `xsd:gMonthDay` (was `xsd:integer`)
@@ -527,6 +576,138 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`engine="pyshacl"` reports a reference or class of another namespace whole**, as the
+  other engines do: VALUE `http://example.org/ns#vl1`, where the bridge read `vl1`. With
+  an `rdf_map` it reads `sh:value` back exactly (`report_to_violations(rdf_map=…)`);
+  without one the form is still guessed.
+- **`engine="pyshacl"` no longer crashes on a shape pyshacl gives up on.** pyshacl returns
+  its `ValidationFailure` in place of the report (a `sh:sparql` query it does not accept),
+  and the run ended in `AttributeError: 'ValidationFailure' object has no attribute
+  'objects'`. The run now returns one `triplets:validationFailure` Violation row with
+  pyshacl's reason (a type of its own: pyshacl reports other causes than a query this
+  way) and lists the reason in the run metadata's `skipped_shapes`, so the reports say
+  the run is partial; pyshacl names no shape, so the row has no `SOURCE_SHAPE`. Like
+  `triplets:invalidSparql`, the row is no data Violation for `has_violation`.
+- **`sh:targetObjectsOf rdf:type` findings carry the class IRI as `ID`** on pandas, polars
+  and duckdb, as pyshacl reports them (`http://iec.ch/TC57/CIM100#Bay`; it was the local
+  `Bay`), and so do the findings of `sh:targetObjectsOf` on an enumeration KEY. A class
+  or enumeration VALUE met as a focus node is the IRI it stands for, from every target
+  and under every inverse path.
+- **`cim-spreadsheet` keeps the values pandas reads as missing, and texts that start with
+  `=`.** A VALUE `NaN` (a legal `xsd:float`), `NA`, `null`, `None`, `N/A` or `nan` was
+  dropped on the way back from CSV and Excel, and a VALUE `=1+2` was written to Excel as
+  a formula and lost. Only an empty cell is no value now (the CLI reads with
+  `keep_default_na=False, na_values=[""]`), and `export_to_excel` writes a text that
+  starts with `=` and the Excel error words (`#N/A`, `#REF!`, `#DIV/0!`) as text cells.
+- **Every SARIF ruleId of a SHACL finding changes: it is now a function of the shape
+  alone.** The ruleId was the shape's local name and the constraint, with a counter in
+  order of appearance for shapes of one local name in several namespaces
+  (`AllowedClasses-property/sh:in-11`: a fixed alert handed its ruleId to the next
+  shape), and the blank-node label for a shape without an IRI (`n3f…b1/sh:minCount`, new
+  at every parse). It is now `<local name>-<8 hex digits of the SHA-1 of the shape
+  IRI>/<constraint>` (`AllowedClasses-property-1f0c9a2e/sh:in`) for every named shape,
+  and `<nearest named shape>.<path>-<8 hex digits of the SHA-1 of that IRI and the shape's
+  canonical definition>/<constraint>` for a shape without an IRI
+  (`BreakerShape.IdentifiedObject.name-5c1d07aa/sh:minCount`;
+  `attrs["validation"]["anonymous_shapes"]` maps the labels). The same in every run,
+  parse, engine and row order, with or without findings of other shapes, for joined runs
+  and frames without metadata (a blank-node shape needs the metadata). Every
+  `triplets-shacl` alert on GitHub code scanning closes and re-opens once. Schema ruleIds
+  (`triplets-rdfs`) are unchanged; `SOURCE_SHAPE` and `properties.sourceShape` are
+  unchanged.
+- **Every `sh:sparql` solution is a finding, with its `sh:message` filled in.**
+  Solutions that differed only in a variable other than `?value` were reported once,
+  and `{?name}` / `{$name}` in the message stayed as written (APL `ClassCount`: 9
+  classes, 3 rows with the text `The class {?class} appears {?value} times …`). The
+  placeholders are now replaced by the solution's values, as pyshacl writes them (an
+  IRI whole, a literal's text; `{?value}` of a node shape's solution without `?value` is
+  the focus node), on every engine, and identical findings of a
+  `sh:sparql` constraint are told apart by the message too. `MESSAGE_SOURCE` of a
+  filled message is `shacl`.
+- **`sh:targetNode <class IRI>` with `sh:path [ sh:inversePath rdf:type ]` finds the
+  class's instances** on pandas, polars and duckdb, as pyshacl does. The engines compared
+  the class IRI with the local `Type` VALUE, so a `sh:minCount 1` on that path ("no
+  TopologicalIsland instantiated") always failed. The node is matched when it is the IRI
+  the VALUE stands for (the name's schema namespace, else `undefined_namespace`); the
+  same holds for an enumeration value IRI under the inverse of an enumeration KEY.
+- **The parser's `Distribution` and `NamespaceMap` objects are no longer validated as
+  data.** Every engine, pyshacl included, checked the two objects the parsers add to each
+  file: `sh:targetSubjectsOf rdf:type` shapes reported them as classes outside the
+  profile, and dangling-reference queries reported the namespace IRIs of `NamespaceMap`.
+  Their IDs are new at every parse, so those findings never matched the previous run.
+  They are now left out of the validated rows (focus nodes, value nodes, the graph of
+  `sh:sparql`, SPARQL targets and pyshacl) on every engine. The classes are
+  `triplets.iri.METADATA_TYPES`, the ones `cim-diff` and `cim-spreadsheet` use
+  (`triplets.cli.METADATA_TYPES` is the same object); validation leaves out only the
+  objects the parsers wrote — unreferenced, a `Distribution` with a `label` and no KEY but
+  `label` / `fileName` / `belongsToContainer` — so a `dcat:Distribution` of the data is
+  validated. The schema validations never
+  reported them: no schema defines the two classes.
+- **`concat_violations` raises on a schema frame without run metadata joined with a SHACL
+  frame.** Only the metadata was compared, so the result was one `triplets-shacl` run
+  holding schema rules. The language of a frame without metadata is the one its rows show,
+  as in the exports.
+- **`concat_violations` joins a frame it already joined.** A joined frame of runs with
+  two rule sets (so also the frame of `validate_by_header`) raised
+  `TypeError: unhashable type: 'list'` when joined again. The result is now the same
+  however the runs are grouped: `concat_violations([concat_violations([a, b]), c])`
+  equals `concat_violations([a, b, c])`, rows and metadata. A joined frame keeps its
+  runs' rule sets with their counts in `attrs["validation"]["rule_sets"]` (not
+  exported); a single value meeting a list of distinct values joins the list, and
+  `None` is no value (`profiles` of a run without `rdf_map_scope` no longer nests as
+  `[None, [...]]`).
+- **The run metadata is plain values: operations on a violations frame no longer
+  deep-copy rdflib graphs.** `attrs["validation"]["source_shapes"]` held one
+  `rdflib.Graph` per violated shape, which pandas deep-copies with `attrs` at every
+  frame and column operation (55 to 115 ms each on a run with 82 violated shapes). It
+  now holds the same definitions as N-Triples text per shape id
+  (`triplets.validation.shacl_report.shape_triples(text)` reads one back, blank-node
+  labels kept); the SHACL report embeds the same triples as before.
+- **SHACL report: `sh:value` has the term kind of the data**, by the schema entry type of
+  the KEY (`rdf_map=` on `export_to_shacl_report` / `violations_to_report_graph`): the
+  referenced object's IRI for an Association (`<urn:uuid:…>`, an absolute IRI as it is),
+  the enumeration value IRI for an Enumeration, the class IRI for a `Type` VALUE (also
+  without `rdf_map`: in `undefined_namespace`, CIM100 by default) and for the class a
+  `( association rdf:type )` path reports (told by the shape's definition in the run
+  metadata). Every one was a string literal (`sh:value "00000000-…"`). An Attribute
+  value, a value of a KEY the schema does not define, and every value but `Type` without
+  `rdf_map` stay plain literals with the VALUE text, whatever the text looks like. The
+  terms are the ones `export_to_nquads` writes: a reference VALUE that reads like a
+  schema name is still `urn:uuid:<text>`, a KEY given as its IRI has the entry of its
+  local name, a VALUE that is no text is written as its text.
+  `report_to_violations(graph, rdf_map=…, undefined_namespace=…)` reads the values back
+  exactly: an IRI becomes a local name only when it is the IRI that name stands for, so
+  a reference or a class in another namespace comes back whole, with a `#` too
+  (`http://www.w3.org/ns/dcat#Dataset`). Without `rdf_map` the reader guesses, and an
+  `http` IRI with a `#` loses its namespace.
+- **A violations frame without run metadata that holds schema findings is exported as an
+  RDFS run**, in SARIF (`triplets-rdfs`, `RDFS …` titles, `[rdfs_…]` message tags) and in
+  the SHACL report: the language is `rdfs` when every `SOURCE_SHAPE` is a schema shape
+  (`urn:triplets:schema…`), where every such frame was labelled SHACL. `pandas.concat`
+  drops the metadata of frames from different runs. A frame that mixes schema and SHACL
+  rows stays one SHACL run: pass the frames as a list for one run each.
+- **`parse()` reads a `.owl` file as RDF/XML**, as a path and as a zip member, like `.xml` and
+  `.rdf`; it logged "Not supported file" and returned no rows. `cim-spreadsheet` takes a
+  `.owl` input as CIM XML too. A file is told by the suffix of its file name
+  (`.xml` / `.rdf` / `.owl`, any case), not by those letters anywhere in its path: a zip in
+  a directory `j.owlett/` is a zip, `model.xml.zip` is a zip, and `model.xml.tmp` is no
+  longer read. `.owl` is read as RDF/XML only; a `.owl` zip member that is not XML with a
+  namespaced root element (an ontology in Turtle) is skipped with a warning, in any
+  encoding XML declares.
+- **CIM XML export: no "matches none of the schema profiles … nothing is exported" warning
+  for a schema with root entries.** A flat schema that also holds a nested dict without a
+  `type` (read as a profile section) exported every object and logged the warning once per
+  file. The warning is for a schema with sections whose root entries define no class of
+  the instance (a bundled schema with one added root attribute still warns).
+- **`validate_schema_references` on the pandas engine no longer costs by the number of typed
+  objects in every rule.** `Series.isin` on the pandas 3 `str` dtype converts every member
+  of the ID list one by one at each call (about 40 ms for 15 000 IDs), and the reference
+  rules made that call once or twice each with the ID of every typed object. The pandas
+  engine now compares IDs as objects in every membership test (focus, `sh:class`,
+  `sh:node`, `sh:closed`, `sh:nodeKind`, `rdfs:range`, `triplets:missing`), with or
+  without pyarrow, and the pandas and polars engines build the typed-ID list once per
+  run. 78 786 rows, 14 900 objects, 238 rules: pandas 5.0 s → 0.4 s, polars
+  0.72 s → 0.26 s; findings unchanged.
 - **CIM XML export: a reference VALUE that is an absolute IRI is written as it is**, as
   `export_to_nquads` writes it. For a reference key with an empty `value_prefix` the VALUE
   was only looked up as an enumeration name, so `rdf:resource="http://www.w3.org/ns/dcat#Dataset"`

@@ -14,7 +14,8 @@ from triplets._header import distribution_labels
 logger = logging.getLogger(__name__)
 
 
-def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None):
+def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, single_file=False, base_filename=None,
+                  string_to_number=False):
     """Export triplet data to CSV files using polars.
 
     Parameters
@@ -31,6 +32,10 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
         If True, export all data using a single base filename.
     base_filename : str, optional
         Base filename when single_file=True. If None, uses 'export'.
+    string_to_number : bool, default False
+        False writes every VALUE as its text. True converts the columns that hold
+        only numbers to numbers first, so they are written in the number's form
+        (``007`` → ``7``).
     """
     from triplets.tools import polars_engine
 
@@ -38,7 +43,7 @@ def export_to_csv(data, path=None, multivalue=True, export_to_memory=False, sing
         td = polars_engine.types_dict(df)
         views = {}
         for class_name in td:
-            tv = polars_engine.type_tableview(df, class_name, string_to_number=False, multivalue=multivalue)
+            tv = polars_engine.type_tableview(df, class_name, string_to_number=string_to_number, multivalue=multivalue)
             if tv is not None:
                 views[class_name] = tv
         return views

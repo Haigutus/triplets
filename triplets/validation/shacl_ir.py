@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, XSD_NS, local_id, local_key, local_value, split_iri
+from ..iri import SH_NS, TYPE_KEY, XSD_NS, local_id, local_key, local_value, split_iri
 from .value_space import bound_space, pair_params
 
 logger = logging.getLogger(__name__)
@@ -171,6 +171,20 @@ def _term(shape_id):
     """A shape id (``shape_id`` / ``shapes`` string form) → its rdflib term."""
     import rdflib
     return rdflib.URIRef(shape_id) if _is_iri(shape_id) else rdflib.BNode(shape_id)
+
+
+MESSAGE_VARIABLE = re.compile(r"\{[?$](\w+)\}")
+"""``{?name}`` / ``{$name}`` in the sh:message of a sh:sparql constraint: replaced by the
+solution's value of that variable (SHACL 5.3.2)."""
+
+
+def holds_names(key, value_types):
+    """Whether the VALUEs under *key* are names that stand for IRI nodes: classes
+    (``Type``) and enumeration values. As a focus node — ``sh:targetObjectsOf``, a
+    ``sh:targetNode`` class, the focus of an inverse path — such a VALUE is its IRI
+    (``iri.absolute_name``: the name's schema namespace, else the undefined
+    namespace); a reference VALUE is a node id as it is."""
+    return key == TYPE_KEY or value_types.get(key) == "enum"
 
 
 def _mark_switched_off(graph, compiled):

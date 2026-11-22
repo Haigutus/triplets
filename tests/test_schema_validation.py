@@ -337,6 +337,24 @@ def test_sarif_tool_name_and_tags(engine):
     assert tags["xsd:minOccurs"] == ["rdfs", "xsd:minOccurs", "EQ", "OP"]
 
 
+def test_sarif_rule_id_keeps_the_scope():
+    """ruleId = scope, shape local name, constraint: the same class and key under two scopes
+    are two stable rules, whatever their order; no scope, no prefix."""
+    from triplets.validation.sarif import build_sarif
+
+    rows = breaker("b1")
+    scoped = [run(rows, "pandas", rdf_map_scope=scope) for scope in (["EQ"], ["EQ", "OP"])]
+    expected = {"EQ:Breaker.IdentifiedObject.mRID/xsd:minOccurs", "EQ:OP:Breaker.IdentifiedObject.mRID/xsd:minOccurs"}
+    for frames in (scoped, scoped[::-1]):
+        both = pandas.concat(frames, ignore_index=True)
+        both.attrs = frames[0].attrs
+        ids = {rule["id"] for rule in build_sarif(both)["runs"][0]["tool"]["driver"]["rules"]}
+        assert expected <= ids and not any(rule_id.endswith("-2") for rule_id in ids)
+    flat = validate_schema(frame(rows), SCHEMA["EQ"], engine="pandas")
+    assert "Breaker.IdentifiedObject.mRID/xsd:minOccurs" in {
+        rule["id"] for rule in build_sarif(flat)["runs"][0]["tool"]["driver"]["rules"]}
+
+
 def test_info_severity_reaches_the_reports():
     """Info → SARIF note (schema-valid document) and sh:resultSeverity sh:Info."""
     import json

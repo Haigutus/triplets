@@ -46,6 +46,7 @@ every engine's report carries the triplets:lexicalForm Warnings, with
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Any
 
@@ -53,14 +54,14 @@ import pandas
 
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, load_rdf_map
+from ..iri import CIM_NS, load_rdf_map, split_iri
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
-from .shacl_ir import _mark_switched_off, _term
+from .shacl_ir import MESSAGE_VARIABLE, _is_iri, _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_ir import schema_name
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
-from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
+from .shacl_report import (VALIDATION_FAILURE, VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
 from .context import file_names as _file_names
@@ -107,7 +108,7 @@ def get_engine(name: str = "auto"):
 
 
 def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=None, engine="auto", lexical=True,
-                   undefined_namespace=CIM_NS, inheritance=True, deactivated_shapes=None, abort_on_first=False,
+                   undefined_namespace=CIM_NS, inheritance=False, deactivated_shapes=None, abort_on_first=False,
                    **kwargs):
     """Validate triplet data against SHACL shapes; return a violations DataFrame.
 
@@ -146,12 +147,16 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     undefined_namespace : str, default CIM100
         Namespace for names the schema does not declare (every name without
         an rdf_map) in the graph the sh:sparql constraints and pyshacl see.
-    inheritance : bool, default True
+    inheritance : bool, default False
+        False matches the exact ``rdf:type`` only: plain SHACL reads
+        ``rdfs:subClassOf`` from the data graph, and CIM files carry none. True:
         ``sh:targetClass`` and ``sh:class`` also match instances of subclasses,
         from the scoped profiles' ``inheritance`` lists
         (:func:`~triplets.validation.schema_scope.class_ancestors`; pyshacl: as
-        ``rdfs:subClassOf`` in ``ont_graph``). False matches the exact
-        ``rdf:type`` only. No effect without an rdf_map.
+        ``rdfs:subClassOf`` in ``ont_graph``). The ancestor map is one per run,
+        built from all profiles in ``rdf_map_scope``: same-named Class entries
+        union their ``inheritance`` lists, and the closure goes only through
+        ancestors that have a Class entry in the scope. No effect without an rdf_map.
     deactivated_shapes : shape IRI or iterable of them, optional
         The shapes to switch off for this run — replaces the set the graph
         declares (``compiled.deactivated``): None = the declared set, ``[]`` =
@@ -161,7 +166,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         (``CompiledShapes.active``).
     abort_on_first : bool, default False
         Stop at the first Violation — for a yes/no gate, not a full report.
-        Warning and Info findings and ``triplets:invalidSparql`` rows never
+        Warning and Info findings and ``triplets:invalidSparql`` / ``triplets:validationFailure`` rows never
         stop the run. The result holds the findings of the work finished
         before the stop, so engines agree on whether a Violation exists, not
         on the rows. polars / duckdb stop after the vectorized pass, pandas
@@ -195,6 +200,9 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
+    # a run the engine gave up on (pyshacl's ValidationFailure) is partial: said where the coverage is read
+    violations.attrs["validation"]["skipped_shapes"] += list(
+        violations.loc[violations["VIOLATION_TYPE"] == VALIDATION_FAILURE, "MESSAGE"])
     violations.attrs["validation"]["aborted"] = abort_on_first and has_violation(violations)
     violations.attrs["validation"]["inheritance"] = bool(ancestors)   # applied: an rdf_map with classes, the flag on
     violations.attrs["validation"]["profiles"] = (scoped[SCOPE_KEY].get("ProfileMetadata", {}).get("sections")
@@ -217,9 +225,13 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=T
         violations = pandas.concat([violations, supplement], ignore_index=True)
     # identical findings once: a property shape on a parent and a child node shape
     # both reach a subclass instance, the same triple sits in two instance files,
-    # the lexical supplement repeats pyshacl
-    return violations.drop_duplicates(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
-                                              "SOURCE_SHAPE", "SEVERITY"], ignore_index=True)
+    # the lexical supplement repeats pyshacl (in its own words). The solutions of a
+    # sh:sparql constraint are told apart by their message too: two that differ in
+    # another variable than ?value are two findings
+    solution = violations["MESSAGE"].where(violations["VIOLATION_TYPE"] == "sh:sparql")
+    repeated = violations.assign(MESSAGE=solution).duplicated(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
+                                                                      "SOURCE_SHAPE", "SEVERITY", "MESSAGE"])
+    return violations.loc[~repeated].reset_index(drop=True)
 
 
 def _present(violations, ir, language):
@@ -288,19 +300,20 @@ def _expected(violations, ir):
             zip(violations["SOURCE_SHAPE"], violations["KEY"], violations["VIOLATION_TYPE"])]
 
 
-def _source_shape_graphs(violations, compiled):
-    """{shape id: rdflib CBD graph} of the violated shapes — the SHACL report
-    embeds these so sh:sourceShape is never an empty node (term identity is
-    preserved: the CBD's blank nodes ARE the compiled graph's, so they align
-    with the report's sh:sourceShape labels). sh:deactivated as the run used it."""
-    graphs = {}
+def _source_shapes(violations, compiled):
+    """{shape id: N-Triples text} of the violated shapes' definitions (CBD) — the
+    SHACL report embeds these so sh:sourceShape is never an empty node. Text, so
+    the frame's attrs stay plain values; the blank-node labels in it are the
+    compiled graph's, the ones SOURCE_SHAPE names (shacl_report.shape_triples
+    reads them back unchanged). sh:deactivated as the run used it."""
+    texts = {}
     if compiled.graph is None:           # schema-compiled IR — no shapes graph to embed
-        return graphs
+        return texts
     for shape in set(violations["SOURCE_SHAPE"].dropna().astype(str)):
         cbd = compiled.graph.cbd(_term(shape))
         if len(cbd):
-            graphs[shape] = _mark_switched_off(cbd, compiled)
-    return graphs
+            texts[shape] = _mark_switched_off(cbd, compiled).serialize(format="nt")
+    return texts
 
 
 def _message_sources(violations, ir):
@@ -309,8 +322,19 @@ def _message_sources(violations, ir):
     authored = tuple(sorted({rule.message for rule in ir.itertuples()
                              if isinstance(rule.message, str) and rule.message},
                             key=len, reverse=True))
-    return ["shacl" if isinstance(message, str) and message.startswith(authored) else "engine"
-            for message in violations["MESSAGE"]]
+    # the sh:sparql messages of a shape, their {?variable} placeholders filled with any values
+    filled = {}
+    for rule in ir.itertuples():
+        if rule.component == "sh:sparql" and isinstance(rule.message, str) and MESSAGE_VARIABLE.search(rule.message):
+            parts = MESSAGE_VARIABLE.sub("\0", rule.message).split("\0")
+            filled.setdefault(rule.shape_id, []).append(re.compile(".*".join(map(re.escape, parts)), re.DOTALL))
+
+    def is_authored(message, violation_type, shape):
+        return message.startswith(authored) or (violation_type == "sh:sparql"
+                                                and any(pattern.match(message) for pattern in filled.get(shape, ())))
+    return ["shacl" if isinstance(message, str) and is_authored(message, violation_type, shape) else "engine"
+            for message, violation_type, shape in zip(violations["MESSAGE"], violations["VIOLATION_TYPE"],
+                                                      violations["SOURCE_SHAPE"])]
 
 
 def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
@@ -524,10 +548,45 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "skipped_shapes": skipped_shapes,
         "relaxed_constraints": list(notes["relaxed_constraints"]),
         "skipped_components": skipped_components,
-        # rdflib graphs, in-memory only — the SHACL report embeds them;
-        # SARIF properties and the csv/excel sidecars skip this key
-        "source_shapes": _source_shape_graphs(violations, compiled),
+        "anonymous_shapes": _anonymous_shapes(violations, compiled),
+        # the violated shapes' definitions as N-Triples — the SHACL report embeds
+        # them; SARIF properties and the csv/excel sidecars skip this key
+        "source_shapes": _source_shapes(violations, compiled),
     }
+
+
+def _anonymous_shapes(violations, compiled):
+    """{blank-node label: stable name} of the violated shapes without an IRI — the label
+    is new at every parse, the stable name is the shape part of the SARIF ruleId: the
+    nearest named shape above it, its path, and eight hex digits of the SHA-1 of that
+    shape's IRI and the canonical definition (``BreakerShape.IdentifiedObject.name-5c1d07aa``;
+    ``BreakerShape-5c1d07aa`` without a path, ``shape-5c1d07aa`` with no named shape
+    above). Two anonymous shapes of one parent and path have two names."""
+    labels = {shape for shape in violations["SOURCE_SHAPE"].dropna().astype(str) if not _is_iri(shape)}
+    if not labels or compiled.graph is None:
+        return {}
+    ir = (compiled.base or compiled).ir
+    rows = ir.loc[ir["shape_id"].isin(labels)].drop_duplicates("shape_id").set_index("shape_id")
+    stable = {}
+    for label in sorted(labels):
+        lineage = rows.at[label, "shapes"] if label in rows.index else ()
+        lineage = lineage[:lineage.index(label)] if label in lineage else ()   # the shapes above it
+        path = rows.at[label, "path"] if label in rows.index else None
+        named = next((shape for shape in reversed(lineage) if _is_iri(shape)), None)
+        name = ".".join(filter(None, (split_iri(named)[1] if named else "shape", path if isinstance(path, str) and named else None)))
+        stable[label] = f"{name}-{_definition_digest(compiled.graph, label, named)}"
+    return stable
+
+
+def _definition_digest(graph, label, parent=None):
+    """Eight hex digits of the SHA-1 of a blank-node shape's definition (CBD), its
+    blank nodes labelled canonically, and the IRI of the named shape above it: the
+    same for the same Turtle in every parse."""
+    import hashlib
+    from rdflib.compare import to_canonical_graph
+
+    lines = sorted(to_canonical_graph(graph.cbd(_term(label))).serialize(format="nt").splitlines())
+    return hashlib.sha1("\n".join([parent or "", *lines]).encode("utf-8")).hexdigest()[:8]
 
 
 def _iso(moment):

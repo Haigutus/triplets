@@ -19,7 +19,7 @@ rdf_map_scope. Import-light on purpose: stdlib only.
 
 from .iri import _root_entries, _sections, absolute_datatype, prefixes
 from .iri import load_rdf_map  # noqa: F401 — re-exported for the export engines
-from .iri import TYPE_KEY
+from .iri import DISTRIBUTION_KEYS, METADATA_TYPES, TYPE_KEY
 from ._engine_detect import flavor
 
 # Profile identity a header may declare, in priority order: old FullModel
@@ -182,6 +182,51 @@ def _merge_entry(name, merged, found, notes, bound):
         merged["values"] = list(dict.fromkeys(value for each in values for value in each))
         notes["relaxed_constraints"].append(
             f"{name}: enumeration values united ({' + '.join(section for section, _ in found)})")
+
+
+def parser_metadata_ids(data):
+    """The IDs of the objects the parsers added to *data* (pandas or polars), by what
+    the parsers write and nothing in a file can be: a ``METADATA_TYPES`` object that no
+    row references — the parsers give it a new ID — and, for a ``Distribution``, one
+    with a ``label`` and no KEY outside ``DISTRIBUTION_KEYS``. A ``dcat:Distribution``
+    of the data (a manifest) has other properties or is referenced: it is data."""
+    if flavor(data) == "polars":
+        import polars
+        key, value = polars.col("KEY"), polars.col("VALUE")
+        types = data.filter((key == TYPE_KEY) & value.is_in(METADATA_TYPES)).drop_nulls("ID")
+        if types.is_empty():
+            return []
+        rows = data.filter(polars.col("ID").is_in(types["ID"].implode()))
+        distributions = set(types.filter(value == "Distribution")["ID"])
+        labelled = set(rows.filter(key == "label")["ID"])
+        foreign = set(rows.filter(~key.is_in(DISTRIBUTION_KEYS))["ID"])
+        own = [identifier for identifier in types["ID"].unique()
+               if identifier not in distributions or (identifier in labelled and identifier not in foreign)]
+        referenced = set(data.filter(value.is_in(own))["VALUE"])
+        return [identifier for identifier in own if identifier not in referenced]
+    types = data.loc[(data["KEY"] == TYPE_KEY) & data["VALUE"].isin(METADATA_TYPES) & data["ID"].notna()]
+    if types.empty:
+        return []
+    rows = data.loc[data["ID"].isin(types["ID"])]
+    distributions = set(types.loc[types["VALUE"] == "Distribution", "ID"])
+    labelled = set(rows.loc[rows["KEY"] == "label", "ID"])
+    foreign = set(rows.loc[~rows["KEY"].isin(DISTRIBUTION_KEYS), "ID"])
+    own = [identifier for identifier in types["ID"].unique()
+           if identifier not in distributions or (identifier in labelled and identifier not in foreign)]
+    referenced = set(data.loc[data["VALUE"].isin(own), "VALUE"])
+    return [identifier for identifier in own if identifier not in referenced]
+
+
+def without_metadata(data):
+    """*data* (pandas or polars) without the objects the parsers add to every file
+    (``parser_metadata_ids``) — every row of their IDs; the same frame when it has none."""
+    ids = parser_metadata_ids(data)
+    if not ids:
+        return data
+    if flavor(data) == "polars":
+        import polars
+        return data.filter(~polars.col("ID").is_in(ids) | polars.col("ID").is_null())
+    return data.loc[~data["ID"].isin(ids)]
 
 
 def distribution_labels(data, label_key="label"):

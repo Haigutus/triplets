@@ -572,6 +572,78 @@ class TestExportToCsv:
         assert hasattr(result[0], 'read')
 
 
+LEXICAL = ["1.0", "0.10", "1e3", "007", "522000000.0", "-0"]   # a column of numbers only
+
+
+def _lexical_frame():
+    rows = [(f"id{i}", key, value, "i1") for i, text in enumerate(LEXICAL)
+            for key, value in (("Type", "ParameterValue"), ("ParameterValue.value", text))]
+    return pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
+@pytest.mark.parametrize("fmt", ["excel", "csv"])
+def test_spreadsheet_export_keeps_the_value_text(fmt):
+    """A number is a cell with the VALUE text, so the spreadsheet → CIM direction writes it back unchanged."""
+    import io
+    from triplets.tools import tableviews_to_triplets
+    if fmt == "excel":
+        pytest.importorskip("openpyxl")
+        file = triplets.export.export_to_excel(_lexical_frame(), export_to_memory=True, single_file=True)
+        table = pandas.read_excel(file, sheet_name="ParameterValue", index_col=0, dtype=str)
+    else:
+        (file,) = triplets.export.export_to_csv(_lexical_frame(), export_to_memory=True, single_file=True)
+        table = pandas.read_csv(io.BytesIO(file.getvalue()), index_col=0, dtype=str)
+    assert table["ParameterValue.value"].tolist() == LEXICAL
+    back = tableviews_to_triplets({"ParameterValue": table})
+    assert back.loc[back["KEY"] == "ParameterValue.value", "VALUE"].tolist() == LEXICAL
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+def test_triplets_to_tableviews_string_to_number(flavor):
+    data = _lexical_frame() if flavor == "pandas" else pytest.importorskip("polars").from_pandas(_lexical_frame())
+    values = lambda views: list(views["ParameterValue"]["ParameterValue.value"])  # noqa: E731
+    assert values(triplets.tools.triplets_to_tableviews(data)) == [1.0, 0.1, 1000.0, 7.0, 522000000.0, 0.0]
+    assert values(triplets.tools.triplets_to_tableviews(data, string_to_number=False)) == LEXICAL
+    with pytest.raises(TypeError):                                # keyword only: the second position is multivalue
+        triplets.tools.triplets_to_tableviews(data, False, False)
+
+
+def test_tableviews_signatures_agree():
+    """pandas, polars and DuckDB: multivalue, then string_to_number as a keyword."""
+    import inspect
+    from triplets.tools import duckdb_engine, pandas_engine, polars_engine
+    for engine in (pandas_engine, polars_engine, duckdb_engine):
+        parameters = inspect.signature(engine.triplets_to_tableviews).parameters
+        assert list(parameters)[-2:] == ["multivalue", "string_to_number"]
+        assert parameters["string_to_number"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+@pytest.mark.parametrize("fmt", ["excel", "csv"])
+def test_spreadsheet_export_per_instance(fmt, flavor):
+    """One export per instance (its Distribution label names the file) keeps the VALUE
+    text; string_to_number=True writes number cells instead."""
+    import io
+    data = pandas.concat([_lexical_frame(), pandas.DataFrame(
+        [("d1", "Type", "Distribution", "i1"), ("d1", "label", "model.xml", "i1")], columns=_lexical_frame().columns)])
+    if flavor == "polars":
+        data = pytest.importorskip("polars").from_pandas(data)
+
+    def column(**options):
+        if fmt == "excel":
+            pytest.importorskip("openpyxl")
+            (file,) = triplets.export.export_to_excel(data, export_to_memory=True, **options)
+            assert file.name == "model.xlsx"
+            return pandas.read_excel(file, sheet_name="ParameterValue", index_col=0, dtype=object)["ParameterValue.value"]
+        files = {file.name: file for file in triplets.export.export_to_csv(data, export_to_memory=True, **options)}
+        return pandas.read_csv(io.BytesIO(files["model_ParameterValue.csv"].getvalue()), index_col=0,
+                               dtype=str)["ParameterValue.value"]
+    assert column().tolist() == LEXICAL
+    numbers = column(string_to_number=True)
+    assert [float(value) for value in numbers] == [1.0, 0.1, 1000.0, 7.0, 522000000.0, 0.0]
+    assert numbers.tolist() != LEXICAL and (fmt == "csv" or not any(isinstance(value, str) for value in numbers))
+
+
 # CIM XML export engines; cython_pugixml skipped when the extension is not built
 CIMXML_ENGINES = ["python_lxml", "cython_pugixml"]
 

@@ -1,6 +1,7 @@
 """Tests for the SARIF 2.1.0 exporter (triplets.validation.sarif)."""
 import io
 import json
+import re
 
 from pathlib import Path
 from urllib.parse import quote
@@ -278,6 +279,81 @@ def test_official_schema_conformance(violations):
     assert document["runs"][0]["invocations"][0]["toolConfigurationNotifications"]
     assert document["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["tags"]
     jsonschema.validate(document, schema)
+
+
+def _schema_violations():
+    """One xsd:minOccurs finding of a schema run."""
+    schema = {"EQ": {"ACLineSegment": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                                       "parameters": ["IdentifiedObject.name"]},
+                     "IdentifiedObject.name": {"type": "Attribute", "xsd:minOccours": "1", "xsd:maxOccours": "1",
+                                               "xsd:type": "xsd:string"}}}
+    return triplets.validation.validate_schema(frame(1), schema, rdf_map_scope="EQ", engine="pandas")
+
+
+def test_one_log_for_a_schema_run_and_a_shacl_run(violations, tmp_path):
+    """A list of frames is one log with one run per frame, each named by its own language
+    and equal to the run of that frame alone."""
+    jsonschema = pytest.importorskip("jsonschema")
+    schema_violations = _schema_violations()
+    document = build_sarif([schema_violations, violations])
+    jsonschema.validate(document, json.loads((Path(__file__).parent / "data" / "sarif-schema-2.1.0.json")
+                                             .read_text(encoding="utf-8")))
+    assert [run["tool"]["driver"]["name"] for run in document["runs"]] == ["triplets-rdfs", "triplets-shacl"]
+    assert document["runs"] == [build_sarif(schema_violations)["runs"][0], build_sarif(violations)["runs"][0]]
+    assert [rule["id"] for rule in document["runs"][0]["tool"]["driver"]["rules"]] \
+        == ["EQ:ACLineSegment.IdentifiedObject.name/xsd:minOccurs"]
+    assert document["runs"][0]["properties"]["language"] == "rdfs"
+    for run in document["runs"]:                                   # ruleIndex is per run
+        for result in run["results"]:
+            assert run["tool"]["driver"]["rules"][result["ruleIndex"]]["id"] == result["ruleId"]
+
+    path = export_to_sarif([schema_violations, violations], data=frame(), path=tmp_path / "both.sarif")
+    written = json.loads(Path(path).read_text(encoding="utf-8"))
+    assert [run["tool"]["driver"]["name"] for run in written["runs"]] == ["triplets-rdfs", "triplets-shacl"]
+    uris = {location["physicalLocation"]["artifactLocation"]["uri"]
+            for run in written["runs"] for result in run["results"] for location in result["locations"]}
+    assert uris == {quote("Svedala EQ.xml")}                       # data= enriched every frame
+
+
+def test_frames_of_one_language_are_joined_first(violations):
+    """Two frames of one language would be two runs of one tool: ValueError naming the
+    language. A tuple is a list of frames; no frame is a log without runs."""
+    schema_violations = _schema_violations()
+    for frames in ([violations, violations], (schema_violations, violations, schema_violations)):
+        with pytest.raises(ValueError, match="(shacl|rdfs).*concat_violations"):
+            build_sarif(frames)
+    with pytest.raises(ValueError, match="rdfs"):
+        export_to_sarif([schema_violations, schema_violations], export_to_memory=True)
+    joined = triplets.validation.concat_violations([schema_violations, schema_violations])
+    assert [run["tool"]["driver"]["name"] for run in build_sarif((joined, violations))["runs"]] \
+        == ["triplets-rdfs", "triplets-shacl"]
+    assert build_sarif([])["runs"] == []
+    # an empty frame without metadata (a clean run joined with pandas.concat) is no run and no clash
+    bare = pandas.DataFrame(columns=schema_violations.columns)
+    assert [run["tool"]["driver"]["name"] for run in build_sarif([bare, violations])["runs"]] == ["triplets-shacl"]
+    assert build_sarif([bare])["runs"] == []
+    clean = schema_violations.iloc[0:0]                               # a clean run with its metadata is a run
+    assert [run["tool"]["driver"]["name"] for run in build_sarif([clean, violations])["runs"]] \
+        == ["triplets-rdfs", "triplets-shacl"]
+
+
+def test_language_of_a_frame_without_run_metadata(violations):
+    """A frame without run metadata: schema rows alone are an RDFS run, anything else SHACL."""
+    def bare(rows):
+        rows = rows.copy()
+        rows.attrs = {}
+        return rows
+
+    run = build_sarif(bare(_schema_violations()))["runs"][0]
+    assert run["tool"]["driver"]["name"] == "triplets-rdfs"
+    assert run["tool"]["driver"]["rules"][0]["name"].startswith("RDFS ")
+    assert "[rdfs_path] IdentifiedObject.name" in run["results"][0]["message"]["text"]
+    report = triplets.validation.shacl_report.violations_to_report_graph(bare(_schema_violations()))
+    assert "[rdfs_profile] EQ" in {str(term) for term in report.objects()}
+    mixed = pandas.concat([_schema_violations(), violations], ignore_index=True)
+    assert not mixed.attrs                                          # pandas.concat drops differing attrs
+    for rows in (bare(violations), mixed, bare(_schema_violations()).iloc[0:0]):
+        assert build_sarif(rows)["runs"][0]["tool"]["driver"]["name"] == "triplets-shacl"
 
 
 def test_github_code_scanning_requirements(violations):
@@ -889,3 +965,126 @@ def test_related_locations_schema_conformance(tmp_path):
         document = build_sarif(violations, group=group, sources=[xml])
         assert "relatedLocations" in json.dumps(document)
         jsonschema.validate(document, schema)
+
+
+# ── ruleIds of shapes that share a local name ─────────────────────────────────
+SAME_NAME = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix eq: <http://example.org/eq#> .
+@prefix ssh: <http://example.org/ssh#> .
+eq:Named-node a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:property eq:Named-property .
+eq:Named-property a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 .
+ssh:Named-node a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:property ssh:Named-property .
+ssh:Named-property a sh:PropertyShape ; sh:path cim:IdentifiedObject.description ; sh:minCount 1 .
+cim:Long-node a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:property cim:Long-property .
+cim:Long-property a sh:PropertyShape ; sh:path cim:Conductor.length ; sh:minCount 1 .
+"""
+
+
+def rule_ids(violations):
+    """{SOURCE_SHAPE: ruleId} of a one-run log."""
+    return {rule["properties"]["sourceShape"]: rule["id"] for rule in build_sarif(violations)["runs"][0]["tool"]["driver"]["rules"]}
+
+
+def hashed(shape, constraint="sh:minCount"):
+    """The ruleId of a named SHACL shape."""
+    import hashlib
+    return f"{shape.rsplit('#', 1)[1]}-{hashlib.sha1(shape.encode()).hexdigest()[:8]}/{constraint}"
+
+
+def test_shacl_rule_ids_are_a_function_of_the_shape_iri():
+    """<local name>-<8 hex of the SHA-1 of the IRI>/<constraint> for every named shape:
+    the same in any row order, with or without findings of a shape of the same local
+    name, with or without run metadata, alone or joined with a run of other shape files."""
+    import rdflib
+    compiled = triplets.validation.compile(rdflib.Graph().parse(data=SAME_NAME, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(2), compiled, engine="pandas")
+    eq, ssh, long = ("http://example.org/eq#Named-property", "http://example.org/ssh#Named-property",
+                     "http://iec.ch/TC57/CIM100#Long-property")
+    expected = {shape: hashed(shape) for shape in (eq, ssh, long)}
+    assert len(set(expected.values())) == 3
+    assert rule_ids(violations) == expected
+    assert rule_ids(violations.iloc[::-1]) == expected
+    only_ssh = violations[violations["SOURCE_SHAPE"] != eq]              # the eq findings are fixed
+    assert rule_ids(only_ssh) == {shape: rule for shape, rule in expected.items() if shape != eq}
+    bare = pandas.DataFrame(violations)
+    bare.attrs = {}
+    assert rule_ids(bare) == expected
+    # two runs on two shape files that each hold a shape P, joined
+    runs = {}
+    for namespace in ("http://a.org/s#", "http://b.org/s#"):
+        shapes = triplets.validation.compile(rdflib.Graph().parse(format="turtle", data=f"""
+            @prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> .
+            <{namespace}N> a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:property <{namespace}P> .
+            <{namespace}P> a sh:PropertyShape ; sh:path cim:IdentifiedObject.name ; sh:minCount 1 ."""))
+        runs[namespace + "P"] = triplets.validation.validate_shacl(frame(2), shapes, engine="pandas")
+    alone = {shape: rule_ids(run)[shape] for shape, run in runs.items()}
+    assert alone == {shape: hashed(shape) for shape in runs}
+    assert rule_ids(triplets.validation.concat_violations(runs.values())) == alone
+    assert "anonymous_shapes" not in build_sarif(violations)["runs"][0]["properties"]
+
+
+def test_schema_rule_id_does_not_follow_the_scope_order():
+    """The ruleId sorts the profile names of the scope; a section name with a separator
+    is percent-encoded in the shape id; a shape id that only starts like the schema
+    namespace is a SHACL shape."""
+    schema = {name: {"ACLineSegment": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#",
+                                       "parameters": ["IdentifiedObject.name"]},
+                     "IdentifiedObject.name": {"type": "Attribute", "xsd:minOccours": "1", "xsd:maxOccours": "1",
+                                               "xsd:type": "xsd:string"}} for name in ("OP", "EQ#1")}
+    ids = set()
+    for scope in (["OP", "EQ#1"], ["EQ#1", "OP"]):
+        violations = triplets.validation.validate_schema(frame(1), schema, rdf_map_scope=scope, engine="pandas")
+        assert set(violations["SOURCE_SHAPE"]) == {
+            "urn:triplets:schema:" + ":".join(name.replace("#", "%23") for name in scope) + "#ACLineSegment.IdentifiedObject.name"}
+        ids |= set(rule_ids(violations).values())
+    assert ids == {"EQ%231:OP:ACLineSegment.IdentifiedObject.name/xsd:minOccurs"}
+    runs = [triplets.validation.validate_schema(frame(1), schema, rdf_map_scope=scope, engine="pandas")
+            for scope in (["OP", "EQ#1"], ["EQ#1", "OP"])]
+    (run,) = build_sarif(triplets.validation.concat_violations(runs))["runs"]       # joined: still one rule
+    assert [rule["id"] for rule in run["tool"]["driver"]["rules"]] == sorted(ids)
+    assert run["results"][0]["occurrenceCount"] == 2
+    other = violations.assign(SOURCE_SHAPE="urn:triplets:schemaX#MyShape")
+    other.attrs = {}
+    run = build_sarif(other)["runs"][0]
+    assert run["tool"]["driver"]["name"] == "triplets-shacl" and run["tool"]["driver"]["rules"][0]["id"] == hashed("urn:triplets:schemaX#MyShape", "xsd:minOccurs")
+
+
+ANONYMOUS = SHAPE + """
+[] a sh:NodeShape ; sh:targetClass cim:ACLineSegment ; sh:closed true ; sh:ignoredProperties ( rdf:type ) .
+cim:Twice a sh:NodeShape ; sh:targetClass cim:ACLineSegment ;
+    sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ; sh:severity sh:Warning ] ,
+                [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ; sh:message "second" ] ,
+                [ sh:path [ sh:inversePath cim:IdentifiedObject.description ] ; sh:minCount 1 ] .
+"""
+
+
+def test_rule_ids_of_anonymous_shapes_are_the_same_in_every_parse():
+    """A blank-node shape has a new label at every parse; its ruleId is made of the named
+    shape above it, its path and a digest of its definition, on every engine. Shapes of
+    one parent, path and component are rules of their own, each with its level."""
+    import rdflib
+    data = frame(2)
+    data.loc[len(data)] = (data["ID"][0], "IdentifiedObject.aliasName", "a", "g1")
+    runs = []
+    for engine in ("pandas", "polars", "duckdb", "pyshacl", "pandas"):
+        pytest.importorskip(engine)
+        compiled = triplets.validation.compile(rdflib.Graph().parse(
+            data="@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> ." + ANONYMOUS, format="turtle"))
+        runs.append(triplets.validation.validate_shacl(data, compiled, engine=engine, lexical=False))
+    assert not set(runs[0]["SOURCE_SHAPE"]) & set(runs[4]["SOURCE_SHAPE"])        # one engine, two parses: other labels
+    documents = [build_sarif(run)["runs"][0] for run in runs]
+    levels = [{rule["id"]: rule["defaultConfiguration"]["level"] for rule in document["tool"]["driver"]["rules"]}
+              for document in documents]
+    assert all(level == levels[0] for level in levels)
+    ids = sorted(levels[0])
+    patterns = [r"NameShape\.Conductor\.length-[0-9a-f]{8}/sh:minCount", r"NameShape\.IdentifiedObject\.name-[0-9a-f]{8}/sh:minCount",
+                *[r"Twice\.IdentifiedObject\.description-[0-9a-f]{8}/sh:minCount"] * 3, r"shape-[0-9a-f]{8}/sh:closed"]
+    assert len(ids) == len(patterns) and all(re.fullmatch(pattern, rule) for pattern, rule in zip(patterns, ids))
+    twice = [level for rule, level in levels[0].items() if rule.startswith("Twice.")]
+    assert sorted(twice) == ["error", "error", "warning"]
+    assert sorted(rule_ids(runs[0].iloc[::-1]).values()) == ids
+    joined = build_sarif(triplets.validation.concat_violations([runs[0], runs[4]]))["runs"][0]
+    assert sorted(rule["id"] for rule in joined["tool"]["driver"]["rules"]) == ids      # two parses, one rule each
+    assert "anonymous_shapes" not in joined["properties"]

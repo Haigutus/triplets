@@ -14,7 +14,28 @@ from triplets.tools import triplets_to_tableviews
 logger = logging.getLogger(__name__)
 
 
-def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True):
+def _write_sheets(output, tableviews, apply_formatting):
+    """One sheet per tableview into *output*. A text that starts with ``=`` and an
+    Excel error word (``#N/A``, ``#REF!``, ``#DIV/0!``) stay text cells: openpyxl
+    writes them as a formula and an error, which read back as no value."""
+    from openpyxl.utils import get_column_letter
+
+    with pandas.ExcelWriter(output, engine='openpyxl') as writer:
+        for class_type, class_data in tableviews.items():
+            class_data.to_excel(writer, sheet_name=class_type)
+            sheet = writer.sheets[class_type]
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if cell.data_type in ("f", "e"):
+                        cell.data_type = "s"
+            if apply_formatting:
+                for i in range(1, len(class_data.columns) + 2):
+                    sheet.column_dimensions[get_column_letter(i)].width = 38
+                sheet.freeze_panes = 'B2'
+
+
+def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, single_file=False, filename=None, apply_formatting=True,
+                    string_to_number=False):
     """Export triplet data to Excel file(s), with each type on a separate sheet.
 
     Parameters
@@ -33,6 +54,11 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         Filename to use when single_file=True. If None, uses 'export.xlsx'.
     apply_formatting : bool, default True
         If True, apply column width and freeze panes formatting.
+    string_to_number : bool, default False
+        False writes every VALUE as a text cell with its text (``1.0`` stays ``1.0``
+        and reads back unchanged). True writes the columns that hold only numbers as
+        number cells, for sums and charts in Excel: the text form is not kept
+        (``1.0`` → ``1``, ``007`` → ``7``).
 
     Returns
     -------
@@ -43,19 +69,11 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
         if filename is None:
             filename = 'export.xlsx'
 
-        tableviews = triplets_to_tableviews(data, multivalue=multivalue)
+        tableviews = triplets_to_tableviews(data, string_to_number=string_to_number, multivalue=multivalue)
         output = BytesIO()
         output.name = filename
 
-        with pandas.ExcelWriter(output, engine='openpyxl') as writer:
-            for class_type, class_data in tableviews.items():
-                class_data.to_excel(writer, sheet_name=class_type)
-                if apply_formatting:
-                    from openpyxl.utils import get_column_letter
-                    sheet = writer.sheets[class_type]
-                    for i in range(1, len(class_data.columns) + 2):
-                        sheet.column_dimensions[get_column_letter(i)].width = 38
-                    sheet.freeze_panes = 'B2'
+        _write_sheets(output, tableviews, apply_formatting)
 
         output.seek(0)
 
@@ -77,20 +95,12 @@ def export_to_excel(data, path=None, multivalue=True, export_to_memory=False, si
 
         for _, label in labels.iterrows():
             instance_data = data[data.INSTANCE_ID == label.INSTANCE_ID]
-            tableviews = triplets_to_tableviews(instance_data, multivalue=multivalue)
+            tableviews = triplets_to_tableviews(instance_data, string_to_number=string_to_number, multivalue=multivalue)
             file_name = '{}.xlsx'.format(label.VALUE.split(".")[0])
             output = BytesIO()
             output.name = file_name
 
-            with pandas.ExcelWriter(output, engine='openpyxl') as writer:
-                for class_type, class_data in tableviews.items():
-                    class_data.to_excel(writer, sheet_name=class_type)
-                    if apply_formatting:
-                        from openpyxl.utils import get_column_letter
-                        sheet = writer.sheets[class_type]
-                        for i in range(1, len(class_data.columns) + 2):
-                            sheet.column_dimensions[get_column_letter(i)].width = 38
-                        sheet.freeze_panes = 'B2'
+            _write_sheets(output, tableviews, apply_formatting)
 
             output.seek(0)
             exported_files.append(output)

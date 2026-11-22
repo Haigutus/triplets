@@ -48,10 +48,12 @@ from types import SimpleNamespace
 import numpy
 import pandas
 
+from .._header import without_metadata
 from ..export.nquads_utils import make_subject
-from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, node_kind, prefixes, rdf_map_entries, split_iri,
+from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, split_iri,
                    value_types)
 from .schema_scope import ancestor_pairs
+from .shacl_ir import MESSAGE_VARIABLE, holds_names
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
 from .value_space import datatype_patterns
@@ -60,6 +62,12 @@ logger = logging.getLogger(__name__)
 
 
 _NO_IDS = numpy.array([], dtype=object)
+
+
+def _isin(values, ids):
+    """``values.isin(ids)`` for an ID list of any size, compared as objects: ``Series.isin``
+    on the ``str`` dtype converts every member of *ids* one by one, at each call."""
+    return values.astype(object).isin(ids)
 
 
 class _Context:
@@ -78,9 +86,11 @@ class _Context:
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
+        self.namespaces = namespaces(rdf_map)     # sh:targetNode on a class / enum value: its local name
         self._by_key = None
         self._class_ids = None
         self._all_ids = None
+        self._typed_ids = None
         self._dataset = None
         self._dataset_lock = threading.Lock()   # sh:sparql threads share one rdflib fallback load
         # The data and rdf_map cannot change between the constraint queries
@@ -111,7 +121,7 @@ class _Context:
     def class_ids(self, class_name):
         """IDs of all instances of *class_name*, subclasses included (``ancestors``)."""
         if self._class_ids is None:
-            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype({"VALUE": object})
+            types = self.key_rows(TYPE_KEY)[["ID", "VALUE"]].astype(object)
             if self.ancestors:
                 pairs = pandas.DataFrame(self.ancestors, columns=["VALUE", "ANCESTOR"], dtype=object)
                 wider = types.merge(pairs, on="VALUE")[["ID", "ANCESTOR"]].rename(columns={"ANCESTOR": "VALUE"})
@@ -127,6 +137,21 @@ class _Context:
             self._all_ids = set(self.data["ID"].unique())
         return self._all_ids
 
+    @property
+    def typed_ids(self):
+        """Every ID with a Type row — the objects a reference can resolve to."""
+        if self._typed_ids is None:
+            self._typed_ids = self.key_rows(TYPE_KEY)["ID"].astype(object).unique()
+        return self._typed_ids
+
+    def nodes(self, key, values):
+        """The VALUEs under *key* as focus nodes: a class or enumeration value is
+        the IRI it stands for (``shacl_ir.holds_names``), any other VALUE its text."""
+        values = values.astype(str)
+        if not holds_names(key, self.value_types):
+            return values
+        return iri_pandas.absolute_name(values, self.namespaces, self.undefined_namespace)
+
     def focus(self, rule):
         """The rule's focus nodes: an explicit ``focus_ids`` (set by sh:node — the
         referenced value nodes), else what ``target_by`` names: the IDs having
@@ -141,7 +166,7 @@ class _Context:
         if by == "KEY":
             return self.key_rows(rule.target_on)["ID"].unique()
         if by == "VALUE":
-            return self.key_rows(rule.target_on)["VALUE"].astype(str).unique()
+            return self.nodes(rule.target_on, self.key_rows(rule.target_on)["VALUE"].dropna()).unique()   # no VALUE, no node
         if by == "ID":
             return numpy.array([rule.target_on], dtype=object)
         return self.class_ids(rule.target_on)
@@ -151,20 +176,22 @@ class _Context:
 
         Normal path:  FOCUS = row ID,   PATH_VALUE = row VALUE.
         Inverse path: FOCUS = row VALUE (the referenced focus object),
-                      PATH_VALUE = row ID (the referencing object).
+                      PATH_VALUE = row ID (the referencing object); a class
+                      or enum VALUE is the IRI node it stands for (``nodes``).
         via_type:     PATH_VALUE = the referenced object's type (the
                       ( assoc rdf:type ) sequence path; SHACL path semantics:
                       a reference whose target has no Type row yields no
                       value node, hence the inner join).
         """
-        ids = self.focus(rule)
         rows = self.key_rows(rule.path)
+        ids = self.focus(rule)
         if rule.inverse:
-            rows = rows[rows["VALUE"].isin(ids)]
-            frame = pandas.DataFrame({"FOCUS": rows["VALUE"].to_numpy(),
-                                      "PATH_VALUE": rows["ID"].to_numpy()})
+            nodes = self.nodes(rule.path, rows["VALUE"])
+            found = _isin(nodes, ids)
+            frame = pandas.DataFrame({"FOCUS": nodes[found].to_numpy(),
+                                      "PATH_VALUE": rows.loc[found, "ID"].to_numpy()})
         else:
-            rows = rows[rows["ID"].isin(ids)]
+            rows = rows[_isin(rows["ID"], ids)]
             frame = pandas.DataFrame({"FOCUS": rows["ID"].to_numpy(),
                                       "PATH_VALUE": rows["VALUE"].to_numpy()})
         if getattr(rule, "via_type", False):
@@ -328,7 +355,7 @@ def _has_value(context, rule):
 def _class(context, rule):
     rows = context.path_rows(rule)
     of_class = context.class_ids(rule.params)
-    bad = ~rows["PATH_VALUE"].isin(of_class)
+    bad = ~_isin(rows["PATH_VALUE"], of_class)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"referenced object is not of class {rule.params}")
 
@@ -338,10 +365,8 @@ def _schema_range(context, rule):
     is in the allowed set (RDF types are cumulative, issue #100); a target
     without a Type row is left to triplets:missing."""
     rows = context.path_rows(rule)
-    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
-    allowed = pandas.Index([]).append([pandas.Index(context.class_ids(cls))
-                                       for cls in rule.params])
-    bad = rows["PATH_VALUE"].isin(typed) & ~rows["PATH_VALUE"].isin(allowed)
+    allowed = numpy.concatenate([_NO_IDS, *(context.class_ids(cls) for cls in rule.params)])
+    bad = _isin(rows["PATH_VALUE"], context.typed_ids) & ~_isin(rows["PATH_VALUE"], allowed)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"reference target is not one of {rule.params}")
 
@@ -349,8 +374,7 @@ def _schema_range(context, rule):
 def _schema_missing(context, rule):
     """triplets:missing — the referenced object has no Type row in the validated data."""
     rows = context.path_rows(rule)
-    typed = context.key_rows(TYPE_KEY)["ID"].astype(str).unique()
-    bad = ~rows["PATH_VALUE"].isin(typed)
+    bad = ~_isin(rows["PATH_VALUE"], context.typed_ids)
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   "referenced object not found in the data")
 
@@ -371,7 +395,7 @@ def _node_kind(context, rule):
         is_iri = pandas.Series(kind == "iri", index=rows.index)
     else:
         values = rows["PATH_VALUE"].astype(str)
-        is_iri = values.str.fullmatch(REFERENCE_LIKE) | values.isin(context.all_ids)
+        is_iri = values.str.fullmatch(REFERENCE_LIKE) | _isin(values, context.all_ids)
     bad = ~is_iri if rule.params == "IRI" else is_iri
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not of node kind sh:{rule.params}")
@@ -441,7 +465,7 @@ def _closed(context, rule):
     """
     allowed = set(rule.params) | {TYPE_KEY}
     ids = context.focus(rule)
-    rows = context.data[context.data["ID"].isin(ids) & ~context.data["KEY"].isin(allowed)]
+    rows = context.data[_isin(context.data["ID"], ids) & ~context.data["KEY"].isin(allowed)]
     frame = _frame(rule, rows["ID"], rows["VALUE"], "property is not allowed on a closed shape")
     frame["KEY"] = rows["KEY"].to_numpy()
     return frame
@@ -465,7 +489,8 @@ def _sparql_query_text(rule, focus_ids):
 
 
 def _sparql_violations(rule, result):
-    """Each SELECT result row is one violation: $this = focus node, ?value = value."""
+    """Each SELECT result row is one violation: $this = focus node, ?value = value,
+    the sh:message with the row's variables filled in (``_solution_messages``)."""
     if result is None or len(result) == 0 or "this" not in result.columns:
         return _empty()
     result = result[result["this"].notna()]   # a row without a focus node is no violation
@@ -473,7 +498,26 @@ def _sparql_violations(rule, result):
         return _empty()                       #  for some aggregate queries)
     focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
     values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
-    return _frame(rule, focus, values, "sparql constraint violated")
+    violations = _frame(rule, focus, values, "sparql constraint violated")
+    if rule.message and MESSAGE_VARIABLE.search(rule.message):
+        violations["MESSAGE"] = _solution_messages(rule.message, result, node_level=rule.path is None)
+    return violations
+
+
+def _solution_messages(message, result, node_level=False):
+    """*message* once per solution, each ``{?name}`` / ``{$name}`` replaced by the
+    solution's term for that variable as the query returned it (an IRI whole, a
+    literal's lexical form — what pyshacl writes); a variable the solution does not
+    bind stays as written. On a node shape (*node_level*) the value of a solution
+    without ``?value`` is the focus node, as in its result."""
+    if node_level:
+        value = result["value"] if "value" in result.columns else pandas.Series(None, index=result.index, dtype=object)
+        result = result.assign(value=value.astype(object).where(value.notna(), result["this"]))
+    names = [name for name in dict.fromkeys(MESSAGE_VARIABLE.findall(message)) if name in result.columns]
+    bound = result[names].astype(object).where(result[names].notna(), None)
+    return [MESSAGE_VARIABLE.sub(lambda variable: variable[0] if solution.get(variable[1]) is None
+                                 else str(solution[variable[1]]), message)
+            for solution in bound.to_dict("records")]
 
 
 def _shorten(terms, rule):
@@ -767,7 +811,7 @@ def _node(context, rule):
     if not len(referenced):
         return _empty()
     non_conforming = set(_run_nested(context, rule.params["rows"], referenced)["ID"])
-    bad = rows[rows["PATH_VALUE"].isin(non_conforming)]
+    bad = rows[_isin(rows["PATH_VALUE"], non_conforming)]
     return _frame(rule, bad["FOCUS"], bad["PATH_VALUE"],
                   f"value does not conform to shape {rule.params['shape']}")
 
@@ -839,7 +883,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         the sh:sparql graph and the IRI/literal decision for sh:nodeKind. Every
         other component reads the raw lexical forms.
     data_scope : iterable of INSTANCE_ID, optional
-        Validate only rows of these instances.
+        Validate only rows of these instances. The objects the parsers add to
+        every file (``iri.METADATA_TYPES``) are never validated.
     components : iterable of component names, optional
         Restrict to a subset (e.g. ``("sh:datatype",)`` for the lexical
         supplement run next to pyshacl). None = everything implemented.
@@ -860,6 +905,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     data = _to_pandas(data)
     if data_scope is not None:
         data = data[data["INSTANCE_ID"].isin(list(data_scope))]
+    data = without_metadata(data)
 
     rules = compiled.ir
     if components is not None:

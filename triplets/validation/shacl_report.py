@@ -8,6 +8,7 @@ engines, so the later vectorized engines can produce it natively)::
 """
 import io
 import logging
+import re
 import os
 from datetime import datetime, timezone
 
@@ -15,20 +16,43 @@ import numpy
 import pandas
 
 from .locations import check_source_root, locate_missing, relative_sources
-from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS,
-                   XSD_NS, CIM_NS, absolute_id, absolute_key, decode_iri, is_iri, load_rdf_map, local_id, local_key, local_value,
-                   namespaces, split_iri)
+from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS, TYPE_KEY,
+                   XSD_NS, CIM_NS, absolute_id, absolute_key, absolute_name, absolute_value, decode_iri, is_iri,
+                   load_rdf_map, local_id, local_key, local_value, namespaces, split_iri, value_types)
 
 logger = logging.getLogger(__name__)
 
 VIOLATION_COLUMNS = ["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE"]
+# SOURCE_SHAPE of a schema finding: ``urn:triplets:schema[:<profile>…]#<Class>[.<KEY>]`` —
+# ``:`` and ``#`` separate, so a profile name is percent-encoded (schema_ir._shape_prefix)
+SCHEMA_SHAPES = "urn:triplets:schema"
+SCHEMA_SHAPE_STARTS = (SCHEMA_SHAPES + ":", SCHEMA_SHAPES + "#")   # with a scope, without one
+
+
+VALIDATION_FAILURE = "triplets:validationFailure"   # the run stopped: the pyshacl engine's ValidationFailure
+# VIOLATION_TYPEs of rows about a shape the run could not evaluate, never about the data
+SHAPE_NOTES = ("triplets:invalidSparql", VALIDATION_FAILURE)
+
+
+def run_language(violations):
+    """The constraint language of a violations frame (``"shacl"`` / ``"rdfs"``): the run
+    metadata's (``attrs["validation"]["language"]``); for a frame without it (``pandas.concat``
+    drops the attrs) ``"rdfs"`` when every SOURCE_SHAPE is a schema shape, else ``"shacl"``."""
+    language = violations.attrs.get("validation", {}).get("language")
+    if language:
+        return language
+    if "SOURCE_SHAPE" not in violations.columns:     # a hand-made frame: nothing says rdfs
+        return "shacl"
+    shapes = violations["SOURCE_SHAPE"].dropna().astype(str)
+    return "rdfs" if len(shapes) and shapes.str.startswith(SCHEMA_SHAPE_STARTS).all() else "shacl"
 
 
 def has_violation(violations):
     """Whether *violations* holds a data Violation — the ``abort_on_first`` stop.
-    A ``triplets:invalidSparql`` row flags a defective shape, not the data."""
+    A ``triplets:invalidSparql`` or ``triplets:validationFailure`` row flags a
+    defective shape, not the data."""
     return bool(len(violations)) and bool(((violations["SEVERITY"] == "Violation")
-                                           & (violations["VIOLATION_TYPE"] != "triplets:invalidSparql")).any())
+                                           & ~violations["VIOLATION_TYPE"].isin(SHAPE_NOTES)).any())
 
 
 # path suffix → rdflib serialize format (traversed in order for the reverse,
@@ -71,19 +95,45 @@ _COMPONENT_MAP = {
 }
 
 
-def report_to_violations(report_graph, shapes_graph=None):
+# a blank-node label in N-Triples text (rdflib's serializer: at the start of a line or after a space)
+_BLANK_NODE = re.compile(r"(?:^|\s)_:([A-Za-z0-9]+)", re.MULTILINE)
+
+
+def shape_triples(text, graph=None):
+    """A shape definition of the run metadata (``source_shapes``: N-Triples text) →
+    its triples in *graph* (a new one by default), the blank-node labels kept:
+    they are the ones SOURCE_SHAPE names."""
+    import rdflib
+
+    graph = rdflib.Graph() if graph is None else graph
+    # bnode_context (rdflib's N-Triples parser): label → the BNode it is read as; a label
+    # that is no node (inside a literal) is an entry nothing asks for
+    labels = {label: rdflib.BNode(label) for label in _BLANK_NODE.findall(text)}
+    return graph.parse(data=text, format="nt", bnode_context=labels)
+
+
+def report_to_violations(report_graph, shapes_graph=None, rdf_map=None, undefined_namespace=CIM_NS):
     """ValidationReport rdflib graph → violations DataFrame (single columnar pass).
 
     Nested ``sh:detail`` results (the cause of a ``sh:node`` result) are not
     listed: the parent result is the finding. With the ``shapes_graph`` the
     report was made from, a blank-node ``sh:resultPath`` (inverse / sequence /
     alternative path) is the KEY it resolves to; without it (reports written by
-    other tools) KEY is the blank-node label."""
+    other tools) KEY is the blank-node label.
+
+    An IRI ``sh:value`` becomes the VALUE the data holds. With the *rdf_map* (and
+    *undefined_namespace*) the report was written with, exactly: the local name when
+    the IRI is the one that name stands for (a class under ``rdf:type``, an
+    enumeration value, a schema name), else :func:`~triplets.iri.local_id` — a
+    reference or a class in another namespace stays whole, with a ``#`` too.
+    Without *rdf_map* the form is guessed (:func:`~triplets.iri.local_value`): an
+    ``http`` IRI with a ``#`` is taken as a name and loses its namespace."""
     import rdflib
 
     from .shacl_ir import _resolve_path
 
     sh = rdflib.Namespace(SH_NS)
+    names = (namespaces(rdf_map), value_types(rdf_map), undefined_namespace) if rdf_map else None
     details = set(report_graph.objects(None, sh.detail))
     # collect into per-column lists, build the DataFrame once (no per-row concat)
     columns = {name: [] for name in VIOLATION_COLUMNS}
@@ -106,7 +156,7 @@ def report_to_violations(report_graph, shapes_graph=None):
 
         columns["ID"].append(local_id(decode_iri(focus)))
         columns["KEY"].append(key)
-        columns["VALUE"].append(_term_value(value, path == rdflib.RDF.type))
+        columns["VALUE"].append(_term_value(value, TYPE_KEY if path == rdflib.RDF.type else key, names))
         columns["VIOLATION_TYPE"].append(_component(component))
         columns["MESSAGE"].append(message)
         columns["SEVERITY"].append(split_iri(severity)[1] if severity is not None else "Violation")
@@ -127,13 +177,24 @@ def _constraint_message(messages):
     return "\n".join(texts) if texts else None
 
 
-def _term_value(term, is_type=False):
-    """sh:value → triplet VALUE: literals verbatim, IRIs decoded then ``local_value`` (a class on a type path)."""
+def _term_value(term, key=None, names=None):
+    """sh:value → triplet VALUE: literals verbatim, IRIs decoded. Without *names*
+    ``local_value`` guesses (a class on a type path). With the schema's
+    *names* (namespaces, value types, undefined namespace) the inverse of the
+    writer: the local name when the IRI is the one the name stands for under
+    *key* (a class, an enumeration value) or a declared schema name (the class a
+    ``( association rdf:type )`` path reports), else ``local_id``."""
     if term is None:
         return None
     if type(term).__name__ == "Literal":
         return str(term)
-    return local_value(decode_iri(term), "class" if is_type else None)
+    iri = decode_iri(term)
+    if names is None:
+        return local_value(iri, "class" if key == TYPE_KEY else None)
+    schema_namespaces, schema_value_types, undefined_namespace = names
+    name = split_iri(iri)[1]
+    named = key == TYPE_KEY or schema_value_types.get(key) == "enum" or name in schema_namespaces
+    return name if named and absolute_name(name, schema_namespaces, undefined_namespace) == str(term) else local_id(iri)
 
 
 def _component(term):
@@ -163,6 +224,20 @@ def violations_to_report_graph(violations, report_source=None, report_references
     report_to_violations; KEYs expand through the export schema namespaces —
     ``rdf_map`` — ``undefined_namespace`` for names it lacks, unless already URIs).
 
+    ``sh:value`` has the term kind the schema entry type of the KEY gives it
+    (:func:`~triplets.iri.absolute_value`): the IRI of the referenced object for
+    an Association, the enumeration value IRI for an Enumeration, the class IRI
+    for ``Type`` (the name's schema namespace; ``undefined_namespace`` — CIM100 by
+    default — for a class the schema lacks and for every class without ``rdf_map``,
+    whatever the data's CIM version), a plain literal with the VALUE text
+    for an Attribute and for a KEY the schema does not define — the same terms
+    ``export_to_nquads`` writes for the row: a reference VALUE is
+    :func:`~triplets.iri.absolute_id` of its text (``urn:uuid:…``, an absolute
+    IRI whole), whatever the text reads like. The VALUE of a finding whose shape
+    has a ``( association rdf:type )`` path (the shape's definition in the run
+    metadata) is the object's class, written as the class IRI. A KEY may be its
+    IRI: the entry of its local name decides.
+
     A result carries several plain-text ``sh:resultMessage``\ s when the frame
     has the context/location columns: the engine message, the shape and
     schema descriptions (context.enrich) and the source position
@@ -183,6 +258,8 @@ def violations_to_report_graph(violations, report_source=None, report_references
     """
     import rdflib
     import triplets
+    from rdflib.collection import Collection
+    from .shacl_ir import _term as _shape_term
 
     meta = violations.attrs.get("validation", {})
     if report_source is None:
@@ -196,7 +273,26 @@ def violations_to_report_graph(violations, report_source=None, report_references
         creator = f"{creator} (engine: {meta['engine']})"
 
     schema_namespaces = namespaces(rdf_map)
+    schema_value_types = value_types(rdf_map)
     expand = lambda value: _expand(value, schema_namespaces, undefined_namespace)  # noqa: E731
+
+    via_type = {}   # SOURCE_SHAPE → its sh:path is a sequence ending in rdf:type (the embedded definitions)
+
+    def reports_type(shape):
+        if shape not in via_type:
+            path = None if pandas.isna(shape) else graph.value(_shape_term(str(shape)), sh.path)
+            members = list(Collection(graph, path)) if path is not None and (path, rdflib.RDF.first, None) in graph else []
+            via_type[shape] = members[-1:] == [rdflib.RDF.type]
+        return via_type[shape]
+
+    def value_term(key, value, shape):
+        key = local_key(key)                          # a KEY given as an IRI has the entry of its name
+        if key != TYPE_KEY and schema_value_types.get(key) not in ("reference", "enum"):
+            return rdflib.Literal(value)
+        if reports_type(shape):                       # ( association rdf:type ): the VALUE is the object's class
+            key = TYPE_KEY
+        return rdflib.URIRef(absolute_value(key, str(value), schema_namespaces, schema_value_types,
+                                            undefined_namespace=undefined_namespace)[1])
     sh = rdflib.Namespace(SH_NS)
     prov = rdflib.Namespace(PROV_NS)
     dcterms = rdflib.Namespace(DCTERMS_NS)
@@ -205,14 +301,13 @@ def violations_to_report_graph(violations, report_source=None, report_references
     graph.bind("prov", prov)
     graph.bind("dcterms", dcterms)
 
-    # embed the violated shapes' definitions (CBD graphs stamped by
-    # validate_shacl()) so sh:sourceShape is never an empty blank node — the
-    # constraint parameters (sh:in list, sh:minCount, ...) are IN the report
-    for shape_graph in meta.get("source_shapes", {}).values():
-        for triple in shape_graph:
-            graph.add(triple)
+    # embed the violated shapes' definitions (CBD, stamped by validate_shacl())
+    # so sh:sourceShape is never an empty blank node — the constraint
+    # parameters (sh:in list, sh:minCount, ...) are IN the report
+    for text in meta.get("source_shapes", {}).values():
+        shape_triples(text, graph)
 
-    language = meta.get("language", "shacl")
+    language = run_language(violations)
 
     report = rdflib.BNode()
     graph.add((report, rdflib.RDF.type, sh.ValidationReport))
@@ -237,7 +332,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
         if pandas.notna(row.KEY):
             graph.add((result, sh.resultPath, rdflib.URIRef(expand(row.KEY))))
         if pandas.notna(row.VALUE):
-            graph.add((result, sh.value, rdflib.Literal(row.VALUE)))
+            graph.add((result, sh.value, value_term(row.KEY, row.VALUE, row.SOURCE_SHAPE)))
         if pandas.notna(row.VIOLATION_TYPE):
             graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(expand(row.VIOLATION_TYPE))))
         for message in _messages(row, language):
@@ -388,7 +483,10 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
         Plain labels — not the shapes object ``to_sarif(shapes=)`` takes.
         Default: the shape file names from ``violations.attrs["validation"]``.
     rdf_map : dict or str, optional
-        Export schema — ``sh:resultPath`` KEYs expand to their profile namespace.
+        Export schema — ``sh:resultPath`` KEYs expand to their profile namespace,
+        and ``sh:value`` of an Association / Enumeration KEY is an IRI (the
+        referenced object, the enumeration value); without it every value but
+        a ``Type`` is a plain literal (see violations_to_report_graph).
     undefined_namespace : str, default CIM100
         Namespace for KEYs the schema does not declare (every KEY without one).
     source_root : str or Path, optional
@@ -426,11 +524,18 @@ def export_to_shacl_report(violations, sources=None, path=None, export_to_memory
 
 # ── tabular exports (csv / excel) — same metadata as the RDF/SARIF reports ───
 
+# run metadata the SARIF run properties and the csv / excel sidecars leave out:
+# the violated shapes' triples (the SHACL report embeds them), the per-rule-set
+# counts concat_violations keeps (the totals are node_shapes / constraints) and
+# the stable names of anonymous shapes the SARIF ruleIds are made of
+UNEXPORTED = ("source_shapes", "rule_sets", "anonymous_shapes")
+
+
 def _meta_rows(meta):
     """The attrs["validation"] dict as (KEY, VALUE) rows — lists fan out; an
-    empty list keeps one blank row so "none" is stated, not implied.
-    source_shapes (in-memory rdflib graphs) belongs to the SHACL report only."""
-    return [(key, item) for key, value in meta.items() if key != "source_shapes"
+    empty list keeps one blank row so "none" is stated, not implied. Without
+    the UNEXPORTED keys."""
+    return [(key, item) for key, value in meta.items() if key not in UNEXPORTED
             for item in ((value or ("",)) if isinstance(value, (list, tuple)) else (value,))]
 
 

@@ -102,11 +102,14 @@ Features
 
 Notes
 -----
-- Values are read back as text, so they return as written, except numbers: the
-  spreadsheet export writes them as numbers, so a number can come back in another
-  written form (``500`` -> ``500.0``, ``8e-5`` -> ``8e-05``). Excel keeps 15
-  significant digits, so longer numbers are rounded (``1.0712249999999999`` ->
-  ``1.071225``); CSV keeps them.
+- Every value is written as text and read back as text, so it returns as written:
+  numbers (``1.0``, ``8e-5``, ``1.0712249999999999``), the texts ``NaN``, ``NA``,
+  ``null``, ``None`` and ``N/A``, a text that starts with ``=`` and the Excel error
+  words (``#N/A``, ``#REF!``, ``#DIV/0!``) — text cells in Excel, no formula and no error. A number is a text cell in Excel. A cell that is edited
+  into a number cell is read as Excel stores the number (``1.0`` -> ``1``, 15
+  significant digits).
+- An empty value is an empty cell, and an empty cell is no value: it is not
+  written back.
 - Excel limits sheet names to 31 characters. Longer class names (e.g.
   ``SynchronousMachineTimeConstantReactance``) are written as is: openpyxl warns
   and Excel may refuse or rename the sheet. Use CSV for such models.
@@ -138,6 +141,11 @@ from uuid import uuid4
 
 from ..export import export_to_cimxml
 from ..parser import parse
+from ..parser.utils import RDF_XML_SUFFIXES
+
+# read options of every csv / excel cell: only an empty cell is no value — the texts
+# pandas reads as missing by default (NA, NaN, null, None, N/A, nan, …) are values
+TEXT_CELLS = {"keep_default_na": False, "na_values": [""]}
 from ..tools import filter_triplets_by_type, tableviews_to_triplets
 from . import add_common_arguments, excluded_types
 
@@ -366,14 +374,14 @@ def spreadsheet_to_cim(input_path, output_path, format=None, rdf_map=None,
                     if filename.endswith('.csv'):
                         sheet_name = os.path.basename(filename)[:-4]
                         csv_content = zf.read(filename).decode('utf-8')
-                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0, dtype=str)
+                        csv_dataframes[sheet_name] = pandas.read_csv(StringIO(csv_content), index_col=0, dtype=str, **TEXT_CELLS)
         elif os.path.isdir(input_path):
             # Read from directory
             for filename in os.listdir(input_path):
                 if filename.endswith('.csv'):
                     sheet_name = filename[:-4]
                     csv_path = os.path.join(input_path, filename)
-                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0, dtype=str)
+                    csv_dataframes[sheet_name] = pandas.read_csv(csv_path, index_col=0, dtype=str, **TEXT_CELLS)
         else:
             raise ValueError(f"CSV format requires a directory or ZIP file, got: {input_path}")
 
@@ -479,10 +487,10 @@ def _read_excel_sheets(excel_obj, tableviews, raw_triplets, sheets=None, triplet
             logging.warning(f"Sheet '{s}' not found in Excel file, skipping")
 
     if valid_sheets:
-        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0, dtype=str))
+        tableviews.update(pandas.read_excel(excel_obj, sheet_name=valid_sheets, index_col=0, dtype=str, **TEXT_CELLS))
 
     if triplets_sheet and triplets_sheet in excel_obj.sheet_names:
-        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet, dtype=str)
+        triplet_df = pandas.read_excel(excel_obj, sheet_name=triplets_sheet, dtype=str, **TEXT_CELLS)
         _extract_raw_triplets(triplet_df, triplets_sheet, raw_triplets)
 
 
@@ -514,7 +522,7 @@ def detect_conversion_direction(input_path, output_path):
     -----
     Detection logic:
 
-    - If input is .xml/.rdf (or ZIP containing such files), direction is 'to-spreadsheet'
+    - If input is .xml/.rdf/.owl (or ZIP containing such files), direction is 'to-spreadsheet'
     - If input is .xlsx/.xls/.csv (or directory with CSVs), direction is 'to-cim'
     - If ambiguous from input, checks output path for spreadsheet extensions or
       directory-like patterns
@@ -529,10 +537,10 @@ def detect_conversion_direction(input_path, output_path):
     """
 
     # Check if input is CIM XML
-    input_is_cim = input_path.endswith(('.xml', '.rdf'))
+    input_is_cim = input_path.endswith(RDF_XML_SUFFIXES)
     if not input_is_cim and zipfile.is_zipfile(input_path):
         with zipfile.ZipFile(input_path, 'r') as zf:
-            input_is_cim = any(f.endswith(('.xml', '.rdf')) for f in zf.namelist())
+            input_is_cim = any(f.endswith(RDF_XML_SUFFIXES) for f in zf.namelist())
 
     # Check if input is spreadsheet
     input_is_spreadsheet = input_path.endswith(('.xlsx', '.xls', '.csv')) or (

@@ -19,7 +19,7 @@ from ..iri import TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
 from .locations import member_name
-from .shacl_report import VIOLATION_COLUMNS
+from .shacl_report import VIOLATION_COLUMNS, run_language
 
 logger = logging.getLogger(__name__)
 
@@ -96,44 +96,70 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
 def concat_violations(frames):
     """Concatenate violations frames, merging their run metadata (``attrs["validation"]``):
     the earliest start, the latest end and the duration between them; shape and
-    constraint counts once per rule set (``compiled_hash`` + ``deactivated_shapes``);
-    lists and dicts united; other values kept when equal, else the list of distinct
-    values.
-    The runs must share one constraint language (ValueError otherwise)."""
+    constraint counts once per rule set (``compiled_hash`` + ``deactivated_shapes`` —
+    the joined runs' rule sets are kept in ``rule_sets``); lists and dicts united;
+    other values kept when equal, else the list of distinct values; None is no value.
+    A joined frame joins again: the result is the same however the frames are grouped.
+    The frames must share one constraint language (ValueError otherwise): the run
+    metadata's, and for a frame without metadata the one its rows show
+    (``shacl_report.run_language``)."""
     frames = list(frames)
     if not frames:
         return pandas.DataFrame(columns=VIOLATION_COLUMNS)
+    # a frame's language is its run metadata's, else what its rows say (run_language);
+    # an empty frame without metadata says nothing
+    languages = {run_language(frame) for frame in frames if len(frame) or frame.attrs.get("validation")}
+    if len(languages) > 1:
+        raise ValueError("concat_violations joins runs of one constraint language (shacl or rdfs)")
     violations = pandas.concat(frames, ignore_index=True)
     metas = [frame.attrs["validation"] for frame in frames if frame.attrs.get("validation")]
     if not metas:
         return violations
-    if len({meta.get("language") for meta in metas}) > 1:
-        raise ValueError("concat_violations joins runs of one constraint language (shacl or rdfs)")
     merged = {}
     for meta in metas:
         for key, value in meta.items():
-            if key not in merged:
-                merged[key] = list(value) if isinstance(value, list) else dict(value) if isinstance(value, dict) else value
-            elif isinstance(value, list) and isinstance(merged[key], list):
-                merged[key] = list(dict.fromkeys([*merged[key], *value]))
-            elif isinstance(value, dict) and isinstance(merged[key], dict):
-                merged[key] = {**merged[key], **value}
-            elif key not in ("started_at", "generated_at", "duration_seconds"):
-                distinct = merged.setdefault("_distinct", {}).setdefault(key, [merged[key]])
-                if value not in distinct:
-                    distinct.append(value)
-    for key, values in merged.pop("_distinct", {}).items():
-        merged[key] = values[0] if len(values) == 1 else values
-    merged["started_at"] = min(meta["started_at"] for meta in metas)
-    merged["generated_at"] = max(meta["generated_at"] for meta in metas)
-    merged["duration_seconds"] = round((_moment(merged["generated_at"]) - _moment(merged["started_at"]))
-                                       .total_seconds(), 3)
-    runs = {(meta.get("compiled_hash"), tuple(meta.get("deactivated_shapes") or ())):
-            (meta.get("node_shapes", 0), meta.get("constraints", 0)) for meta in metas}
-    merged["node_shapes"] = sum(counts[0] for counts in runs.values())
-    merged["constraints"] = sum(counts[1] for counts in runs.values())
+            if key not in _DERIVED:
+                merged[key] = _united(merged[key], value) if key in merged else _united(value, None)
+    timed = [meta for meta in metas if meta.get("started_at")]   # validate_by_header with no instance resolved: no run
+    if timed:
+        merged["started_at"] = min(meta["started_at"] for meta in timed)
+        merged["generated_at"] = max(meta["generated_at"] for meta in timed)
+        merged["duration_seconds"] = round((_moment(merged["generated_at"]) - _moment(merged["started_at"]))
+                                           .total_seconds(), 3)
+    rule_sets = {(rule_set["compiled_hash"], *rule_set["deactivated_shapes"]): rule_set
+                 for meta in timed for rule_set in _rule_sets(meta)}
+    merged["rule_sets"] = list(rule_sets.values())
+    for count in _COUNTS:
+        merged[count] = sum(rule_set[count] for rule_set in rule_sets.values())
     violations.attrs["validation"] = merged
     return violations
+
+
+_COUNTS = ("node_shapes", "constraints")
+# keys concat_violations computes from every frame, not value by value
+_DERIVED = ("started_at", "generated_at", "duration_seconds", "rule_sets", *_COUNTS)
+
+
+def _rule_sets(meta):
+    """The rule sets a frame's metadata counts: a joined frame's ``rule_sets``, else
+    the run's own (``compiled_hash`` + ``deactivated_shapes``) with its counts."""
+    return meta.get("rule_sets") or [{"compiled_hash": meta.get("compiled_hash"),
+                                      "deactivated_shapes": list(meta.get("deactivated_shapes") or ()),
+                                      **{count: meta.get(count, 0) for count in _COUNTS}}]
+
+
+def _united(old, new):
+    """Two values of one metadata key as one, in any grouping: dicts and lists
+    united (a single value joins a list as its member), equal values once,
+    different ones as the list of both; None is no value. Always a new container."""
+    if old is None or new is None:
+        kept = new if old is None else old
+        return list(kept) if isinstance(kept, list) else dict(kept) if isinstance(kept, dict) else kept
+    if isinstance(old, dict) and isinstance(new, dict):
+        return {**old, **new}
+    if isinstance(old, list) or isinstance(new, list):
+        return list(dict.fromkeys(item for value in (old, new) for item in (value if isinstance(value, list) else [value])))
+    return old if old == new else [old, new]
 
 
 def _moment(text):
@@ -340,16 +366,19 @@ def _add_schema_context(violations, rdf_map, scopes):
 
 
 def _scoped(data, data_scope, table_name="triplets"):
-    """The rows of the *data_scope* instances, as a pandas / polars frame."""
-    instances = [str(instance) for instance in data_scope]
+    """The rows of the *data_scope* instances (None: every instance), as a pandas /
+    polars frame."""
+    instances = None if data_scope is None else [str(instance) for instance in data_scope]
     kind = flavor(data)
     if kind == "duckdb":
-        where = f"INSTANCE_ID IN ({', '.join('?' for _ in instances)})" if instances else "FALSE"
-        return data.execute(f"SELECT * FROM {table_name} WHERE {where}", instances).df()
-    if kind == "polars":
-        return data.filter(data["INSTANCE_ID"].is_in(instances))
+        where = "TRUE" if instances is None else f"INSTANCE_ID IN ({', '.join('?' for _ in instances)})" if instances else "FALSE"
+        return data.execute(f"SELECT * FROM {table_name} WHERE {where}", instances or []).df()
     if kind == "pyarrow":
         data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+    if instances is None:
+        return data
+    if kind == "polars":
+        return data.filter(data["INSTANCE_ID"].is_in(instances))
     return data[data["INSTANCE_ID"].astype(str).isin(instances)]
 
 

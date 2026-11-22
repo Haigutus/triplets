@@ -7,13 +7,16 @@ for the vectorized engines.
 """
 import logging
 
+import pandas
+
 from importlib.util import find_spec
 
 from ..iri import CIM_NS
+from .._header import without_metadata
 from .._rdflib_loader import load_dataset
 from .context import _scoped
 from .shacl_ir import _mark_switched_off
-from .shacl_report import report_to_violations
+from .shacl_report import VALIDATION_FAILURE, VIOLATION_COLUMNS, report_to_violations
 
 if find_spec("pyshacl") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("pyshacl is not installed")
@@ -33,7 +36,9 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         From ``triplets.validation.compile`` — this engine uses the shapes graph.
     rdf_map : dict, optional
         Scoped export schema (``schema_scope.scoped_rdf_map``) — xsd-typed
-        literals and class IRIs in the data graph.
+        literals and class IRIs in the data graph, and the exact reading of an
+        IRI ``sh:value`` back into VALUE (``report_to_violations``); without it
+        the form is guessed, and an ``http`` IRI with a ``#`` loses its namespace.
     ancestors : dict, optional
         ``schema_scope.class_ancestors`` map, given to pyshacl as ``rdfs:subClassOf``
         in ``ont_graph`` (already closed, so pyshacl's own closure adds nothing):
@@ -43,7 +48,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         Validate only these instances' named graphs — data outside the scope
         is not loaded, so references into unscoped instances count as absent.
         Include dependency instances in the scope (or validate the full
-        union, data_scope=None) for cross-instance checks.
+        union, data_scope=None) for cross-instance checks. The objects the
+        parsers add to every file (``iri.METADATA_TYPES``) are never loaded.
     inference, advanced, abort_on_first : passed to pyshacl.validate;
         abort_on_first also sets ``allow_warnings``, so only a Violation stops the run.
     **kwargs : other engines' options (components, max_workers, table_name, lexical) —
@@ -57,9 +63,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         force-clones the data graph into rdflib Memory regardless
         (advanced=True), and the clone through the oxrdflib wrapper costs
         more than the Rust parse saves (95k warm: 1.8 s vs 1.2 s; 1.14M
-        load+clone: 40 s vs 33 s). Opt in when the store is already loaded
-        for SPARQL anyway — then the load leg is free (unscoped runs only:
-        a data_scope run loads its own store of the scoped rows).
+        load+clone: 40 s vs 33 s). The store holds the validated rows (the
+        scope, without the parser's metadata objects), cached by their content.
     """
     if compiled.graph is None:
         raise ValueError("schema-compiled (rdfs) shapes carry no SHACL graph — "
@@ -67,9 +72,10 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
 
     from pyshacl import validate as pyshacl_validate
 
-    if data_scope is not None:   # filter before the export — data outside the scope is never loaded
-        from . import _table_ref
-        data = _scoped(data, data_scope, _table_ref(data, **kwargs))
+    from . import _table_ref
+    # filter before the export — data outside the scope and the objects the parsers
+    # add to every file are never loaded
+    data = without_metadata(_scoped(data, data_scope, _table_ref(data, **kwargs)))
     data_graph = load_dataset(data, rdf_map=rdf_map, store=store, undefined_namespace=undefined_namespace)
     ont_graph = _ontology_graph(ancestors, rdf_map, undefined_namespace) if ancestors else None
 
@@ -80,7 +86,25 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         allow_warnings=abort_on_first,   # else pyshacl's abort_on_first also stops on a Warning
     )
     logger.debug("SHACL conforms=%s", conforms)
-    return report_to_violations(report_graph, shapes_graph=shapes_graph)
+    if isinstance(report_graph, Exception):   # pyshacl returns its ValidationFailure in place of the report
+        return _not_validated(report_graph)
+    # with the schema an IRI sh:value is read exactly (a reference or a class of another
+    # namespace stays whole, as the other engines report it); without one the form is guessed
+    return report_to_violations(report_graph, shapes_graph=shapes_graph, rdf_map=rdf_map,
+                                undefined_namespace=undefined_namespace)
+
+
+def _not_validated(failure):
+    """The one row of a run pyshacl gave up on (its ``ValidationFailure``: a sh:sparql
+    query it does not accept, or any other cause it reports that way) — a
+    ``triplets:validationFailure`` Violation without a focus node. pyshacl stops at the
+    first such shape and names none, so the row has no SOURCE_SHAPE and pyshacl
+    reports nothing else; ``validate_shacl`` lists the stop in ``skipped_shapes``."""
+    reason = " ".join(str(getattr(failure, "message", failure)).split())
+    logger.error("pyshacl stopped the validation: %s", reason)
+    message = f"pyshacl stopped the validation — {reason} Nothing was evaluated: no data finding, the run is partial."
+    return pandas.DataFrame([[None, None, None, VALIDATION_FAILURE, message, "Violation", None]],
+                            columns=VIOLATION_COLUMNS)
 
 
 def _shapes_graph(compiled):

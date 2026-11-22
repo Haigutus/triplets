@@ -2,6 +2,9 @@
 
 Uses minimal_cim.xml (committed) + RealGrid when present.
 """
+import shutil
+import zipfile
+
 import pytest
 import pandas
 
@@ -43,6 +46,38 @@ def test_local_id():
 def test_find_all_xml_minimal():
     files = find_all_xml([MINIMAL])
     assert len(files) == 1
+
+
+@pytest.mark.parametrize("suffix", [".xml", ".rdf", ".owl", ".OWL"])
+def test_rdf_xml_suffixes(tmp_path, suffix):
+    """An RDF/XML file is read under each of its usual suffixes, as a path and as a zip member."""
+    path = tmp_path / f"model{suffix}"
+    shutil.copy(MINIMAL, path)
+    with zipfile.ZipFile(tmp_path / "model.zip", "w") as archive:
+        archive.write(path, path.name)
+    expected = len(parse(MINIMAL, engine="python_lxml_pandas"))
+    assert len(parse(str(path), engine="python_lxml_pandas")) == expected
+    assert len(parse(str(tmp_path / "model.zip"), engine="python_lxml_pandas")) == expected + 1   # belongsToContainer
+
+
+def test_rdf_xml_is_told_by_the_file_name(tmp_path):
+    """A directory name with a suffix in it does not make a zip an XML file, and a
+    Turtle ``.owl`` zip member is skipped like any other member that is not RDF/XML."""
+    folder = tmp_path / "j.owlett.xml.d"
+    folder.mkdir()
+    with zipfile.ZipFile(folder / "grid.zip", "w") as archive:
+        archive.write(MINIMAL, "model.xml")
+        archive.writestr("ontology.owl", "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n<http://example.org/o> a owl:Ontology .\n")
+        archive.writestr("iri-first.owl", "<http://example.org/o> a <http://www.w3.org/2002/07/owl#Ontology> .\n")
+        archive.writestr("relative-iri.owl", "<a> <b> <c> .\n")
+        archive.write(MINIMAL, "model.owl")
+        text = Path(MINIMAL).read_bytes().decode("utf-8")
+        archive.writestr("utf16.owl", text.replace('encoding="UTF-8"', 'encoding="UTF-16"').encode("utf-16"))
+    expected = len(parse(MINIMAL, engine="python_lxml_pandas")) + 1                    # belongsToContainer
+    assert [file.name for file in find_all_xml([str(folder / "grid.zip")])] == ["model.xml", "model.owl", "utf16.owl"]
+    assert len(parse(str(folder / "grid.zip"), engine="python_lxml_pandas")) == 3 * expected
+    shutil.copy(MINIMAL, tmp_path / "model.xml.txt")
+    assert find_all_xml([str(tmp_path / "model.xml.txt")]) == []                   # neither suffix: not supported
 
 
 # ── Registration ────────────────────────────────────────────────────────────

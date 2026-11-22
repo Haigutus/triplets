@@ -140,7 +140,7 @@ def declared_profiles(data, rdf_map, data_scope=None, **kwargs):
 
 
 def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, report_undefined_keys=False,
-                       references=False, report_missing_targets=True, engine="auto", **kwargs):
+                       references=False, report_missing_targets=True, engine="auto", severity="Violation", **kwargs):
     """Schema-validate every instance against the profiles its header declares.
 
     Instances declaring the same profiles run together through
@@ -155,6 +155,9 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
         looked up in every loaded instance.
     rdf_map_scope : profile identifier(s), optional
         Override the declared profiles for every instance (header-less data).
+    severity : {"Violation", "Warning", "Info"}, default "Violation"
+        The SEVERITY of every finding of both validations (``triplets:lexicalForm``
+        stays Warning).
     """
     from .. import validation
     from ..iri import load_rdf_map
@@ -176,11 +179,12 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
     frames = []
     for sections, instances in groups.items():
         frames.append(validation.validate_schema(data, rdf_map, data_scope=instances, rdf_map_scope=list(sections),
-                                                 report_undefined_keys=report_undefined_keys, engine=engine, **kwargs))
+                                                 report_undefined_keys=report_undefined_keys, engine=engine,
+                                                 severity=severity, **kwargs))
         if references:
             frames.append(validation.validate_schema_references(
                 data, rdf_map, instances, list(sections), list(loaded), target_profiles,
-                report_missing_targets=report_missing_targets, engine=engine, **kwargs))
+                report_missing_targets=report_missing_targets, engine=engine, severity=severity, **kwargs))
     violations = validation.concat_violations(frames)
     if "PROFILE" not in violations.columns:            # no instance resolved: no run stamped it
         violations["PROFILE"] = pandas.Series(dtype=object)

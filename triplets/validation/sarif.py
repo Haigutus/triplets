@@ -11,6 +11,7 @@ RDF objects have no text coordinates, so results point at the model through
 ``artifactLocation`` when the enrichment pass can trace it. Passing
 data/shapes/rdf_map runs that pass automatically (see context.enrich).
 """
+import hashlib
 import io
 import os
 import json
@@ -22,7 +23,7 @@ import pandas
 
 from .context import ENRICHMENT_COLUMNS, REFERENCED_OBJECT, enrich
 from .locations import LOCATION_COLUMNS, check_source_root, locate_missing, relative_sources
-from .shacl_report import _expand, message_prefix, profile_names, profile_text
+from .shacl_report import SCHEMA_SHAPES, SCHEMA_SHAPE_STARTS, UNEXPORTED, _expand, message_prefix, profile_names, profile_text, run_language
 from ..iri import split_iri
 
 logger = logging.getLogger(__name__)
@@ -46,12 +47,19 @@ _LINK_BREAKERS = set("[]\\")
 
 def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True,
                     sources=None, path=None, export_to_memory=False, source_root=None, data_scope=None):
-    """Violations frame → SARIF 2.1.0 log.
+    """Violations frame(s) → SARIF 2.1.0 log.
 
     Parameters
     ----------
-    violations : DataFrame in VIOLATION_COLUMNS (any engine's output).
+    violations : DataFrame in VIOLATION_COLUMNS (any engine's output), or a list of them.
         A frame already carrying the enrichment columns is used as-is.
+        A list writes one log with one run per frame, in order, each with the
+        tool name, rules and run metadata of its own frame — a schema run and a
+        SHACL run in one file (``[schema_violations, shacl_violations]``); every
+        other argument applies to each frame. Runs of one constraint language
+        would share a tool name: two frames of one language raise ValueError —
+        join them with ``concat_violations`` first. An empty frame without run
+        metadata in the list is left out (no run): it does not say what ran.
     data, shapes, rdf_map : optional
         Run the context enrichment pass first (see context.enrich) — fills
         object names, source files and shape/schema descriptions into the
@@ -92,9 +100,10 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         object the run did not see (see context.enrich).
     """
     check_source_root(source_root)
-    if any(source is not None for source in (data, shapes, rdf_map)) \
-            and not set(ENRICHMENT_COLUMNS) <= set(violations.columns):
-        violations = enrich(violations, data=data, shapes=shapes, rdf_map=rdf_map, data_scope=data_scope)
+    if any(source is not None for source in (data, shapes, rdf_map)):
+        violations = [frame if set(ENRICHMENT_COLUMNS) <= set(frame.columns)
+                      else enrich(frame, data=data, shapes=shapes, rdf_map=rdf_map, data_scope=data_scope)
+                      for frame in _frames(violations)]
 
     payload = json.dumps(build_sarif(violations, group=group, sources=sources, source_root=source_root),
                          ensure_ascii=False, indent=2).encode("utf-8")
@@ -110,14 +119,39 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     return path
 
 
+def _frames(violations):
+    """One violations frame, or a sequence of them → the list of frames."""
+    return [violations] if isinstance(violations, pandas.DataFrame) else list(violations)
+
+
 def build_sarif(violations, group=True, sources=None, source_root=None):
-    """Violations frame → SARIF document dict (I/O only when *sources* is
+    """Violations frame, or a list of them → SARIF document dict with one run
+    per frame (I/O only when *sources* is
     given — the locate pass reads just the source files and stamps only the
     location columns the frame lacks, see locations.locate_missing).
     *source_root*:
     absolute file names under it are written relative to it (see
     export_to_sarif)."""
     check_source_root(source_root)
+    frames = _frames(violations)
+    if not isinstance(violations, pandas.DataFrame):
+        # in a list, an empty frame without run metadata says nothing (a clean run whose attrs were lost): no run
+        frames = [frame for frame in frames if len(frame) or frame.attrs.get("validation")]
+    languages = [run_language(frame) for frame in frames]
+    repeated = sorted({language for language in languages if languages.count(language) > 1})
+    if repeated:
+        raise ValueError(f"build_sarif got several frames of the constraint language {', '.join(repeated)}: they would "
+                         f"be runs with one tool name (triplets-{repeated[0]}) — join them with concat_violations first")
+    return {
+        "$schema": _SCHEMA,
+        "version": "2.1.0",
+        "runs": [_run(frame, group, sources, source_root) for frame in frames],
+    }
+
+
+def _run(violations, group, sources, source_root):
+    """One violations frame → its SARIF run: the tool is named by the frame's
+    constraint language (shacl_report.run_language)."""
     frame = violations.copy()
     if sources is not None:
         frame = locate_missing(frame, sources)
@@ -129,14 +163,17 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
     frame, names = relative_sources(frame, {key: meta[key] for key in ("source", "references")
                                             if meta.get(key)}, source_root)
     meta = {**meta, **names}
-    language = meta.get("language", "shacl")
-    groups = [(key, rows.to_dict("records")) for key, rows
-              in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False)]
+    language = run_language(violations)
+    # one rule per ruleId: the schema shapes of one scope given in two orders are one rule,
+    # and so is an anonymous shape parsed twice (its stable name, not its blank-node label)
+    anonymous = meta.get("anonymous_shapes") or {}
+    groups = {}
+    for (shape, constraint), rows in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False):
+        groups.setdefault(_rule_id(shape, constraint, anonymous), []).extend(rows.to_dict("records"))
 
     rules, results = [], []
-    seen_ids = {}
-    for (shape, constraint), records in groups:
-        rule = _rule(shape, constraint, records, seen_ids, occurrences=len(records) if group else None,
+    for identifier, records in groups.items():
+        rule = _rule(identifier, records, occurrences=len(records) if group else None,
                      language=language, references=meta.get("references"))
         rule_index = len(rules)
         rules.append(rule)
@@ -163,7 +200,7 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
     skipped = {key: descriptor for key, descriptor in _SKIPPED.items() if meta.get(key)}
     notifications = [{"descriptor": {"id": descriptor}, "level": "warning", "message": {"text": str(text)}}
                      for key, (descriptor, _) in skipped.items() for text in meta[key]]
-    run = _prune({
+    return _prune({
         "tool": {"driver": _prune({
             "name": f"triplets-{language}",
             "informationUri": "https://github.com/Haigutus/triplets",
@@ -184,16 +221,10 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
         })] if meta.get("generated_at") or notifications else None,
         # empty coverage lists stay in — a clean run STATES full coverage
         "properties": {key: value for key, value in meta.items()
-                       if key not in ("started_at", "generated_at", "creator",
-                                      "source_shapes")   # in-memory graphs, SHACL report only
+                       if key not in ("started_at", "generated_at", "creator", *UNEXPORTED)
                        and value is not None} or None,
         "results": results,
     })
-    return {
-        "$schema": _SCHEMA,
-        "version": "2.1.0",
-        "runs": [run],
-    }
 
 
 def _fallback_name(shape, first, language):
@@ -218,15 +249,35 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _rule(shape, constraint, records, seen_ids, occurrences=None, language="shacl", references=None):
-    identifier = f"{split_iri(str(shape))[1]}/{constraint}" if not pandas.isna(shape) else str(constraint)
-    if identifier in seen_ids:                       # distinct shapes, same local name
-        seen_ids[identifier] += 1
-        identifier = f"{identifier}-{seen_ids[identifier]}"
-    else:
-        seen_ids[identifier] = 1
+def _shape_name(shape, anonymous=()):
+    """The shape part of a ruleId, a function of the shape alone — the same in every
+    run, parse and frame, whatever the findings:
 
+    - a schema shape: its scope and local name, the profile names sorted, so one class
+      and key checked under two scopes are two rules and the order of ``rdf_map_scope``
+      makes no other rule (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` →
+      ``EQ:OP:Breaker.Switch.open``);
+    - a SHACL shape: its local name and eight hex digits of the SHA-1 of its IRI
+      (``AllowedClasses-property-1f0c9a2e``) — shapes of one local name in several
+      namespaces are several rules;
+    - a shape without an IRI: its stable name from the run metadata (*anonymous*,
+      ``validation._anonymous_shapes``)."""
+    if shape.startswith(SCHEMA_SHAPE_STARTS):
+        scope, _, name = shape.removeprefix(SCHEMA_SHAPES).partition("#")
+        return ":".join((*sorted(filter(None, scope.split(":"))), name))
+    if shape in anonymous:
+        return anonymous[shape]
+    return f"{split_iri(shape)[1]}-{hashlib.sha1(shape.encode('utf-8')).hexdigest()[:8]}"
+
+
+def _rule_id(shape, constraint, anonymous=()):
+    """``<shape name>/<constraint>`` (:func:`_shape_name`); the constraint alone for a row without a shape."""
+    return f"{_shape_name(str(shape), anonymous)}/{constraint}" if not pandas.isna(shape) else str(constraint)
+
+
+def _rule(identifier, records, occurrences=None, language="shacl", references=None):
     first = records[0]
+    shape, constraint = first["SOURCE_SHAPE"], first["VIOLATION_TYPE"]
     # the rule title — what GitHub shows as the alert name — names the
     # constraint language; grouped runs add the occurrence count (the ruleId
     # stays stable, so alerts still match)

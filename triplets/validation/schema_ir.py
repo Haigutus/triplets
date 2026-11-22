@@ -31,6 +31,8 @@ import json
 import logging
 import os
 
+from urllib.parse import quote
+
 import pandas
 
 from .._header import _PROPERTY_TYPES
@@ -38,6 +40,7 @@ from ..iri import _PLAIN_DATATYPES, TYPE_KEY, XSD_NS, language_tag, load_rdf_map
 from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
                            scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
+from .shacl_report import SCHEMA_SHAPES
 
 logger = logging.getLogger(__name__)
 
@@ -176,8 +179,9 @@ def _associations(sections, entries):
 def _shape_prefix(sections):
     """Shape-id namespace of a scope: one per scope, so findings of different
     scopes never share a shape (SARIF groups by shape); the local name is the
-    class (``Breaker`` / ``Breaker.IdentifiedObject.name``)."""
-    return "urn:triplets:schema" + "".join(f":{section}" for section in sections or ()) + "#"
+    class (``Breaker`` / ``Breaker.IdentifiedObject.name``). ``:`` and ``#`` separate
+    the parts, so a section name is percent-encoded (``EQ#1`` → ``EQ%231``)."""
+    return SCHEMA_SHAPES + "".join(f":{quote(section, safe='')}" for section in sections or ()) + "#"
 
 
 def _class_meta(sections, entries):
