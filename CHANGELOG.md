@@ -688,8 +688,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `.owl` input as CIM XML too. A file is told by the suffix of its file name
   (`.xml` / `.rdf` / `.owl`, any case), not by those letters anywhere in its path: a zip in
   a directory `j.owlett/` is a zip, `model.xml.zip` is a zip, and `model.xml.tmp` is no
-  longer read. `.owl` is read as RDF/XML only; a `.owl` zip member in another syntax
-  (Turtle) is skipped like the other members that are not RDF/XML.
+  longer read. `.owl` is read as RDF/XML only; a `.owl` zip member that is not XML with a
+  namespaced root element (an ontology in Turtle) is skipped with a warning, in any
+  encoding XML declares.
 - **CIM XML export: no "matches none of the schema profiles … nothing is exported" warning
   for a schema with root entries.** A flat schema that also holds a nested dict without a
   `type` (read as a profile section) exported every object and logged the warning once per

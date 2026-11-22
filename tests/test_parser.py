@@ -69,10 +69,13 @@ def test_rdf_xml_is_told_by_the_file_name(tmp_path):
         archive.write(MINIMAL, "model.xml")
         archive.writestr("ontology.owl", "@prefix owl: <http://www.w3.org/2002/07/owl#> .\n<http://example.org/o> a owl:Ontology .\n")
         archive.writestr("iri-first.owl", "<http://example.org/o> a <http://www.w3.org/2002/07/owl#Ontology> .\n")
+        archive.writestr("relative-iri.owl", "<a> <b> <c> .\n")
         archive.write(MINIMAL, "model.owl")
+        text = Path(MINIMAL).read_bytes().decode("utf-8")
+        archive.writestr("utf16.owl", text.replace('encoding="UTF-8"', 'encoding="UTF-16"').encode("utf-16"))
     expected = len(parse(MINIMAL, engine="python_lxml_pandas")) + 1                    # belongsToContainer
-    assert [file.name for file in find_all_xml([str(folder / "grid.zip")])] == ["model.xml", "model.owl"]
-    assert len(parse(str(folder / "grid.zip"), engine="python_lxml_pandas")) == 2 * expected
+    assert [file.name for file in find_all_xml([str(folder / "grid.zip")])] == ["model.xml", "model.owl", "utf16.owl"]
+    assert len(parse(str(folder / "grid.zip"), engine="python_lxml_pandas")) == 3 * expected
     shutil.copy(MINIMAL, tmp_path / "model.xml.txt")
     assert find_all_xml([str(tmp_path / "model.xml.txt")]) == []                   # neither suffix: not supported
 

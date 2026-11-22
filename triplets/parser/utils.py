@@ -5,11 +5,11 @@ Extracted/adapted from rdf_parser.py and rdf_parser_lxml_arrow.py cues.
 
 from io import BytesIO
 import os
-import re
 import uuid
 import logging
 import zipfile
 from typing import List, Union, IO, Any
+from xml.etree import ElementTree
 
 logger = logging.getLogger(__name__)
 
@@ -22,9 +22,18 @@ RDF_RESOURCE = f"{{{RDF_NS}}}resource"
 XML_BASE = "{http://www.w3.org/XML/1998/namespace}base"
 # file name suffixes of an RDF/XML file; ``.owl`` is read as RDF/XML only (no Turtle, no OWL/XML)
 RDF_XML_SUFFIXES = (".xml", ".rdf", ".owl")
-# how an XML document starts (BOM and white space aside): a declaration, a comment or
-# DOCTYPE, or an element name — a Turtle file opening with ``<http://…>`` does not
-XML_START = re.compile(rb"(?:\xef\xbb\xbf)?\s*<(?:[?!]|[A-Za-z_][\w.-]*(?::[\w.-]+)?[\s>/])")
+
+
+def opens_as_rdf_xml(content: bytes) -> bool:
+    """Whether *content* is an XML document whose root element is in a namespace, as
+    every RDF/XML node element is — read by the XML parser up to the root's start tag,
+    in any encoding XML declares (a BOM, UTF-16). An ontology in Turtle is not: it is no
+    XML, or its first ``<a>`` is an element without a namespace."""
+    try:
+        _, root = next(ElementTree.iterparse(BytesIO(content), events=("start",)))
+    except (ElementTree.ParseError, StopIteration):
+        return False
+    return root.tag.startswith("{")
 
 
 def is_rdf_xml(name: str) -> bool:
@@ -181,9 +190,8 @@ def iter_all_xml(list_of_paths_to_zip_globalzip_xml: Union[str, List, Any], debu
                             logger.warning("Zip member read fail %s: %s", zipped_file, e)
                             continue
                         # an ontology in Turtle or another syntax: not RDF/XML, skipped like any other member
-                        if zipped_file_lower.endswith(".owl") and not XML_START.match(content):
-                            if debug:
-                                logger.debug("Skipped in zip: %s", zipped_file)
+                        if zipped_file_lower.endswith(".owl") and not opens_as_rdf_xml(content):
+                            logger.warning("Skipped in zip, not RDF/XML: %s", zipped_file)
                             continue
                         if debug:
                             logger.debug("Added from zip: %s", zipped_file)
