@@ -429,6 +429,18 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
         the connection, else ``triplets``).
     """
     connection, table = _connection(data, table=table, schema=schema, table_name=table_name)
+    try:
+        return _validate(connection, table, compiled, rdf_map, data_scope, components, max_workers,
+                         undefined_namespace, ancestors, lexical, abort_on_first, **kwargs)
+    finally:   # nothing of the run stays on the caller's connection, also when a statement raised
+        connection.execute("DROP VIEW IF EXISTS _shacl_scoped")
+        for name in ("_shacl_types", "_shacl_targets", "_shacl_names", "_shacl_metadata"):
+            connection.execute(f"DROP TABLE IF EXISTS {name}")
+
+
+def _validate(connection, table, compiled, rdf_map, data_scope, components, max_workers, undefined_namespace,
+              ancestors, lexical, abort_on_first, **kwargs):
+    """The run of ``validate`` on *connection*; its temp objects are dropped by the caller."""
     # the validated rows: the scoped instances, without the objects the parsers add to every file
     scoped = "TRUE"
     if data_scope is not None:
@@ -486,12 +498,6 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
                                            ancestors=ancestors, lexical=lexical, abort_on_first=abort_on_first,
                                            **kwargs)
         violations = pandas.concat([violations, supplement], ignore_index=True)
-    # don't leave them on the caller's connection
-    connection.execute("DROP TABLE IF EXISTS _shacl_types")
-    connection.execute("DROP TABLE IF EXISTS _shacl_targets")
-    connection.execute("DROP TABLE IF EXISTS _shacl_names")
-    connection.execute("DROP VIEW IF EXISTS _shacl_scoped")
-    connection.execute("DROP TABLE IF EXISTS _shacl_metadata")
     return violations
 
 

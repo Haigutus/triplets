@@ -875,3 +875,24 @@ def test_distributions_of_the_data_are_validated(engine, scope):
     violations = triplets.validation.validate_shacl(frame(rows), shapes, engine=engine, rdf_map=DCAT_SCHEMA,
                                                     rdf_map_scope="*", data_scope=scope, lexical=False)
     assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {("real1", "sh:minCount"), ("real2", "sh:minCount")}
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_metadata_row_without_id(engine, monkeypatch):
+    """A Type row without an ID does not empty the run (duckdb: no NOT IN over a NULL),
+    and a run that raises leaves no temp object on the connection."""
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    data = frame(TRIO + METADATA + [(None, "Type", "Distribution", "eq")])
+    violations = triplets.validation.validate_shacl(data, compiled("target_class"), engine=engine, rdf_map=SCHEMA,
+                                                    rdf_map_scope="*")
+    assert set(violations["ID"]) == {"b2", "b3"}
+    if engine == "duckdb":
+        from _parity import make_duckdb
+        connection = make_duckdb(frame(TRIO))
+        from triplets.validation import shacl_duckdb
+        monkeypatch.setattr(shacl_duckdb, "_create_names_table", lambda *args: 1 / 0)
+        with pytest.raises(ZeroDivisionError):
+            triplets.validation.validate_shacl(connection, compiled("target_class"), engine="duckdb", data_scope=["eq"])
+        left = connection.execute("SELECT table_name FROM information_schema.tables WHERE table_name LIKE '_shacl%'").fetchall()
+        assert left == []
