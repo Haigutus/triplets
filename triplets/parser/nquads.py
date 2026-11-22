@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas
 
 from .._engine_detect import to_return_type
-from ..iri import TYPE_KEY, iri_pandas, load_rdf_map, value_types
+from ..iri import CLASS, LITERAL, TYPE_KEY, iri_pandas, load_rdf_map, value_types
 
 
 # N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)
@@ -131,12 +131,10 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
         iri_pandas.decode_iri(_term(keys)), type_key))
     value = frame["VALUE"]
     quoted = value.str.startswith('"', na=False).astype(bool)
-    # drop a ^^<datatype> / @lang suffix, then slice the quotes off — cheaper
-    # than one back-reference regex over the whole literal
-    unquoted = _unescape(value.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
+    unquoted = _lexical(value)
     objects = iri_pandas.decode_iri(_term(value).where(~quoted))
-    kind = frame["KEY"].map({key: kind for key, kind in (kinds or {}).items() if kind != "literal"})
-    kind = kind.astype(object).where(frame["KEY"] != type_key, "class")
+    kind = frame["KEY"].map({key: kind for key, kind in (kinds or {}).items() if kind != LITERAL})
+    kind = kind.astype(object).where(frame["KEY"] != type_key, CLASS)
     local = iri_pandas.local_value(objects, kind)
     # the guess cannot tell an enum from a reference to an http#… object
     local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))
@@ -147,6 +145,27 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     # the same shape every SPARQL engine returns for a constructed graph
     frame["INSTANCE_ID"] = graphs if graphs is not None and graphs.notna().any() else None
     return frame
+
+
+def _lexical(literals):
+    """Quoted literals → their lexical forms, string escapes decoded. The ^^<datatype> /
+    @lang suffix is dropped, then the quotes sliced off — cheaper than one
+    back-reference regex over the whole literal."""
+    return _unescape(literals.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
+
+
+def term_text(terms):
+    """N-Triples terms → their text, as SPARQL CSV results give it: an IRI without its
+    brackets (as written), a literal's lexical form (``^^<datatype>`` / ``@lang`` dropped,
+    string escapes decoded), a blank node or turtle-shorthand number as written, null as null."""
+    quoted = terms.str.startswith('"', na=False).astype(bool)
+    wrapped = (terms.str.startswith("<", na=False) & terms.str.endswith(">", na=False)).astype(bool)
+    return terms.mask(quoted, _lexical(terms.where(quoted))).mask(wrapped, terms.str.slice(1, -1))
+
+
+def is_node(terms):
+    """Boolean mask of the N-Triples terms that are IRIs (``<…>``)."""
+    return terms.str.startswith("<", na=False).astype(bool)
 
 
 def _subject_references(objects, subjects, kind):

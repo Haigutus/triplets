@@ -255,7 +255,12 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   in the exports and in the graph the `sh:sparql` constraints and pyshacl read. A
   class is its local name too: on polars / pandas / duckdb a class target in
   another namespace (`cim16:Switch`) matches every class of that local name, while
-  pyshacl sees the class in the namespace the schema gives the name.
+  pyshacl sees the class in the namespace the schema gives the name. The same holds
+  for a `sh:in` / `sh:hasValue` class member on `rdf:type` or
+  `( association rdf:type )` whose class the scoped schema lacks (every class without
+  an `rdf_map`): it matches by local name, so a member in another namespace than
+  `undefined_namespace` passes on the engines where pyshacl reports it. A class the
+  schema declares is compared as its full IRI on every engine.
 - The duckdb engine streams/spills by design, but a true larger-than-RAM
   validation has not been exercised yet.
 
@@ -316,8 +321,8 @@ registries that consume it are internal.
 |------------|----------------|
 | `sh:minCount` `sh:maxCount` `sh:minLength` `sh:maxLength` | int |
 | `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (the value of a numeric literal); `(space, lexical form)` for a date or dateTime bound (`("date", "2020-01-01")`, `("dateTime", "2020-01-01T00:00:00+00:00")`); a bound in no value space compiles to no row and is named in `skipped_shapes` |
-| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str; `(KEY, space)` for `sh:lessThan` / `sh:lessThanOrEquals` on a property shape with an XSD `sh:datatype` (`("Switch.retiredDate", "date")`, `""` for a type in no value space) |
-| `sh:in` | list[str] (IRIs shortened to local names) |
+| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str; `(KEY, space)` for `sh:lessThan` / `sh:lessThanOrEquals` on a property shape with an XSD `sh:datatype` (`("Switch.retiredDate", "date")`, `""` for a type in no value space) |
+| `sh:in` (list), `sh:hasValue` (one) | the members' rdflib terms (`URIRef` / `Literal`: the text with its term kind); the engines read them as the VALUEs they stand for on the path (`shacl_ir.member_values`). A schema enumeration's `sh:in` lists its value names |
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included); the vectorized engines always allow `Type` (rdf:type) on top |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
@@ -571,10 +576,22 @@ conforms** — identical across all engines:
 | `SOURCE_SHAPE` | shape URI that produced the result |
 
 plus `EXPECTED` (what the constraint requires, worded from the rule) and
-`MESSAGE_SOURCE` (authored `sh:message` or engine text) — both from the rules
-alone — and, for the schema validations, `PROFILE` (the list of scoped
-section keys, `["EQ", "OP", "SC"]`; the reports format it for display). What
-a finding found in the data (`TARGET`) is added by `enrich`.
+`MESSAGE_SOURCE` (authored `sh:message` or engine text), both from the rules
+alone, and, for the schema validations, `PROFILE` (the list of scoped section
+keys, `["EQ", "OP", "SC"]`; the reports format it for display). What a finding
+found in the data (`TARGET`) is added by `enrich`.
+
+Two term-kind columns appear where no schema entry gives the kind; their values
+are `triplets.iri.TERM_KINDS` (`class`, `enum`, `reference`, `literal`), and the
+SHACL report writes `sh:value` / `sh:focusNode` by them:
+
+- `VALUE_KIND` on a frame with `sh:sparql` findings: the kind of the `?value`
+  binding (empty on other rows).
+- `ID_KIND` on a frame with a literal focus node, per row: a focus a
+  `sh:targetObjectsOf` KEY gives has the term kind the export writes for that
+  value — `literal` for an Attribute, or for a KEY the schema lacks when the text
+  is no IRI or UUID; when the shape's other targets give the same text as a node,
+  a subject in the data is the node. `reference` on the other rows.
 
 Violations DataFrames export like any other DataFrame (`export_to_csv`, Excel, ...),
 as a standard `sh:ValidationReport` (`violations.shacl.to_shacl_report(...)` — the
@@ -590,7 +607,7 @@ sources only when the `SOURCE_*` columns are missing. The columns:
 
 | Columns | Content |
 |---------|---------|
-| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`). The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element, in whichever file holds it for the object (an SSH property of an object an EQ file defines), else of the object definition (`ID`); a finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition. The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
 
 The name of a file in a zip holds the zip's file name only: two zips with the same
@@ -600,7 +617,7 @@ zip gives the inner zip's name.
 An object's definition is the first `rdf:ID` or `rdf:about` element with its id, in the
 order the sources are read (the plain files as given, then the members of the zips): for
 an object written in several files (an `rdf:about` element in the SSH, the `rdf:ID`
-element in the EQ) the file read first gives the position.
+element in the EQ) the file read first gives the position. The pass stops once every object and every searched property element is found.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
@@ -940,8 +957,10 @@ violations.shacl.to_sarif(path="report.sarif", sources=[f"{repository}/models/gr
 # with report_source=/report_references=
 violations.shacl.to_shacl_report(path="report.ttl", sources=["grid.zip"])
 violations.shacl.to_shacl_report(path="report.xml")  # RDF/XML via .xml
-# rdf_map= expands sh:resultPath KEYs to their profile namespace
-# (undefined_namespace for KEYs it lacks) and writes sh:value of a reference
+# sh:resultPath is the violated shape's own sh:path (a sequence, inverse or
+# alternative path as its blank node, embedded with the shape); without it
+# rdf_map= expands the KEY to its profile namespace
+# (undefined_namespace for KEYs it lacks). rdf_map= writes sh:value of a reference
 # or an enumeration KEY as an IRI (a plain literal without it), the terms
 # export_to_nquads writes; report_to_violations(graph, rdf_map=rdf_map) reads
 # them back as the VALUEs they were (without rdf_map it guesses: an http IRI

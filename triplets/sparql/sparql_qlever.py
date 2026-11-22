@@ -54,6 +54,7 @@ from .._content_key import content_key
 from .._engine_detect import flavor, to_pandas, to_return_type
 from ..iri import CIM_NS, absolute_id, datatypes, load_rdf_map, namespaces, value_types
 from ..parser.nquads import terms_to_triplets
+from . import json_terms
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ _QUERY_FORM = re.compile(r"(select|ask|construct|describe)\b", re.IGNORECASE)
 
 
 def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto", data_unchanged=False,
-          undefined_namespace=CIM_NS):
+          undefined_namespace=CIM_NS, terms=False):
     """Execute query_string over data; shape the result by query type.
 
     Queries are executed exactly as given — the text is never modified.
@@ -82,7 +83,8 @@ def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto",
     ``data_scope`` travels beside the query as SPARQL-protocol dataset clauses
     (``default-graph-uri``): the query runs against exactly the union of the
     scoped instances' named graphs on the one shared index, and per the
-    protocol these take precedence over any FROM inside the query.
+    protocol these take precedence over any FROM inside the query. *terms*:
+    SELECT values as N-Triples terms, from the JSON results.
     """
     index = _index_for(data, rdf_map, data_unchanged, undefined_namespace)
     graphs = [absolute_id(instance) for instance in data_scope] if data_scope is not None else None
@@ -95,6 +97,8 @@ def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto",
     if form in ("construct", "describe"):
         return _finalize(_terms_to_triplets(_run(index.construct_arrow, query_string, graphs)),
                          return_type)
+    if terms:   # the Arrow decode keeps lexical forms only; the JSON results keep the term kinds
+        return json_terms(_run(index.query, query_string, "sparqljson", graphs), return_type)
     return _finalize(_run(index.select_arrow, query_string, graphs), return_type)
 
 

@@ -98,6 +98,23 @@ def test_max_occurs(engine):
     assert v.loc[v["VIOLATION_TYPE"] == "xsd:maxOccurs", "TARGET"].iloc[0] == "found 2 values: 'B', 'B-again'"
 
 
+def test_max_occurs_counts_elements(engine):
+    """XSD counts elements: a property written twice with the same value in one
+    instance breaks 1..1 (SHACL counts the one value node)."""
+    rows = breaker("b1", *OK, ("IdentifiedObject.name", "B"))
+    v = run(rows, engine)
+    assert violating(v, "xsd:maxOccurs") == {("b1", None)}
+    v = enrich(v, data=frame(rows))
+    assert v.loc[v["VIOLATION_TYPE"] == "xsd:maxOccurs", "TARGET"].iloc[0] == "found 2 values: 'B', 'B'"
+
+
+def test_null_value_is_no_element(engine):
+    """A row without a VALUE counts as no element: name missing, not twice."""
+    v = run(breaker("b1", ("IdentifiedObject.mRID", "b1"), ("IdentifiedObject.name", None))
+            + breaker("b2", *OK, ("IdentifiedObject.name", None)), engine)
+    assert violating(v, "xsd:minOccurs") == {("b1", None)} and violating(v, "xsd:maxOccurs") == set()
+
+
 def test_datatype_lexical_two_levels(engine):
     rows = (breaker("b1", *OK, ("Switch.retained", "maybe"))     # invalid boolean
             + breaker("b2", ("IdentifiedObject.mRID", "b2"), ("IdentifiedObject.name", "B2"),

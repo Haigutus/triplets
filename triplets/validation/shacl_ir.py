@@ -33,7 +33,8 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, TYPE_KEY, XSD_NS, local_id, local_key, local_value, split_iri
+from ..iri import (CLASS, ENUM, LITERAL, REFERENCE, SH_NS, TYPE_KEY, XSD_NS, absolute_value, is_iri, local_id, local_key,
+                   local_value, split_iri)
 from .value_space import bound_space, pair_params
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,8 @@ class CompiledShapes:
     hash: str                     # content hash of the shape sources (any file name; a filtered compile keeps it)
     sources: tuple = ()           # shape file basenames, sorted, each name once (report metadata; () for a Graph)
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
+    # cardinality counts every element (XSD, compile_schema), else the distinct value nodes (SHACL)
+    count_elements: bool = False
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
     # shape ids switched off: on the full compile those the graph declares
@@ -184,7 +187,7 @@ def holds_names(key, value_types):
     ``sh:targetNode`` class, the focus of an inverse path — such a VALUE is its IRI
     (``iri.absolute_name``: the name's schema namespace, else the undefined
     namespace); a reference VALUE is a node id as it is."""
-    return key == TYPE_KEY or value_types.get(key) == "enum"
+    return key == TYPE_KEY or value_types.get(key) == ENUM
 
 
 def _mark_switched_off(graph, compiled):
@@ -214,7 +217,8 @@ def _switched_off(base, off):
     if unknown:
         logger.warning("deactivated_shapes names no shape in the shapes graph: %s", ", ".join(unknown))
     ir = base.ir.loc[base.ir["shapes"].map(off.isdisjoint)].reset_index(drop=True)
-    ir["params"] = [_prune(component, params, off) for component, params in zip(ir["component"], ir["params"])]
+    ir["params"] = pandas.Series([_prune(component, params, off) for component, params in zip(ir["component"], ir["params"])],
+                                 index=ir.index, dtype=object)   # object: the members keep their term kind
     skipped = frozenset(entry for entry in base._skipped if off.isdisjoint(entry[0]))
     return CompiledShapes(graph=base.graph, ir=ir, hash=base.hash,
                           sources=base.sources, language=base.language,
@@ -378,7 +382,7 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
 
     SH = rdflib.Namespace(SH_NS)
     skipped = set() if skipped is None else skipped
-    targets = ((SH.targetClass, "Type", lambda node: local_value(node, "class")),
+    targets = ((SH.targetClass, "Type", lambda node: local_value(node, CLASS)),
                (SH.targetSubjectsOf, "KEY", local_key),
                (SH.targetObjectsOf, "VALUE", local_key),
                # the ID as the data spells it (urn:uuid: stripped); any other IRI
@@ -408,6 +412,9 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
             skipped.add(((str(shape),), f"{shape}: {reason}", shape))
 
     ir = pandas.DataFrame(rows, columns=IR_COLUMNS)
+    # object dtype: the str dtype would turn an all-text params column into plain text and lose
+    # the term kind of the rdflib Literal / URIRef sh:in / sh:hasValue members
+    ir["params"] = pandas.Series([row["params"] for row in rows], index=ir.index, dtype=object)
     # identical re-declarations behave like ONE shape (issue #99): the ENTSO-E
     # Simple files re-declare shared property-shape URIs per profile file —
     # duplicated rules double-counted in the polars batch path. Rows that differ
@@ -737,7 +744,7 @@ def _components(SH, shape):
         (SH.minCount, "sh:minCount", lambda g, v: int(v)),
         (SH.maxCount, "sh:maxCount", lambda g, v: int(v)),
         (SH.datatype, "sh:datatype", lambda g, v: f"xsd:{split_iri(v)[1]}"),
-        (SH["class"], "sh:class", lambda g, v: local_value(v, "class")),
+        (SH["class"], "sh:class", lambda g, v: local_value(v, CLASS)),
         (SH.minInclusive, "sh:minInclusive", lambda g, v: _bound(v)),
         (SH.maxInclusive, "sh:maxInclusive", lambda g, v: _bound(v)),
         (SH.minExclusive, "sh:minExclusive", lambda g, v: _bound(v)),
@@ -848,8 +855,49 @@ def _rdf_list(graph, head, transform):
 
 
 def _value(term):
-    """sh:in / sh:hasValue member → comparable VALUE string: literals verbatim, IRIs by the
-    VALUE rule (``local_value`` — an enum ``#`` IRI → its name, a ``/`` IRI stays whole)."""
-    if type(term).__name__ == "Literal":
-        return str(term)
-    return local_value(str(term))
+    """sh:in / sh:hasValue member → the rdflib term itself: its text (a literal's lexical
+    form, an IRI whole) with its term kind, which ``member_values`` keeps."""
+    return term
+
+
+def is_literal(member):
+    """A sh:in / sh:hasValue member that is a literal (an rdflib ``Literal``); a schema
+    enumeration value is a plain name or IRI."""
+    return type(member).__name__ == "Literal"
+
+
+def path_kind(rule, value_types):
+    """The :data:`~triplets.iri.TERM_KINDS` kind of *rule*'s value nodes: ``class`` on a
+    ``( association rdf:type )`` path and under ``rdf:type``, ``reference`` on an inverse
+    path (the subjects), else the KEY's schema entry type; None for a KEY the schema lacks."""
+    if getattr(rule, "via_type", False) or (rule.path == TYPE_KEY and not rule.inverse):
+        return CLASS
+    if rule.inverse:
+        return REFERENCE
+    return value_types.get(rule.path)
+
+
+def member_values(members, kind, namespaces, undefined_namespace):
+    """sh:in / sh:hasValue members → the VALUE texts they are on a path of *kind*
+    (``path_kind``): an IRI member is the local VALUE of that kind
+    (:func:`~triplets.iri.local_value`) when that VALUE stands for exactly this IRI
+    (:func:`~triplets.iri.absolute_value` — a class in its schema namespace, a
+    ``urn:uuid:`` node), else the whole IRI, which only a VALUE holding the IRI
+    matches; a literal member (:func:`is_literal`, also when its text reads as an IRI),
+    and every member on a literal path, is its text.
+    A class the schema lacks (its name not in *namespaces*, every class without a
+    schema) is its name, as ``sh:targetClass`` / ``sh:class`` match classes.
+    Without a kind (an undefined KEY) an IRI member is its guessed local VALUE
+    and the engines compare the values' local forms."""
+    def value(member):
+        iri = str(member)
+        if is_literal(member) or not is_iri(iri) or kind == LITERAL:
+            return iri
+        if kind is None:
+            return local_value(iri)
+        text = local_value(iri, kind)
+        if kind == CLASS and text not in namespaces:
+            return text
+        same = absolute_value(None, text, namespaces, kind=kind, undefined_namespace=undefined_namespace)[1] == iri
+        return text if same else iri
+    return [value(member) for member in members]

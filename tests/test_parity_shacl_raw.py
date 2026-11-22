@@ -32,11 +32,13 @@ pytest.importorskip("polars")
 
 import pandas
 import triplets
+from rdflib.collection import Collection
 
 from triplets.export import export_to_nquads
 from triplets.export_schema import schemas
 from triplets.iri import load_rdf_map
 from triplets.validation.schema_scope import scoped_rdf_map
+from triplets.validation.shacl_report import violations_to_report_graph
 
 from _parity import LEXICAL_ALLOWANCE
 from test_parity_shacl_matrix import B, CASES, CIM, DEFAULTS, PREFIX, SCHEMA, SKIPPED, TRIO, XFAIL, frame
@@ -117,8 +119,11 @@ def subclass_edges(rdf_map):
     return graph
 
 
-def pyshacl_rows(data, shapes, ontology):
-    _, report, _ = pyshacl.validate(data, shacl_graph=shapes, ont_graph=ontology, advanced=True, inference="none")
+def pyshacl_report(data, shapes, ontology):
+    return pyshacl.validate(data, shacl_graph=shapes, ont_graph=ontology, advanced=True, inference="none")[1]
+
+
+def pyshacl_rows(report, shapes):
     details = set(report.objects(None, SH.detail))   # nested causes: the engines report the outer result
     rows = set()
     for result in set(report.subjects(rdflib.RDF.type, SH.ValidationResult)) - details:
@@ -135,15 +140,58 @@ def pyshacl_rows(data, shapes, ontology):
     return rows
 
 
+def path_form(graph, path):
+    """A sh:resultPath as comparable data: an IRI, or (operator, member forms) for a
+    blank-node path — the labels differ between two graphs, the structure does not."""
+    if path is None or isinstance(path, rdflib.URIRef):
+        return path
+    if (path, rdflib.RDF.first, None) in graph:
+        return "sequence", tuple(path_form(graph, step) for step in Collection(graph, path))
+    for operator in ("inversePath", "alternativePath", "zeroOrMorePath", "oneOrMorePath", "zeroOrOnePath"):
+        member = graph.value(path, SH[operator])
+        if member is not None:
+            return operator, path_form(graph, member)
+    return path
+
+
+def report_rows(report):
+    """The results of a report graph as terms: (focus, path form, value term, component,
+    severity, shape) — a literal by its lexical form (datatypes differ, accepted)."""
+    details = set(report.objects(None, SH.detail))
+    rows = set()
+    for result in set(report.subjects(rdflib.RDF.type, SH.ValidationResult)) - details:
+        focus, path, value, component, severity, shape = (report.value(result, SH[term]) for term in (
+            "focusNode", "resultPath", "value", "sourceConstraintComponent", "resultSeverity", "sourceShape"))
+        if path is None and value == focus:   # a node-level result echoes the focus node
+            value = None
+        value = rdflib.Literal(str(value)) if isinstance(value, rdflib.Literal) else value
+        rows.add((focus, path_form(report, path), value, stem(component), local(severity), str(shape)))
+    return rows
+
+
 # ── our leg ───────────────────────────────────────────────────────────────────
-def engine_rows(data, compiled, **kwargs):
+def engine_run(data, compiled, **kwargs):
     violations = triplets.validation.validate_shacl(data, compiled, engine="polars", lexical=False, **kwargs)
-    found = violations[violations["VIOLATION_TYPE"] != LEXICAL_ALLOWANCE].astype(object)
-    # an IRI VALUE (a reference or class of another namespace) by its local name, as local() reads the reference leg
-    name = lambda value: value.rsplit("#", 1)[-1] if isinstance(value, str) and value.startswith("http") else value  # noqa: E731
-    rows = {(local(row.ID), "type" if row.KEY == "Type" else row.KEY, name(row.VALUE), stem(row.VIOLATION_TYPE), row.SEVERITY,
-             row.SOURCE_SHAPE) for row in found.where(found.notna(), None).itertuples(index=False)}
+    found = violations[violations["VIOLATION_TYPE"] != LEXICAL_ALLOWANCE]
+    found.attrs = violations.attrs
+    return found
+
+
+def engine_rows(violations):
+    found = violations.astype(object)
+    # an IRI VALUE (a reference or class of another namespace) by its local name, as local() reads the
+    # reference leg; a literal (VALUE_KIND) keeps its text
+    name = lambda value, kind: (value.rsplit("#", 1)[-1] if isinstance(value, str) and value.startswith("http")  # noqa: E731
+                                and kind != "literal" else value)
+    rows = {(local(row.ID), "type" if row.KEY == "Type" else row.KEY, name(row.VALUE, getattr(row, "VALUE_KIND", None)),
+             stem(row.VIOLATION_TYPE), row.SEVERITY, row.SOURCE_SHAPE)
+            for row in found.where(found.notna(), None).itertuples(index=False)}
     return rows, violations.attrs["validation"]
+
+
+def engine_report_rows(violations, rdf_map, cim):
+    graph = violations_to_report_graph(violations, rdf_map=load_rdf_map(rdf_map), undefined_namespace=cim)
+    return report_rows(graph), violations.attrs["validation"]
 
 
 def compare(reference, ours, meta):
@@ -161,8 +209,9 @@ def compare(reference, ours, meta):
     return ours - reference, reference - ours - declared
 
 
-def synthetic(shape, rows, kwargs):
-    """(pyshacl rows, polars rows, run metadata) of one shape Turtle on matrix-style rows."""
+def synthetic(shape, rows, kwargs, report=False):
+    """(pyshacl rows, polars rows, run metadata) of one shape Turtle on matrix-style rows;
+    with *report*, the rows of pyshacl's report graph and of the one we write."""
     rdf_map = load_rdf_map(kwargs["rdf_map"])
     dataset = nquads(frame(rows), rdf_map, "*", CIM)
     data = (sum((dataset.get_context(rdflib.URIRef(UUID + instance)) for instance in kwargs["data_scope"]),
@@ -170,7 +219,11 @@ def synthetic(shape, rows, kwargs):
     shapes = rdflib.Graph().parse(data=PREFIX + shape, format="turtle")
     compiled = triplets.validation.compile(clone(shapes))
     ontology = subclass_edges(rdf_map) if kwargs.get("inheritance") else None
-    return pyshacl_rows(data, shapes, ontology), *engine_rows(frame(rows), compiled, **kwargs)
+    found = pyshacl_report(data, shapes, ontology)
+    violations = engine_run(frame(rows), compiled, **kwargs)
+    if report:
+        return report_rows(found), *engine_report_rows(violations, rdf_map, CIM)
+    return pyshacl_rows(found, shapes), *engine_rows(violations)
 
 
 # ── synthetic: every matrix case ──────────────────────────────────────────────
@@ -188,6 +241,16 @@ def test_matrix_raw(case):
     assert compare(*synthetic(shape, rows, kwargs)) == (set(), set())
 
 
+@pytest.mark.parametrize("case", matrix_cases())
+def test_matrix_report_raw(case):
+    """The report graph we write states every result as pyshacl's does: the shape's
+    sh:path as sh:resultPath (sequence, inverse, alternative), sh:value the data's node."""
+    shape, rows, *rest = {**CASES, **SKIPPED}[case]
+    kwargs = {**DEFAULTS, **(rest[0] if rest and isinstance(rest[0], dict) else {})}
+    kwargs.pop("deactivated_shapes", None)
+    assert compare(*synthetic(shape, rows, kwargs, report=True)) == (set(), set())
+
+
 def test_skip_excuses_only_its_component():
     """A skipped node-level sh:in leaves the shape's sh:closed rows to compare: with
     them missing on our side, they are pyshacl-only rows nothing declares."""
@@ -203,7 +266,7 @@ def test_raw_pyshacl_rejects_target_without_select():
     shape, rows, _ = SKIPPED["target_without_select"]
     shapes = rdflib.Graph().parse(data=PREFIX + shape, format="turtle")
     with pytest.raises(pyshacl.errors.ShapeLoadError):
-        pyshacl_rows(nquads(frame(rows), load_rdf_map(SCHEMA), "*", CIM), shapes, None)
+        pyshacl_report(nquads(frame(rows), load_rdf_map(SCHEMA), "*", CIM), shapes, None)
 
 
 def test_expected_entries_name_cases():
@@ -244,6 +307,7 @@ def test_real_data_raw(shapes_path, data_path, rdf_map, cim, rdfs):
     data, dataset = eq_data(data_path, rdf_map, cim)
     compiled = triplets.validation.compile(clone(shape_file(shapes_path)))
     shapes = clone(shape_file(shapes_path))
-    reference = pyshacl_rows(dataset, shapes, vocabulary(rdfs, cim))
-    ours = engine_rows(data, compiled, rdf_map=rdf_map, rdf_map_scope=["EQ"], inheritance=True)
-    assert compare(reference, *ours) == (set(), set())
+    report = pyshacl_report(dataset, shapes, vocabulary(rdfs, cim))
+    violations = engine_run(data, compiled, rdf_map=rdf_map, rdf_map_scope=["EQ"], inheritance=True)
+    assert compare(pyshacl_rows(report, shapes), *engine_rows(violations)) == (set(), set())
+    assert compare(report_rows(report), *engine_report_rows(violations, rdf_map, cim)) == (set(), set())

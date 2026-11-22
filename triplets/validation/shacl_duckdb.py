@@ -25,7 +25,7 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import holds_names, split_rules, FALLBACK_COMPONENTS
+from .shacl_ir import holds_names, member_values, path_kind, split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from ..iri import CIM_NS, DISTRIBUTION_KEYS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, value_types
@@ -102,7 +102,7 @@ _NULL_VALUE = "CAST(NULL AS VARCHAR)"
 def _min_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
-                f"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM ({rows}) GROUP BY FOCUS) c "
+                f"LEFT JOIN (SELECT FOCUS, {context.count} AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
     return _wrap(rule, f"{rule.path} occurs fewer than {rule.params} time(s)",
                  from_sql, [rule.target_on, *rows_params, rule.params], "TRUE", [],
@@ -111,7 +111,7 @@ def _min_count(rule, table, context):
 
 def _max_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
-    from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING COUNT(*) > ?"
+    from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING {context.count} > ?"
     return _wrap(rule, f"{rule.path} occurs more than {rule.params} time(s)",
                  from_sql, [*rows_params, rule.params], "TRUE", [], value_expr=_NULL_VALUE)
 
@@ -189,14 +189,21 @@ def _range(operator, description):
     return builder
 
 
+def _members(rule, context, members):
+    """(path kind, the members as the VALUE texts they are on the path) — ``shacl_ir.member_values``."""
+    kind = path_kind(rule, context.value_types)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+
+
 def _in(rule, table, context):
-    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
-    text; the datatype is ignored."""
+    """Each value against the members as the VALUEs they stand for on the path; on a KEY
+    the schema lacks, the value's local form (an IRI's local id); the datatype is ignored."""
     rows, rows_params = _rows_sql(rule, table, context)
-    allowed = [str(value) for value in rule.params]
-    local = f"CASE WHEN {iri_duckdb.is_iri('PV')} THEN {iri_duckdb.local_value('PV')} ELSE PV END"
+    kind, allowed = _members(rule, context, rule.params)
+    value = (f"CASE WHEN {iri_duckdb.is_iri('PV')} THEN {iri_duckdb.local_value('PV')} ELSE PV END"
+             if kind is None else "PV")
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
-                 rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
+                 rows, rows_params, f"NOT list_contains(?, {value})", [allowed])
 
 
 def _has_value(rule, table, context):
@@ -204,7 +211,7 @@ def _has_value(rule, table, context):
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
                 f"WHERE f.ID NOT IN (SELECT FOCUS FROM ({rows}) WHERE PV = ?)")
     return _wrap(rule, f"{rule.path} does not have required value '{rule.params}'",
-                 from_sql, [rule.target_on, *rows_params, str(rule.params)], "TRUE", [],
+                 from_sql, [rule.target_on, *rows_params, _members(rule, context, [rule.params])[1][0]], "TRUE", [],
                  value_expr=_NULL_VALUE)
 
 
@@ -351,9 +358,11 @@ class _Context:
     operands' types resolve from, and the lexical flag (shared with the other
     vectorized engines)."""
 
-    def __init__(self, rdf_map, lexical=True, undefined_namespace=CIM_NS):
+    def __init__(self, rdf_map, lexical=True, undefined_namespace=CIM_NS, count_elements=False):
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
+        # cardinality: every element (XSD), else distinct value nodes; a null VALUE is none
+        self.count = "COUNT(PV)" if count_elements else "COUNT(DISTINCT PV)"
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
@@ -467,7 +476,7 @@ def _validate(connection, table, compiled, rdf_map, data_scope, components, max_
         targets, notes = shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
                                                      undefined_namespace=undefined_namespace)
         _create_targets_table(connection, targets)
-    context = _Context(rdf_map, lexical, undefined_namespace)
+    context = _Context(rdf_map, lexical, undefined_namespace, compiled.count_elements)
     _create_names_table(connection, table, vectorized, context)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]

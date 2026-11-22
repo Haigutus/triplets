@@ -7,6 +7,7 @@ import pytest
 pytest.importorskip("rdflib")
 
 import triplets  # noqa: F401 — registers the shacl accessor namespace
+from triplets.export import export_to_nquads
 from triplets.validation import VIOLATION_COLUMNS, export_to_shacl_report
 from triplets.validation.shacl_report import report_to_violations, violations_to_report_graph
 
@@ -513,6 +514,208 @@ cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
     assert list(report_to_violations(typed, rdf_map=rdf_map)["VALUE"]) == ["Substation"]
 
 
+PATHS_TTL = """
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:BreakerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:Bay ) ] .
+cim:SubstationShape a sh:NodeShape ; sh:targetClass cim:Substation ;
+    sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:class cim:Bay ] .
+cim:Checks a sh:NodeShape ; sh:targetNode cim:IDchecks ;
+    sh:property [ sh:path rdf:type ; sh:sparql [ sh:select \"\"\"SELECT $this ?value WHERE {
+        { ?value a <http://iec.ch/TC57/CIM100#Breaker> }
+        UNION { ?b <http://iec.ch/TC57/CIM100#IdentifiedObject.name> ?value }
+        UNION { ?b a ?value . FILTER (?value = <http://iec.ch/TC57/CIM100#Breaker>) } }\"\"\" ] ] .
+"""
+
+
+@pytest.mark.parametrize("fmt", ["turtle", "xml"])
+def test_report_paths_and_sparql_values_round_trip(tmp_path, fmt):
+    """sh:resultPath is the shape's own path (a sequence, an inverse), sh:value of a
+    sh:sparql result has the kind of the ?value binding (a node, a literal, a class) and
+    of an inverse path the node; the serialized report reads back to the frame, the
+    blank-node paths resolved in the report itself."""
+    import rdflib
+    from rdflib.collection import Collection
+
+    shapes = tmp_path / "paths.ttl"
+    shapes.write_text(PATHS_TTL)
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.name", "B1", "i1"),
+                             ("b1", "Equipment.EquipmentContainer", "s1", "i1"), ("s1", "Type", "Substation", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_shacl(data, shapes, engine="pandas")
+    cim, sh = "http://iec.ch/TC57/CIM100#", rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    rdf_map = {"Breaker": {"type": "Class", "namespace": cim}, "Bay": {"type": "Class", "namespace": cim},
+               "IdentifiedObject.name": {"type": "Attribute", "namespace": cim},
+               "Equipment.EquipmentContainer": {"type": "Association", "namespace": cim}}
+    payload = export_to_shacl_report(violations, export_to_memory=True, format=fmt, rdf_map=rdf_map)
+    graph = rdflib.Graph().parse(data=payload.getvalue(), format=fmt)
+
+    def path(result):
+        node = graph.value(result, sh.resultPath)
+        if (node, rdflib.RDF.first, None) in graph:
+            return tuple(map(str, Collection(graph, node)))
+        inverse = graph.value(node, sh.inversePath)
+        return ("^", str(inverse)) if inverse is not None else str(node)
+
+    results = {(path(result), graph.value(result, sh.value))
+               for result in graph.subjects(rdflib.RDF.type, sh.ValidationResult)}
+    rdf_type = str(rdflib.RDF.type)
+    assert results == {((cim + "Equipment.EquipmentContainer", rdf_type), rdflib.URIRef(cim + "Substation")),
+                       (("^", cim + "Equipment.EquipmentContainer"), rdflib.URIRef("urn:uuid:b1")),
+                       (rdf_type, rdflib.URIRef("urn:uuid:b1")), (rdf_type, rdflib.Literal("B1")),
+                       (rdf_type, rdflib.URIRef(cim + "Breaker"))}
+
+    def rows(frame):   # parsing relabels the blank nodes: SOURCE_SHAPE left out
+        frame = frame[["ID", "KEY", "VALUE", "VALUE_KIND", "VIOLATION_TYPE", "MESSAGE", "SEVERITY"]].astype(object)
+        return set(frame.where(frame.notna(), None).itertuples(index=False, name=None))
+
+    back = report_to_violations(graph, rdf_map=rdf_map)
+    assert rows(back) == rows(violations)
+    # the paths of a report we wrote resolve in the report, also next to the shapes graph
+    assert rows(report_to_violations(graph, shapes_graph=rdflib.Graph().parse(shapes), rdf_map=rdf_map)) == rows(violations)
+    assert {(row[2], row[3]) for row in rows(back)} == {
+        ("Substation", None), ("b1", None), ("b1", "reference"), ("B1", "literal"), ("Breaker", "class")}
+
+    # pyshacl's report of the same run reads to the same rows (its own messages aside)
+    pyshacl = pytest.importorskip("pyshacl")
+    nquads = export_to_nquads(data, rdf_map=rdf_map, export_to_memory=True, undefined_namespace=cim)
+    dataset = rdflib.Dataset(default_union=True).parse(data=nquads.getvalue(), format="nquads")
+    report = pyshacl.validate(dataset, shacl_graph=rdflib.Graph().parse(shapes), advanced=True)[1]
+    assert ({row[:5] for row in rows(report_to_violations(report, rdf_map=rdf_map))}
+            == {row[:5] for row in rows(violations)})
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb", "pyshacl"])
+def test_literal_focus_node_round_trip(tmp_path, engine):
+    """The objects of an Attribute KEY as focus nodes (sh:targetObjectsOf) are literals:
+    ID_KIND literal, a literal sh:focusNode, read back as the same rows."""
+    import rdflib
+    pytest.importorskip(engine)
+    shapes = tmp_path / "names.ttl"
+    shapes.write_text("""
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:NameShape a sh:NodeShape ; sh:targetObjectsOf cim:IdentifiedObject.name ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
+    cim = "http://iec.ch/TC57/CIM100#"
+    rdf_map = {"Breaker": {"type": "Class", "namespace": cim},
+               "IdentifiedObject.name": {"type": "Attribute", "namespace": cim}}
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.name", "B 1", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_shacl(data, shapes, rdf_map=rdf_map, engine=engine)
+    assert list(zip(violations["ID"], violations["ID_KIND"])) == [("B 1", "literal")]
+    graph = violations_to_report_graph(violations, rdf_map=rdf_map)
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    assert list(graph.objects(None, sh.focusNode)) == [rdflib.Literal("B 1")]
+    back = report_to_violations(graph, rdf_map=rdf_map)
+    assert list(zip(back["ID"], back["ID_KIND"])) == [("B 1", "literal")]
+
+
+FOCUS_CIM = "http://iec.ch/TC57/CIM100#"
+FOCUS_SCHEMA = {"Breaker": {"type": "Class", "namespace": FOCUS_CIM}, "Substation": {"type": "Class", "namespace": FOCUS_CIM},
+                "IdentifiedObject.name": {"type": "Attribute", "namespace": FOCUS_CIM},
+                "Conductor.length": {"type": "Attribute", "namespace": FOCUS_CIM, "xsd:type": "xsd:float"}}
+FOCUS_NAMES = ("cim:N a sh:NodeShape ; sh:targetObjectsOf cim:{key} ; "
+               "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .")
+FOCUS_CASES = {
+    # no schema: a name that is no IRI or UUID is a literal, as the export writes it
+    "no_schema": (FOCUS_NAMES.format(key="IdentifiedObject.name"), [], None, [("B 1", "literal")]),
+    # a KEY the schema lacks: the same text rule
+    "key_not_in_schema": (FOCUS_NAMES.format(key="Foo.bar"), [("b1", "Foo.bar", "hello", "i1")], FOCUS_SCHEMA,
+                          [("hello", "literal")]),
+    # a shape with a class target too: per row — the Substation a node, the name a literal
+    "mixed_targets": (FOCUS_NAMES.format(key="IdentifiedObject.name").replace(
+        "sh:targetObjectsOf", "sh:targetClass cim:Substation ; sh:targetObjectsOf"), [], FOCUS_SCHEMA,
+        [("B 1", "literal"), ("sub1", "reference")]),
+    # the lexical supplement next to pyshacl: its rows are nodes
+    "lexical": (FOCUS_NAMES.format(key="IdentifiedObject.name") + " cim:L a sh:NodeShape ; sh:targetClass cim:Breaker ; "
+                "sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] .",
+                [("b1", "Conductor.length", "1", "i1")], FOCUS_SCHEMA, [("B 1", "literal"), ("b1", "reference")]),
+}
+
+
+@pytest.mark.parametrize("case", FOCUS_CASES)
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb", "pyshacl"])
+def test_literal_focus_node_per_row(engine, case):
+    """ID_KIND is decided per row, the same on every engine and pyshacl, and the report
+    writes the literal focus node it is."""
+    import rdflib
+    pytest.importorskip(engine)
+    shape, rows, rdf_map, expected = FOCUS_CASES[case]
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.name", "B 1", "i1"),
+                             ("sub1", "Type", "Substation", "i1"), *rows], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    shapes = rdflib.Graph().parse(data="@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> . "
+                                       "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> . " + shape, format="turtle")
+    violations = triplets.validation.validate_shacl(data, shapes, rdf_map=rdf_map, rdf_map_scope=None, engine=engine)
+    assert sorted(zip(violations["ID"], violations["ID_KIND"])) == expected
+    graph = violations_to_report_graph(violations, rdf_map=rdf_map)
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    focus = {focus: rdflib.Literal(focus) if kind == "literal" else rdflib.URIRef(f"urn:uuid:{focus}")
+             for focus, kind in expected}
+    assert set(graph.objects(None, sh.focusNode)) == set(focus.values())
+
+
+GENC4_TTL = """
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:IDchecksShape a sh:NodeShape ; sh:targetNode cim:IDchecks ;
+    sh:property [ sh:path rdf:type ; sh:sparql [ sh:select
+        "SELECT $this ?value WHERE { ?value rdf:type <http://iec.ch/TC57/CIM100#Breaker> . }" ;
+        sh:prefixes [ sh:declare [ sh:prefix "rdf" ;
+            sh:namespace "http://www.w3.org/1999/02/22-rdf-syntax-ns#"^^<http://www.w3.org/2001/XMLSchema#anyURI> ] ] ] ] .
+cim:ContainerShape a sh:NodeShape ; sh:targetClass cim:Breaker ;
+    sh:property [ sh:path cim:Equipment.EquipmentContainer ; sh:closed true ; sh:ignoredProperties ( rdf:type ) ] .
+"""
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb", "pyshacl"])
+def test_enriched_report_values_and_paths(tmp_path, engine):
+    """Through enrich, on every engine: the ?value node of a sh:sparql check on rdf:type
+    is its urn:uuid: IRI; the finding of sh:closed on a property shape names the
+    property found as sh:resultPath, not the shape's path."""
+    import rdflib
+    pytest.importorskip(engine)
+    uuid, container = "5a0e1f0e-0000-4000-8000-000000000002", "5a0e1f0e-0000-4000-8000-000000000003"
+    shapes = tmp_path / "genc4.ttl"
+    shapes.write_text(GENC4_TTL)
+    data = pandas.DataFrame([(uuid, "Type", "Breaker", "i1"), (uuid, "Equipment.EquipmentContainer", container, "i1"),
+                             (container, "Type", "Substation", "i1"), (container, "IdentifiedObject.name", "S1", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_shacl(data, shapes, engine=engine)
+    graph = violations_to_report_graph(triplets.validation.enrich(violations, data=data))
+    sh, cim = rdflib.Namespace("http://www.w3.org/ns/shacl#"), "http://iec.ch/TC57/CIM100#"
+    results = {(str(graph.value(result, sh.sourceConstraintComponent)).split("#")[1], graph.value(result, sh.resultPath),
+                graph.value(result, sh.value)) for result in graph.subjects(rdflib.RDF.type, sh.ValidationResult)}
+    assert results == {("SPARQLConstraintComponent", rdflib.RDF.type, rdflib.URIRef(f"urn:uuid:{uuid}")),
+                       ("ClosedConstraintComponent", rdflib.URIRef(cim + "IdentifiedObject.name"), rdflib.Literal("S1"))}
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
+def test_closed_finding_value_has_its_own_property_kind(engine):
+    """sh:closed on an inverse-path property shape reports another property of a value
+    node: its sh:value has that property's term kind (a name literal), not the node kind
+    of the shape's inverse path."""
+    import rdflib
+    pytest.importorskip(engine)
+    shapes = rdflib.Graph().parse(format="turtle", data="""
+@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+cim:S a sh:NodeShape ; sh:targetClass cim:Substation ;
+    sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:closed true ;
+                  sh:ignoredProperties ( rdf:type cim:Equipment.EquipmentContainer ) ] .""")
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "Equipment.EquipmentContainer", "sub1", "i1"),
+                             ("b1", "IdentifiedObject.name", "B1", "i1"), ("sub1", "Type", "Substation", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_shacl(data, shapes, engine=engine)
+    assert violations[["KEY", "VALUE", "VIOLATION_TYPE"]].values.tolist() == [["IdentifiedObject.name", "B1", "sh:closed"]]
+    graph = violations_to_report_graph(violations)
+    assert list(graph.objects(None, rdflib.URIRef("http://www.w3.org/ns/shacl#value"))) == [rdflib.Literal("B1")]
+
+
 def test_message_source_distinguishes_authored_from_engine(tmp_path):
     """[shacl_message] = the shape's own sh:message verbatim, [engine_message] =
     engine-worded text — stamped by validate_shacl() (MESSAGE_SOURCE)."""
@@ -683,3 +886,21 @@ def test_report_paths_follow_the_schema_namespace():
     unknown = VIOLATIONS.assign(KEY="Custom.foo")
     graph = violations_to_report_graph(unknown, rdf_map=GRID_SCHEMA, undefined_namespace="http://acme#")
     assert {str(path) for path in graph.objects(None, sh.resultPath)} == {"http://acme#Custom.foo"}
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars", "duckdb"])
+def test_subjects_of_the_scoped_data(flavor):
+    """The ids that are a subject in the data's scoped instances, on every input flavor."""
+    from triplets.validation import _subjects
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b2", "Type", "Breaker", "i2"),
+                             ("b1", "IdentifiedObject.name", "B 1", "i1")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    if flavor == "polars":
+        data = pytest.importorskip("polars").from_pandas(data)
+    elif flavor == "duckdb":
+        connection = pytest.importorskip("duckdb").connect()
+        connection.register("_rows", data)
+        connection.execute("CREATE TABLE triplets AS SELECT * FROM _rows")
+        data = connection
+    assert _subjects(data, ["b1", "b2", "B 1"]) == {"b1", "b2"}
+    assert _subjects(data, ["b1", "b2", "B 1"], ["i2"]) == {"b2"}
+    assert _subjects(data, ["b1"], []) == set()

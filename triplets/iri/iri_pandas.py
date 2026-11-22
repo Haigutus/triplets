@@ -7,7 +7,7 @@ downcast is deprecated on object columns).
 import numpy
 import pandas
 
-from . import (GUESS_NAME_RE, ID_PREFIX_RE, ID_REPLACEMENT, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
+from . import (CLASS, ENUM, LITERAL, REFERENCE, GUESS_NAME_RE, ID_PREFIX_RE, ID_REPLACEMENT, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
                TYPE_KEY, URI_PREFIXES, UUID_PREFIX, UUID_RE)
 from . import decode_iri as _decode_iri, encode_iri as _encode_iri
 
@@ -55,13 +55,13 @@ def by_distinct(series, rule):
 def local_value(series, kind=None):
     """*kind*: None (guess), one of ``VALUE_KINDS`` for every row, or a Series of them per row."""
     if isinstance(kind, str):
-        return _local(series) if kind in ("class", "enum") else local_id(series)
+        return _local(series) if kind in (CLASS, ENUM) else local_id(series)
     node = local_id(series)
     if kind is None:
         return _guess(node)
     guessed = kind.isna().to_numpy()
     value = node.mask(guessed, _guess(node)) if guessed.any() else node
-    names = (_eq(kind, "class") | _eq(kind, "enum"))
+    names = (_eq(kind, CLASS) | _eq(kind, ENUM))
     return value.mask(names, by_distinct(series.where(names), _local)) if names.any() else value
 
 
@@ -116,7 +116,7 @@ def _schema(key, value_types):
 def defined(key, value, namespaces=None, value_types=None):
     """Boolean mask of rows the schema accounts for — see the scalar rule."""
     schema, known = _schema(key, value_types), value.isin(namespaces or ())
-    return (_eq(key, TYPE_KEY) & known) | (schema.notna() & (~_eq(schema, "enum") | is_iri(value) | known))
+    return (_eq(key, TYPE_KEY) & known) | (schema.notna() & (~_eq(schema, ENUM) | is_iri(value) | known))
 
 
 def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
@@ -127,8 +127,8 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     schema = _schema(key, value_types)
     present = value.notna().astype(bool)                 # a null VALUE is no term: ("literal", null)
     is_type = _eq(key, TYPE_KEY) & present
-    enum, reference = _eq(schema, "enum") & present, _eq(schema, "reference") & present
-    typed = _eq(schema, "literal") & present
+    enum, reference = _eq(schema, ENUM) & present, _eq(schema, REFERENCE) & present
+    typed = _eq(schema, LITERAL) & present
     undefined_ref = schema.isna() & (is_iri(value) | value.str.match(UUID_RE.pattern, na=False).astype(bool))
 
     payload = (key.map(datatypes).astype(value.dtype) if datatypes
@@ -138,5 +138,5 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     payload = payload.mask(references, absolute_id(value.where(references)))
     payload = payload.mask(names, by_distinct(value.where(names), lambda distinct: absolute_name(
         distinct, namespaces, undefined_namespace)))
-    kind = numpy.where(references | names, "iri", "literal")
+    kind = numpy.where(references | names, "iri", LITERAL)
     return pandas.Series(kind, index=key.index, dtype=value.dtype), payload

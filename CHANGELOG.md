@@ -7,6 +7,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`sparql.query(terms=True)`**: SELECT values as N-Triples terms (`<iri>`, `"text"^^<datatype>`, `_:label`), the same on rdflib, oxigraph and qlever (read from their SPARQL JSON results) — the term kind a lexical string loses.
+- **`VALUE_KIND` and `ID_KIND` columns on violations frames** where no schema entry gives the term kind: `VALUE_KIND` on `sh:sparql` findings (the `?value` binding's kind), `ID_KIND` when a focus node is a literal. Values are `triplets.iri.TERM_KINDS` — `class`, `enum`, `reference`, `literal` (`VALUE_KINDS` plus the `value_types` literal kind); the scalar `triplets.iri.absolute_value(key, value, …, kind=)` takes one in place of the KEY's schema entry.
 - **`string_to_number=` on `export_to_excel` and `export_to_csv`** (default `False`: every
   VALUE is written as its text). `True` writes the columns that hold only numbers as
   numbers — number cells in Excel, for sums and charts — and does not keep the text form
@@ -576,6 +578,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **SHACL `sh:in` / `sh:hasValue` compare IRIs, not local names** (pandas / polars / duckdb): a class, enumeration value or node of the same name in another namespace no longer passes (`( assoc rdf:type ) sh:in ( cim16:ACLineSegment cim17:ACLineSegment )` on data in a third CIM namespace), as pyshacl reports. A class the schema lacks (every class without an `rdf_map`) matches by its name, as `sh:targetClass` and `sh:class` do. A string literal member stays a literal, also when its text reads as an IRI (`sh:in ( "http://iec.ch/TC57/CIM100#Breaker" )` on `rdf:type` matches no class).
+- **`locate` (SARIF / SHACL report locations) points a finding on a KEY at the file holding that KEY's element** (an SSH property of an object the EQ file defines), not at the first file defining the ID; the definition stays the fallback. A finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition and its KEY is not searched. `locate()`'s `keyLines` entries are `(uri, line, snippet)`, were `(line, snippet)`.
+- **A row without a VALUE counts for no cardinality** (`sh:minCount` / `sh:maxCount`, `xsd:minOccurs` / `xsd:maxOccurs`, pandas / polars / duckdb): it states no triple, as pyshacl sees it.
+- **SHACL count constraints count a triple stated in several instances once** (`sh:minCount` / `sh:maxCount`, every path form, pandas / polars / duckdb): value nodes are a set, as in the RDF merge pyshacl validates, and `enrich` lists each of them once in TARGET ("found 2 values: 'A', 'B'"). `validate_schema` counts every element, as XSD does: a property written twice with the same value breaks `xsd:maxOccurs` 1.
+- **SHACL report `sh:resultPath` is the shape's own path** (sequence, inverse, alternative, …) as pyshacl writes it, not the path's first predicate.
+- **SHACL report `sh:value` of a `sh:sparql` result has the `?value` binding's term kind**: a node on an `rdf:type` path is `urn:uuid:…`, not a class IRI; an inverse path's value is the node; a literal `?value` keeps its full text and stays a literal, also when it reads as a node or an IRI (`"urn:uuid:b1"`).
+- **SHACL report `sh:focusNode` of a literal focus node** is the literal, not `urn:uuid:<text>`: `ID_KIND` is decided per row — an object of a `sh:targetObjectsOf` KEY has the term kind the export writes for it (an Attribute, or without a schema entry a text that is no IRI or UUID, is a literal), and of a shape with other targets too, an ID that is a subject in the data is a node; engines and pyshacl agree, the rows of the lexical supplement next to pyshacl are nodes.
 - **`engine="pyshacl"` reports a reference or class of another namespace whole**, as the
   other engines do: VALUE `http://example.org/ns#vl1`, where the bridge read `vl1`. With
   an `rdf_map` it reads `sh:value` back exactly (`report_to_violations(rdf_map=…)`);

@@ -50,10 +50,11 @@ import pandas
 
 from .._header import without_metadata
 from ..export.nquads_utils import make_subject
-from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, split_iri,
-                   value_types)
+from ..parser.nquads import is_node, term_text
+from ..iri import (CIM_NS, LITERAL, REFERENCE, REFERENCE_LIKE, TYPE_KEY, iri_pandas, name_kind, namespaces, node_kind,
+                   prefixes, rdf_map_entries, split_iri, value_types)
 from .schema_scope import ancestor_pairs
-from .shacl_ir import MESSAGE_VARIABLE, holds_names
+from .shacl_ir import MESSAGE_VARIABLE, holds_names, member_values, path_kind
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
 from .value_space import datatype_patterns
@@ -77,10 +78,12 @@ class _Context:
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=(), lexical=True):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=(), lexical=True,
+                 count_elements=False):
         self.data = data
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
+        self.count_elements = count_elements   # cardinality: every element (XSD), else distinct value nodes
         self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
@@ -232,8 +235,10 @@ def _empty():
 # ── cardinality ──────────────────────────────────────────────────────────────
 
 def _counts(context, rule):
-    rows = context.path_rows(rule)
-    return (rows.groupby("FOCUS").size()
+    """Values per focus node: SHACL value nodes are a set (the same triple stated in two
+    instances is one), XSD counts every element (``count_elements``); a null VALUE is none."""
+    values = context.path_rows(rule).groupby("FOCUS")["PATH_VALUE"]
+    return ((values.count() if context.count_elements else values.nunique())
             .reindex(context.focus(rule), fill_value=0))
 
 
@@ -333,21 +338,29 @@ def _range(comparison, description):
     return validator
 
 
+def _members(context, rule, members):
+    """The members as the VALUE texts they are on the rule's path (``shacl_ir.member_values``)."""
+    kind = path_kind(rule, context.value_types)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+
+
 def _in(context, rule):
-    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
-    text; the datatype is ignored."""
+    """Each value against the members as the VALUEs they stand for on the path; on a KEY
+    the schema lacks, the value's local form (an IRI's local id); the datatype is ignored."""
     rows = context.path_rows(rule)
-    allowed = {str(value) for value in rule.params}
+    kind, allowed = _members(context, rule, rule.params)
     values = rows["PATH_VALUE"].astype(str)
-    local = values.mask(iri_pandas.is_iri(values), iri_pandas.local_value(values))
-    bad = ~local.isin(allowed)
+    if kind is None:
+        values = values.mask(iri_pandas.is_iri(values), iri_pandas.local_value(values))
+    bad = ~values.isin(set(allowed))
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
 
 
 def _has_value(context, rule):
     rows = context.path_rows(rule)
-    having = rows.loc[rows["PATH_VALUE"].astype(str) == str(rule.params), "FOCUS"]
+    value = _members(context, rule, [rule.params])[1][0]
+    having = rows.loc[rows["PATH_VALUE"].astype(str) == value, "FOCUS"]
     missing = pandas.Index(context.focus(rule)).difference(having)
     return _frame(rule, missing, None, f"{rule.path} does not have required value '{rule.params}'")
 
@@ -489,16 +502,28 @@ def _sparql_query_text(rule, focus_ids):
 
 
 def _sparql_violations(rule, result):
-    """Each SELECT result row is one violation: $this = focus node, ?value = value,
-    the sh:message with the row's variables filled in (``_solution_messages``)."""
+    """Each SELECT result row (N-Triples terms, ``sparql.query(terms=True)``) is one
+    violation: $this = focus node, ?value = value, the sh:message with the row's
+    variables filled in (``_solution_messages``). VALUE_KIND keeps the term kind of
+    ?value (``iri.TERM_KINDS``), which no schema entry gives: ``reference`` (a node IRI,
+    its ``local_id``), ``class`` / ``enum`` (an IRI shortened to its local name,
+    ``iri.name_kind``) or ``literal`` (its full text, whatever it looks like)."""
     if result is None or len(result) == 0 or "this" not in result.columns:
         return _empty()
     result = result[result["this"].notna()]   # a row without a focus node is no violation
     if len(result) == 0:                      # (rdflib serializes a spurious empty binding
         return _empty()                       #  for some aggregate queries)
-    focus = _shorten(result["this"].astype(str), iri_pandas.local_id)
-    values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
+    terms, result = result, result.apply(term_text)
+    focus = _shorten(result["this"], iri_pandas.local_id, is_node(terms["this"]))
+    values = None
+    if "value" in result.columns:
+        node = is_node(terms["value"])
+        values = _shorten(result["value"], iri_pandas.local_value, node)
     violations = _frame(rule, focus, values, "sparql constraint violated")
+    if values is not None:
+        names = values.map(name_kind, na_action="ignore")
+        kinds = names.where(values != _shorten(result["value"], iri_pandas.local_id, node), REFERENCE)
+        violations["VALUE_KIND"] = kinds.where(node, LITERAL).where(values.notna()).to_numpy()
     if rule.message and MESSAGE_VARIABLE.search(rule.message):
         violations["MESSAGE"] = _solution_messages(rule.message, result, node_level=rule.path is None)
     return violations
@@ -520,15 +545,17 @@ def _solution_messages(message, result, node_level=False):
             for solution in bound.to_dict("records")]
 
 
-def _shorten(terms, rule):
-    """SPARQL result terms → triplet form: IRIs decoded, then the column *rule* (``local_id``
-    for the focus, ``local_value`` for the value), literals verbatim (a literal ``_name`` or a blank node ``_:b0`` must
-    not lose its ``_``)."""
-    return rule(iri_pandas.decode_iri(terms)).where(iri_pandas.is_iri(terms), terms)
+def _shorten(texts, rule, node):
+    """SPARQL result texts → triplet form: the IRIs (*node*) decoded, then the column *rule*
+    (``local_id`` for the focus, ``local_value`` for the value); literals verbatim (a literal
+    ``urn:uuid:…`` or ``_name`` keeps its text) and blank nodes as written (``_:b0``)."""
+    return rule(iri_pandas.decode_iri(texts.where(node))).where(node, texts)
 
 
-def _select(context, query_text):
-    """One SELECT over the run's data on the auto SPARQL engine → (result,
+def _select(context, query_text, terms=False):
+    """One SELECT over the run's data on the auto SPARQL engine, its values lexical
+    strings, or with *terms* N-Triples terms (``sparql.query(terms=True)``: the term
+    kinds of a constraint's ?value kept) → (result,
     rejection): a strict engine's rejection is re-run on rdflib and returned as
     *rejection* (None when the auto engine ran it). Raises when rdflib fails
     too — the query is defective on every engine."""
@@ -537,17 +564,18 @@ def _select(context, query_text):
     # oxigraph) take the raw frame and manage their own engine-state cache
     # (one build, content-hashed)
     if sparql.get_engine("auto")[0] == "rdflib":
-        return sparql.query(context.dataset(), query_text, return_type="pandas"), None
+        return sparql.query(context.dataset(), query_text, return_type="pandas", terms=terms), None
     try:
         result = sparql.query(context.data, query_text, rdf_map=context.rdf_map, return_type="pandas",
-                              data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace)
+                              data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace,
+                              terms=terms)
         context.data_hashed = True
         return result, None
     except Exception as error:                            # noqa: BLE001 — engine strictness
         # the engine hashes the data before loading or querying, and
         # data_unchanged only reuses a digest stored for this very object
         context.data_hashed = True
-        return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas"), error
+        return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas", terms=terms), error
 
 
 def _rejected(context, shape_ids, path, what, error):
@@ -580,7 +608,7 @@ def _sparql(context, rule):
     if not len(focus_ids):
         return _empty()
     try:
-        result, rejection = _select(context, _sparql_query_text(rule, focus_ids))
+        result, rejection = _select(context, _sparql_query_text(rule, focus_ids), terms=True)
     except Exception as error:                            # noqa: BLE001 — defective authored query
         logger.error("sh:sparql constraint %s fails on every engine: %s", rule.shape_id, error)
         return _invalid_sparql(rule.shape_id, rule.path, _not_evaluated(rule, error), severity="Violation")
@@ -640,7 +668,8 @@ def _sparql_targets(context, rules):
         if "this" not in result.columns:
             notes.append(_unchecked_target(shape_ids, "the query projects no ?this"))
             continue
-        targets[query_text] = _shorten(result["this"].dropna().astype(str), iri_pandas.local_id).unique()
+        this = result["this"].dropna().astype(str)   # lexical: a focus node is always a node
+        targets[query_text] = _shorten(this, iri_pandas.local_id, iri_pandas.is_iri(this)).unique()
         if rejection is not None:
             notes.append(_rejected(context, shape_ids, None, "SPARQL target", rejection))
     return targets, pandas.concat(notes, ignore_index=True)
@@ -667,7 +696,7 @@ _FORK_DATASET = None
 
 def _sparql_worker(query_text):
     from .. import sparql
-    return sparql.query(_FORK_DATASET, query_text)
+    return sparql.query(_FORK_DATASET, query_text, return_type="pandas", terms=True)
 
 
 def _sparql_parallel(context, rules, max_workers):
@@ -914,7 +943,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors), lexical)
+    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors), lexical, compiled.count_elements)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
     context.targets, notes = _sparql_targets(context, [rule for rule in selected if rule.target_by == "SPARQL"])

@@ -14,10 +14,15 @@ qlever ingests the same term mapping as Arrow batches.
 """
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
+import pandas
+
+from .._engine_detect import to_return_type
 from .._registry import EngineRegistry
+from ..export.nquads_utils import escape_literal
 from ..iri import CIM_NS
 
 logger = logging.getLogger(__name__)
@@ -55,7 +60,7 @@ def get_engine(name: str = "auto"):
 
 
 def query(data, query_string, rdf_map=None, data_scope=None, engine="auto", return_type="auto",
-          data_unchanged=False, undefined_namespace=CIM_NS):
+          data_unchanged=False, undefined_namespace=CIM_NS, terms=False):
     """Run a SPARQL query over triplet data.
 
     Parameters
@@ -77,7 +82,7 @@ def query(data, query_string, rdf_map=None, data_scope=None, engine="auto", retu
         Output flavor for data results: "auto" matches the input (polars in →
         polars out; pandas/duckdb → pandas), or explicit "pandas" / "polars" /
         "arrow". All SELECT values are lexical strings in every engine
-        (triplets are all-string; consumers cast).
+        (triplets are all-string; consumers cast) — N-Triples terms with *terms*.
     data_unchanged : bool, default False
         Assert that `data` has not been mutated since it was last hashed:
         the engine reuses the stored content digest for this exact object
@@ -90,7 +95,40 @@ def query(data, query_string, rdf_map=None, data_scope=None, engine="auto", retu
         Namespace for names the schema does not declare — every name when no
         rdf_map is given — so schema-less data answers ``cim:`` queries. The
         store keeps every row (the N-Quads ``export_undefined=True`` form).
+    terms : bool, default False
+        SELECT values as N-Triples terms instead of lexical strings: ``<iri>``,
+        ``"text"`` with its ``^^<datatype>`` / ``@lang``, ``_:label`` (unbound →
+        null) — the term kind of each binding, which a lexical string loses (a
+        literal ``"urn:uuid:b1"`` and the node ``<urn:uuid:b1>``). The built-in
+        engines read them from their SPARQL JSON results (:func:`json_terms`); the
+        flag reaches an engine only when set, so a registered engine without it
+        serves every other query unchanged.
     """
     engine_name, engine_mod = get_engine(engine)
     return engine_mod.query(data, query_string, rdf_map=rdf_map, data_scope=data_scope, return_type=return_type,
-                            data_unchanged=data_unchanged, undefined_namespace=undefined_namespace)
+                            data_unchanged=data_unchanged, undefined_namespace=undefined_namespace,
+                            **({"terms": True} if terms else {}))
+
+
+def json_terms(payload, return_type="pandas"):
+    """SPARQL JSON results (``application/sparql-results+json``) → a frame of N-Triples
+    terms, one column per projected variable, null where a variable is unbound — the
+    SELECT result of ``query(terms=True)`` on every engine."""
+    results = json.loads(payload)
+    names = results["head"]["vars"]
+    rows = [[_term(binding.get(name)) for name in names] for binding in results["results"]["bindings"]]
+    return to_return_type(pandas.DataFrame(rows, columns=names, dtype=object), return_type)
+
+
+def _term(binding):
+    """One SPARQL JSON binding → its N-Triples term (the N-Quads export's quoting)."""
+    if binding is None:
+        return None
+    if binding["type"] == "uri":
+        return f"<{binding['value']}>"
+    if binding["type"] == "bnode":
+        return f"_:{binding['value']}"
+    text = f'"{escape_literal(binding["value"])}"'
+    if "xml:lang" in binding:
+        return f"{text}@{binding['xml:lang']}"
+    return f"{text}^^<{binding['datatype']}>" if "datatype" in binding else text

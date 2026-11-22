@@ -253,3 +253,40 @@ def test_content_key_entry_releases_data_and_rdf_map():
         gc.enable()
     assert object_id not in _content_key._HASHES
     assert sys.getrefcount(schema) == references
+
+
+@pytest.mark.parametrize("engine", ["rdflib", "oxigraph", "qlever"])
+def test_select_terms_keep_the_term_kind(engine):
+    """terms=True: every engine gives the same N-Triples terms — a literal that reads as a
+    node or an IRI stays quoted, escapes and datatypes kept, unbound null."""
+    if engine != "rdflib":
+        pytest.importorskip({"oxigraph": "pyoxigraph", "qlever": "triplets.sparql._qlever"}[engine])
+    cim = "http://iec.ch/TC57/CIM100#"
+    rdf_map = {name: {"type": kind, "namespace": cim} for name, kind in (
+        ("Breaker", "Class"), ("IdentifiedObject.description", "Attribute"), ("IdentifiedObject.name", "Attribute"),
+        ("Switch.normalOpen", "Attribute"))}
+    rdf_map["Switch.normalOpen"]["xsd:type"] = "http://www.w3.org/2001/XMLSchema#boolean"
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.description", "urn:uuid:b1", "i1"),
+                             ("b1", "IdentifiedObject.name", 'a "q"\nx\\y', "i1"), ("b1", "Switch.normalOpen", "true", "i1"),
+                             ("b2", "Type", "Breaker", "i1"),
+                             ("b2", "IdentifiedObject.description", "http://example.org/x#y", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    result = triplets.sparql.query(data, PREFIXES + (
+        "SELECT ?this ?d ?n ?open WHERE { ?this a cim:Breaker . OPTIONAL { ?this cim:IdentifiedObject.description ?d } "
+        "OPTIONAL { ?this cim:IdentifiedObject.name ?n } OPTIONAL { ?this cim:Switch.normalOpen ?open } } ORDER BY ?this"),
+        rdf_map=rdf_map, engine=engine, terms=True)
+    assert result.astype(object).where(result.notna(), None).values.tolist() == [
+        ["<urn:uuid:b1>", '"urn:uuid:b1"', '"a \\"q\\"\\nx\\\\y"', '"true"^^<http://www.w3.org/2001/XMLSchema#boolean>'],
+        ["<urn:uuid:b2>", '"http://example.org/x#y"', None, None]]
+
+
+def test_engine_without_terms_serves_lexical_queries(monkeypatch):
+    """terms= reaches an engine only when set: a registered engine without it keeps working."""
+    from types import SimpleNamespace
+    seen = []
+    engine = SimpleNamespace(query=lambda data, text, rdf_map=None, data_scope=None, return_type="auto",
+                             data_unchanged=False, undefined_namespace=None: seen.append(text) or "ok")
+    monkeypatch.setitem(triplets.sparql._REGISTRY.loaded, "plain", engine)   # register_engine, undone after
+    assert triplets.sparql.query(None, "ASK {}", engine="plain") == "ok" and seen == ["ASK {}"]
+    with pytest.raises(TypeError):
+        triplets.sparql.query(None, "ASK {}", engine="plain", terms=True)

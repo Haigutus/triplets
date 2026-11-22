@@ -147,6 +147,14 @@ B = "cim:B a sh:NodeShape ; sh:targetClass cim:Breaker ;"
 NAME_MIN = "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."
 DESC_MIN = "sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ]"
 
+CIM16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
+# class members on rdf:type, ( assoc rdf:type ) and sh:hasValue, in a namespace no schema declares
+CIM16_CLASS_MEMBERS = (f"<{CIM16}S> a sh:NodeShape ; sh:targetClass <{CIM16}Breaker> ; "
+                       f"sh:property [ sh:path rdf:type ; sh:in ( <{CIM16}Breaker> ) ] ; "
+                       f"sh:property [ sh:path ( <{CIM16}Equipment.EquipmentContainer> rdf:type ) ; "
+                       f"sh:in ( <{CIM16}Bay> <{CIM16}Substation> ) ] ; "
+                       f"sh:property [ sh:path rdf:type ; sh:hasValue <{CIM16}Breaker> ] .")
+
 
 def prop(body):
     return f"{B} sh:property [ {body} ] ."
@@ -261,6 +269,21 @@ CASES = {
     "via_type_count_typed_in_two_instances": (
         prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 2 ; sh:maxCount 1"),
         breaker("b1", (CONT, "bay1")) + obj("bay1", "Bay") + [("bay1", "Type", "Bay", "other")]),
+    # the same triples stated in two instances are one value node each (RDF merge): a Bay and
+    # a Breaker repeated in an SSH-like instance count once on every path form
+    # a row without a VALUE is no value node (no triple)
+    "count_null_value": (prop("sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:maxCount 1"),
+                         breaker("b1", (NAME, None)) + breaker("b2", (NAME, "B2"), (NAME, None))),
+    "count_identical_triples_in_two_instances": (
+        "cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; "
+        "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 2 ; sh:maxCount 1 ] ; "
+        "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:minCount 2 ; sh:maxCount 1 ] . "
+        "cim:T a sh:NodeShape ; sh:targetNode cim:Bay ; sh:property [ sh:path [ sh:inversePath rdf:type ] ; "
+        "sh:minCount 2 ; sh:maxCount 1 ] . "
+        + prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 2 ; sh:maxCount 1"),
+        [row for instance in ("eq", "ssh")
+         for row in obj("bay1", "Bay", (NAME, "Bay 1"), instance=instance)
+         + breaker("b1", (CONT, "bay1"), instance=instance)]),
     # "1" is the lexicalForm allowance
     "datatype_float": (prop("sh:path cim:Conductor.length ; sh:datatype xsd:float"),
                        breaker("b1", (LEN, "10.5")) + breaker("b2", (LEN, "abc")) + breaker("b3", (LEN, "1"))),
@@ -424,6 +447,20 @@ CASES = {
         cim:P a sh:NodeShape ; sh:targetClass cim:Substation ; sh:property [ sh:path cim:IdentifiedObject.name ;
             sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} c={?c}" ; sh:select "SELECT $this ?c WHERE { $this rdf:type ?c }" ] ] .""",
         TRIO),
+    # the ?value of a check on rdf:type is whatever the query binds: a class, a node
+    "sparql_constraint_type_values": (prop("sh:path rdf:type ; sh:sparql [ sh:prefixes cim: ; sh:select "
+                                           "'SELECT $this ?value WHERE { { $this $PATH ?value } UNION "
+                                           "{ $this cim:Equipment.EquipmentContainer ?value } }' ]"), TRIO),
+    # a literal ?value keeps its text and stays a literal, also when it reads as a node or an IRI
+    "sparql_constraint_literal_values": (prop("sh:path cim:IdentifiedObject.description ; sh:sparql [ sh:prefixes cim: ; "
+                                              "sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ]"),
+                                         breaker("b1", (DESC, "urn:uuid:b1")) + breaker("b2", (DESC, "http://example.org/x#y"))
+                                         + breaker("b3", (DESC, "d"))),
+    # the class Breaker and the literal "Breaker" are two values of one solution set
+    "sparql_constraint_same_text_two_kinds": (prop("sh:path rdf:type ; sh:sparql [ sh:prefixes cim: ; sh:select "
+                                                   "'SELECT $this ?value WHERE { { $this rdf:type ?value } UNION "
+                                                   "{ $this rdf:type ?t . BIND(\"Breaker\" AS ?value) } }' ]"),
+                                              breaker("b1")),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
     # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has
@@ -439,12 +476,33 @@ CASES = {
     "path_inverse_class": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; "
                            "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:class cim:Switch ] .",
                            TRIO + obj("x1", "Bay", (CONT, "bay1"))),
+    # the value nodes of an inverse rdf:type / enumeration path are the instances
+    "path_inverse_type_class": ("cim:V a sh:NodeShape ; sh:targetNode cim:Bay ; "
+                                "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:class cim:Substation ] .", TRIO),
+    "path_inverse_enum_class": ("cim:V a sh:NodeShape ; sh:targetNode cim:SwitchKind.breaker ; "
+                                "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:class cim:Bay ] .",
+                                TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
     # forward and inverse rules on one KEY in one component: the container's count and the breaker's
     "path_inverse_and_forward_maxCount": ("cim:C a sh:NodeShape ; sh:targetClass cim:Bay, cim:Substation ; "
                                           "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; "
                                           "sh:maxCount 1 ] . " + prop("sh:path cim:Equipment.EquipmentContainer ; sh:maxCount 1"),
                                           TRIO + breaker("b4", (CONT, "bay1"), (CONT, "sub1"))),
     "path_via_type": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:Bay )"), TRIO),
+    # a referenced object with two Type rows (a stub typed by its parent class beside the concrete
+    # class) is two value nodes: each type not allowed is a finding of its own
+    "path_via_type_two_types": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:VoltageLevel )"),
+                                TRIO + [("bay1", "Type", "EquipmentContainer", "eq")]),
+    # sh:in members are IRIs: a class of the same name in another namespace is not the data's
+    # class (the NC lists name cim16: / cim17: classes, the data a third CIM namespace)
+    "path_via_type_in_other_namespace": (
+        prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; "
+             "sh:in ( <http://iec.ch/TC57/2013/CIM-schema-cim16#Bay> cim:Substation )"), TRIO),
+    # a string literal member is no IRI, also when its text reads as one: no class matches it
+    "in_literal_reading_as_iri": (prop(f"sh:path rdf:type ; sh:in ( '{CIM}Breaker' )"), TRIO),
+    "has_value_literal_reading_as_iri": (prop(f"sh:path rdf:type ; sh:hasValue '{CIM}Breaker'"), TRIO),
+    "in_enum_other_namespace": (prop("sh:path cim:Switch.kind ; sh:in ( <http://example.org/other#SwitchKind.breaker> )"),
+                                TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
+    "has_value_class_other_namespace": (prop("sh:path rdf:type ; sh:hasValue <http://example.org/other#Breaker>"), TRIO),
     # a referenced object without a Type row yields no value node
     "path_via_type_untyped_minCount": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 1"),
                                        TRIO + breaker("b4", (CONT, "ghost"))),
@@ -834,6 +892,76 @@ def test_parser_metadata_is_not_validated(engine, scope):
     assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {
         ("sub1", "sh:in"), ("b2", "sh:minCount"), ("b3", "sh:minCount"), ("sub1", "sh:minCount")}
     assert violations.attrs["validation"]["source"] == ["grid/eq.xml"]
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_class_members_without_schema_match_by_name(engine):
+    """No schema: the cim16 class members match the data's classes by name, as the
+    cim16 sh:targetClass does — every breaker is a focus node (the sh:minCount finds
+    the two without a description), none breaks sh:in / sh:hasValue. Engines only:
+    pyshacl reads the data in the undefined namespace and finds no focus node of these
+    shapes (docs/validation.md, known limitations)."""
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    import rdflib
+    shape = CIM16_CLASS_MEMBERS[:-1] + f"; sh:property [ sh:path <{CIM16}IdentifiedObject.description> ; sh:minCount 1 ] ."
+    violations = triplets.validation.validate_shacl(frame(TRIO), rdflib.Graph().parse(data=PREFIX + shape, format="turtle"),
+                                                    engine=engine)
+    assert sorted(zip(violations["ID"], violations["VIOLATION_TYPE"])) == [("b1", "sh:minCount"), ("b3", "sh:minCount")]
+
+
+@pytest.mark.parametrize("sparql_engine", ["rdflib", "oxigraph", "qlever"])
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_sparql_values_keep_their_term_kind(engine, sparql_engine, monkeypatch):
+    """The ?value bindings keep their term kind on every SPARQL engine, sequential and on
+    worker threads: literals with their full text, a node and a class shortened. (The
+    rdflib fork workers run _sparql_worker, tested on its own: a fork after the native
+    engines started their threads can hang.)"""
+    pytest.importorskip({"pandas": "pandas", "pyshacl": "pyshacl", "polars": "polars", "duckdb": "duckdb"}[engine])
+    if sparql_engine != "rdflib":
+        pytest.importorskip({"oxigraph": "pyoxigraph", "qlever": "triplets.sparql._qlever"}[sparql_engine])
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto", [sparql_engine])
+    expected = [("b1", "urn:uuid:b1", "literal"), ("b2", "http://example.org/x#y", "literal"), ("b3", "d", "literal")]
+    for case, rows in (("sparql_constraint_literal_values", expected),
+                       ("sparql_constraint_same_text_two_kinds", [("b1", "Breaker", "class"), ("b1", "Breaker", "literal")]),
+                       ("sparql_constraint_type_values", [("b1", "Breaker", "class"), ("b1", "bay1", "reference"),
+                                                          ("b2", "Breaker", "class"), ("b2", "sub1", "reference"),
+                                                          ("b3", "Breaker", "class")])):
+        for workers in (None,) if sparql_engine == "rdflib" else (None, 2):
+            violations = triplets.validation.validate_shacl(frame(CASES[case][1]), compiled(case), engine=engine,
+                                                            lexical=False, max_workers=workers, **DEFAULTS)
+            assert sorted(zip(violations["ID"], violations["VALUE"], violations["VALUE_KIND"])) == rows
+
+
+def test_sparql_targets_stay_lexical(monkeypatch):
+    """Only the sh:sparql constraint results are read as terms; a SPARQL target query
+    (?this is always a node) takes the lexical path."""
+    query, calls = triplets.sparql.query, []
+    monkeypatch.setattr(triplets.sparql, "query", lambda data, text, **kwargs: (
+        calls.append(("VALUES ?this" in text, kwargs.get("terms", False))) or query(data, text, **kwargs)))
+    shape = sparql_target(HAS_CONTAINER, "sh:property [ sh:path cim:IdentifiedObject.name ; sh:sparql [ sh:prefixes cim: ; "
+                                         "sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .")
+    import rdflib
+    triplets.validation.validate_shacl(frame(TRIO), rdflib.Graph().parse(data=PREFIX + shape, format="turtle"),
+                                       engine="pandas", **DEFAULTS)
+    assert sorted(set(calls)) == [(False, False), (True, True)]   # (constraint query, terms)
+
+
+def test_sparql_fork_worker_keeps_the_term_kind(monkeypatch):
+    """The rdflib fork worker returns N-Triples terms too: its literal ?value stays a literal."""
+    from triplets.validation import shacl_pandas
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto", ["rdflib"])   # the workers fork on rdflib only
+    case = "sparql_constraint_literal_values"
+    context = shacl_pandas._Context(frame(CASES[case][1]), SCHEMA)
+    rule = next(compiled(case).ir.itertuples())
+    shacl_pandas._FORK_DATASET = context.dataset()
+    try:
+        result = shacl_pandas._sparql_worker(shacl_pandas._sparql_query_text(rule, ["b1", "b2"]))
+    finally:
+        shacl_pandas._FORK_DATASET = None
+    violations = shacl_pandas._sparql_violations(rule, result)
+    assert sorted(zip(violations["VALUE"], violations["VALUE_KIND"])) == [
+        ("http://example.org/x#y", "literal"), ("urn:uuid:b1", "literal")]
 
 
 @pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])

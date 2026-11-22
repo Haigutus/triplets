@@ -17,8 +17,8 @@ import pandas
 
 from .locations import check_source_root, locate_missing, relative_sources
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS, TYPE_KEY,
-                   XSD_NS, CIM_NS, absolute_id, absolute_key, absolute_name, absolute_value, decode_iri, is_iri,
-                   load_rdf_map, local_id, local_key, local_value, namespaces, split_iri, value_types)
+                   XSD_NS, CIM_NS, CLASS, ENUM, LITERAL, REFERENCE, absolute_key, absolute_name, absolute_value, decode_iri,
+                   is_iri, load_rdf_map, local_id, local_key, local_value, name_kind, namespaces, split_iri, value_types)
 
 logger = logging.getLogger(__name__)
 
@@ -116,10 +116,12 @@ def report_to_violations(report_graph, shapes_graph=None, rdf_map=None, undefine
     """ValidationReport rdflib graph → violations DataFrame (single columnar pass).
 
     Nested ``sh:detail`` results (the cause of a ``sh:node`` result) are not
-    listed: the parent result is the finding. With the ``shapes_graph`` the
-    report was made from, a blank-node ``sh:resultPath`` (inverse / sequence /
-    alternative path) is the KEY it resolves to; without it (reports written by
-    other tools) KEY is the blank-node label.
+    listed: the parent result is the finding. A blank-node ``sh:resultPath``
+    (inverse / sequence / alternative path) is the KEY it resolves to in the
+    report graph itself (pyshacl and :func:`violations_to_report_graph` write the
+    path's triples there), else in the ``shapes_graph`` the report was made from;
+    a path neither graph describes, or one that spans more than one KEY, keeps
+    the blank-node label as KEY.
 
     An IRI ``sh:value`` becomes the VALUE the data holds. With the *rdf_map* (and
     *undefined_namespace*) the report was written with, exactly: the local name when
@@ -127,7 +129,10 @@ def report_to_violations(report_graph, shapes_graph=None, rdf_map=None, undefine
     enumeration value, a schema name), else :func:`~triplets.iri.local_id` — a
     reference or a class in another namespace stays whole, with a ``#`` too.
     Without *rdf_map* the form is guessed (:func:`~triplets.iri.local_value`): an
-    ``http`` IRI with a ``#`` is taken as a name and loses its namespace."""
+    ``http`` IRI with a ``#`` is taken as a name and loses its namespace. A
+    ``sh:sparql`` result keeps the term kind (:data:`~triplets.iri.TERM_KINDS`) of its
+    ``sh:value`` in VALUE_KIND, as the engines write it; a report with a literal
+    ``sh:focusNode`` has ID_KIND (``literal``, ``reference`` on the other rows)."""
     import rdflib
 
     from .shacl_ir import _resolve_path
@@ -136,15 +141,17 @@ def report_to_violations(report_graph, shapes_graph=None, rdf_map=None, undefine
     names = (namespaces(rdf_map), value_types(rdf_map), undefined_namespace) if rdf_map else None
     details = set(report_graph.objects(None, sh.detail))
     # collect into per-column lists, build the DataFrame once (no per-row concat)
-    columns = {name: [] for name in VIOLATION_COLUMNS}
+    columns = {name: [] for name in [*VIOLATION_COLUMNS, "VALUE_KIND", "ID_KIND"]}
 
     for result in report_graph.subjects(rdflib.RDF.type, sh.ValidationResult):
         if result in details:
             continue
         path = report_graph.value(result, sh.resultPath)
-        key = local_key(decode_iri(path))
-        if shapes_graph is not None and path is not None and not isinstance(path, rdflib.URIRef):
-            key = _resolve_path(shapes_graph, sh, path)[0] or key
+        key, inverse, via_type = local_key(decode_iri(path)), False, False
+        if path is not None and not isinstance(path, rdflib.URIRef):
+            described = shapes_graph is None or (path, None, None) in report_graph
+            resolved, inverse, via_type = _resolve_path(report_graph if described else shapes_graph, sh, path)
+            key = resolved or key
         focus = report_graph.value(result, sh.focusNode)
         value = report_graph.value(result, sh.value)
         if path is None and value == focus:     # pyshacl echoes the focus node on path-less results; ID holds it
@@ -155,14 +162,33 @@ def report_to_violations(report_graph, shapes_graph=None, rdf_map=None, undefine
         message = _constraint_message(report_graph.objects(result, sh.resultMessage))
 
         columns["ID"].append(local_id(decode_iri(focus)))
+        columns["ID_KIND"].append(_term_kind(focus, columns["ID"][-1]))
         columns["KEY"].append(key)
-        columns["VALUE"].append(_term_value(value, TYPE_KEY if path == rdflib.RDF.type else key, names))
+        columns["VALUE"].append(local_value(decode_iri(value), REFERENCE)   # an inverse path's value is a subject
+                                if inverse and isinstance(value, rdflib.URIRef)
+                                else _term_value(value, TYPE_KEY if path == rdflib.RDF.type or via_type else key, names))
         columns["VIOLATION_TYPE"].append(_component(component))
+        columns["VALUE_KIND"].append(_term_kind(value, columns["VALUE"][-1])
+                                     if columns["VIOLATION_TYPE"][-1] == "sh:sparql" else None)
         columns["MESSAGE"].append(message)
         columns["SEVERITY"].append(split_iri(severity)[1] if severity is not None else "Violation")
         columns["SOURCE_SHAPE"].append(str(shape) if shape is not None else None)
 
-    return pandas.DataFrame(columns, columns=VIOLATION_COLUMNS)
+    violations = pandas.DataFrame(columns)
+    kinds = [name for name, present in (("VALUE_KIND", violations["VALUE_KIND"].notna().any()),
+                                        ("ID_KIND", (violations["ID_KIND"] == LITERAL).any())) if present]
+    return violations[VIOLATION_COLUMNS + kinds]
+
+
+def _term_kind(term, text):
+    """The :data:`~triplets.iri.TERM_KINDS` kind of a report term read as *text*:
+    ``literal``, ``reference`` (the IRI's ``local_id``), else the kind of the local
+    name it was read as (:func:`~triplets.iri.name_kind`); None without a term."""
+    if term is None:
+        return None
+    if type(term).__name__ == "Literal":
+        return LITERAL
+    return REFERENCE if text == local_value(decode_iri(term), REFERENCE) else name_kind(text)
 
 
 def _constraint_message(messages):
@@ -190,10 +216,10 @@ def _term_value(term, key=None, names=None):
         return str(term)
     iri = decode_iri(term)
     if names is None:
-        return local_value(iri, "class" if key == TYPE_KEY else None)
+        return local_value(iri, CLASS if key == TYPE_KEY else None)
     schema_namespaces, schema_value_types, undefined_namespace = names
     name = split_iri(iri)[1]
-    named = key == TYPE_KEY or schema_value_types.get(key) == "enum" or name in schema_namespaces
+    named = key == TYPE_KEY or schema_value_types.get(key) == ENUM or name in schema_namespaces
     return name if named and absolute_name(name, schema_namespaces, undefined_namespace) == str(term) else local_id(iri)
 
 
@@ -221,9 +247,21 @@ _COMPONENT_URI = {short: f"{SH_NS}{suffix}" for suffix, short in _COMPONENT_MAP.
 def violations_to_report_graph(violations, report_source=None, report_references=None,
                                rdf_map=None, undefined_namespace=CIM_NS, source_root=None):
     r"""Violations DataFrame → sh:ValidationReport rdflib graph (inverse of
-    report_to_violations; KEYs expand through the export schema namespaces —
-    ``rdf_map`` — ``undefined_namespace`` for names it lacks, unless already URIs).
+    report_to_violations).
 
+    ``sh:resultPath`` is the ``sh:path`` of the result's shape in the run metadata
+    (``source_shapes``, embedded in the report): an IRI, or the blank node of a
+    sequence, inverse, alternative, … path with its triples. Without that
+    definition (a node shape, a frame without the metadata), and when the KEY is
+    another property (``sh:closed`` on a property shape), it is the KEY,
+    expanded through the export schema namespaces — ``rdf_map`` —
+    ``undefined_namespace`` for names it lacks, unless already an IRI.
+
+    ``sh:focusNode`` and ``sh:value`` are the terms :func:`~triplets.iri.absolute_value`
+    gives for their kind. The ID_KIND column states the focus node's (a literal: an
+    object of a sh:targetObjectsOf KEY the export writes as a literal); without it a focus
+    node is a reference. ``sh:value`` of a ``sh:sparql`` result has the VALUE_KIND the engines
+    write, the term kind of the query's ``?value``. Any other
     ``sh:value`` has the term kind the schema entry type of the KEY gives it
     (:func:`~triplets.iri.absolute_value`): the IRI of the referenced object for
     an Association, the enumeration value IRI for an Enumeration, the class IRI
@@ -233,10 +271,10 @@ def violations_to_report_graph(violations, report_source=None, report_references
     for an Attribute and for a KEY the schema does not define — the same terms
     ``export_to_nquads`` writes for the row: a reference VALUE is
     :func:`~triplets.iri.absolute_id` of its text (``urn:uuid:…``, an absolute
-    IRI whole), whatever the text reads like. The VALUE of a finding whose shape
-    has a ``( association rdf:type )`` path (the shape's definition in the run
-    metadata) is the object's class, written as the class IRI. A KEY may be its
-    IRI: the entry of its local name decides.
+    IRI whole), whatever the text reads like. The shape's path decides first: the
+    VALUE of a ``( association rdf:type )`` path is the object's class, written as
+    the class IRI, and the VALUE of an inverse path is a node (the subject),
+    written as a reference. A KEY may be its IRI: the entry of its local name decides.
 
     A result carries several plain-text ``sh:resultMessage``\ s when the frame
     has the context/location columns: the engine message, the shape and
@@ -258,8 +296,7 @@ def violations_to_report_graph(violations, report_source=None, report_references
     """
     import rdflib
     import triplets
-    from rdflib.collection import Collection
-    from .shacl_ir import _term as _shape_term
+    from .shacl_ir import _resolve_path, _term as _shape_term
 
     meta = violations.attrs.get("validation", {})
     if report_source is None:
@@ -276,23 +313,41 @@ def violations_to_report_graph(violations, report_source=None, report_references
     schema_value_types = value_types(rdf_map)
     expand = lambda value: _expand(value, schema_namespaces, undefined_namespace)  # noqa: E731
 
-    via_type = {}   # SOURCE_SHAPE → its sh:path is a sequence ending in rdf:type (the embedded definitions)
+    paths = {}   # SOURCE_SHAPE → (its sh:path node, (KEY, inverse, via_type)) in the embedded definitions
 
-    def reports_type(shape):
-        if shape not in via_type:
+    def shape_path(shape):
+        if shape not in paths:
             path = None if pandas.isna(shape) else graph.value(_shape_term(str(shape)), sh.path)
-            members = list(Collection(graph, path)) if path is not None and (path, rdflib.RDF.first, None) in graph else []
-            via_type[shape] = members[-1:] == [rdflib.RDF.type]
-        return via_type[shape]
+            paths[shape] = path, _resolve_path(graph, sh, path)
+        return paths[shape]
 
-    def value_term(key, value, shape):
-        key = local_key(key)                          # a KEY given as an IRI has the entry of its name
-        if key != TYPE_KEY and schema_value_types.get(key) not in ("reference", "enum"):
-            return rdflib.Literal(value)
-        if reports_type(shape):                       # ( association rdf:type ): the VALUE is the object's class
-            key = TYPE_KEY
-        return rdflib.URIRef(absolute_value(key, str(value), schema_namespaces, schema_value_types,
-                                            undefined_namespace=undefined_namespace)[1])
+    def kind(row, column):
+        value = getattr(row, column, None)
+        return None if value is None or pandas.isna(value) else value
+
+    def own_path(row):
+        """The shape's sh:path node when the row's KEY is that path (or no KEY decides it),
+        else None — sh:closed reports another property it found; with its flags."""
+        path, (key, inverse, via_type) = shape_path(row.SOURCE_SHAPE)
+        own = path is not None and key in (None, local_key(row.KEY))
+        return (path, inverse, via_type) if own else (None, False, False)
+
+    def value_kind(row):
+        """What the shape's own path (``own_path``) and the schema entry of the KEY give
+        (``literal`` for a KEY the schema lacks)."""
+        key = local_key(row.KEY)                      # a KEY given as an IRI has the entry of its name
+        _, inverse, via_type = own_path(row)
+        if inverse:                                   # the values of an inverse path are subjects: nodes
+            return REFERENCE
+        if via_type or key == TYPE_KEY:               # ( association rdf:type ): the VALUE is the object's class
+            return CLASS
+        return schema_value_types.get(key, LITERAL)
+
+    def term(value, kind):
+        form, iri = absolute_value(None, str(value), schema_namespaces, schema_value_types,
+                                   undefined_namespace=undefined_namespace, kind=kind)
+        return rdflib.URIRef(iri) if form == "iri" else rdflib.Literal(value)
+
     sh = rdflib.Namespace(SH_NS)
     prov = rdflib.Namespace(PROV_NS)
     dcterms = rdflib.Namespace(DCTERMS_NS)
@@ -328,11 +383,12 @@ def violations_to_report_graph(violations, report_source=None, report_references
         graph.add((result, rdflib.RDF.type, sh.ValidationResult))
         graph.add((result, sh.resultSeverity, sh[row.SEVERITY if pandas.notna(row.SEVERITY) else "Violation"]))
         if pandas.notna(row.ID):
-            graph.add((result, sh.focusNode, rdflib.URIRef(absolute_id(str(row.ID)))))
-        if pandas.notna(row.KEY):
-            graph.add((result, sh.resultPath, rdflib.URIRef(expand(row.KEY))))
+            graph.add((result, sh.focusNode, term(row.ID, kind(row, "ID_KIND") or REFERENCE)))
+        if pandas.notna(row.KEY):   # the shape's own sh:path (a blank node for a sequence, inverse, … path)
+            path = own_path(row)[0]                   # else sh:closed: the predicate found
+            graph.add((result, sh.resultPath, path if path is not None else rdflib.URIRef(expand(row.KEY))))
         if pandas.notna(row.VALUE):
-            graph.add((result, sh.value, value_term(row.KEY, row.VALUE, row.SOURCE_SHAPE)))
+            graph.add((result, sh.value, term(row.VALUE, kind(row, "VALUE_KIND") or value_kind(row))))
         if pandas.notna(row.VIOLATION_TYPE):
             graph.add((result, sh.sourceConstraintComponent, rdflib.URIRef(expand(row.VIOLATION_TYPE))))
         for message in _messages(row, language):

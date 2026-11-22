@@ -47,6 +47,7 @@ from .._engine_detect import as_frame, flavor, to_pandas
 from ..export import export_to_nquads
 from ..iri import CIM_NS, absolute_id
 from ..parser.nquads import read_nquads
+from . import json_terms
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ _STORES = register_cache({})    # content hash → (in-memory pyoxigraph.Store, 
 
 
 def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto", data_unchanged=False,
-          undefined_namespace=CIM_NS):
+          undefined_namespace=CIM_NS, terms=False):
     """Execute query_string over data; shape the result by query type.
 
     Queries are executed exactly as given — the text is never modified.
@@ -66,7 +67,8 @@ def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto",
     FROM inside the query. None → the deduplicated union of all named
     graphs: a single-graph store runs it with its one graph as the protocol
     default graph — which, as with data_scope, takes precedence over any
-    FROM; other stores run against the projected default graph.
+    FROM; other stores run against the projected default graph. *terms*: SELECT
+    values as N-Triples terms, from the JSON results.
     """
     store, default_graph = _store_for(data, rdf_map, data_unchanged, undefined_namespace)
     graphs = [NamedNode(absolute_id(instance)) for instance in data_scope] if data_scope is not None else default_graph
@@ -78,6 +80,8 @@ def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto",
         return bool(result)
     if isinstance(result, pyoxigraph.QueryTriples):
         return read_nquads(result.serialize(format=RdfFormat.N_QUADS), return_type=return_type)
+    if terms:
+        return json_terms(result.serialize(format=QueryResultsFormat.JSON), return_type)
     return _select_frame(result.serialize(format=QueryResultsFormat.CSV), return_type)
 
 

@@ -95,7 +95,9 @@ def test_ir_columns_and_components(shape_file):
     assert set(by_component.loc["sh:closed", "params"]) == {
         "IdentifiedObject.mRID", "IdentifiedObject.name", "Switch.normalOpen",
         "Equipment.EquipmentContainer"}
-    assert by_component.loc["sh:in", "params"] == ["true", "false"]
+    # sh:in members keep their rdflib term: the text and the term kind
+    assert [(str(member), type(member).__name__) for member in by_component.loc["sh:in", "params"]] \
+        == [("true", "Literal"), ("false", "Literal")]
     assert by_component.loc["sh:class", "params"] == "VoltageLevel"
     assert sorted(by_component.loc["sh:datatype", "params"]) == ["xsd:boolean", "xsd:string"]
     sparql = by_component.loc["sh:sparql", "params"]
@@ -839,3 +841,42 @@ def test_cgmes24_enhanced_shapes_compile():
             FILE_HEADER_SEQUENCE_PATHS if path.name == "FileHeaderProfile.ttl" else set()), path.name
         conforms, _, _ = pyshacl.validate(rdflib.Graph(), shacl_graph=compiled.graph)
         assert conforms, path.name
+
+
+@pytest.mark.parametrize("path, inverse, via_type, kind", [
+    ("Type", False, False, "class"),                          # rdf:type: classes
+    ("Equipment.EquipmentContainer", False, True, "class"),   # ( assoc rdf:type ): the object's classes
+    ("Equipment.EquipmentContainer", True, False, "reference"),   # inverse: the subjects
+    ("Type", True, False, "reference"),                       # inverse rdf:type: the instances
+    ("Equipment.EquipmentContainer", False, False, "reference"),  # the KEY's schema entry
+    ("Switch.kind", False, False, "enum"),
+    ("IdentifiedObject.name", False, False, "literal"),
+    ("Foo.bar", False, False, None),                          # a KEY the schema lacks
+])
+def test_path_kind(path, inverse, via_type, kind):
+    from types import SimpleNamespace
+    from triplets.validation.shacl_ir import path_kind
+    value_types = {"Equipment.EquipmentContainer": "reference", "Switch.kind": "enum", "IdentifiedObject.name": "literal"}
+    assert path_kind(SimpleNamespace(path=path, inverse=inverse, via_type=via_type), value_types) == kind
+
+
+def test_member_values():
+    """sh:in / sh:hasValue members as the VALUE texts they are on a path of each kind."""
+    import rdflib
+    from triplets.validation.shacl_ir import member_values
+    other, cim16 = "http://example.org/other#", "http://iec.ch/TC57/2013/CIM-schema-cim16#"
+    namespaces = {"Breaker": CIM, "SwitchKind.open": CIM}
+    members = [rdflib.URIRef(CIM + "Breaker"), rdflib.URIRef(other + "Breaker"), rdflib.URIRef(cim16 + "Bay"),
+               rdflib.Literal(CIM + "Breaker"), rdflib.Literal("5", datatype=rdflib.XSD.integer)]
+    values = lambda kind: member_values(members, kind, namespaces, CIM)  # noqa: E731
+    # class: a schema class by its name, another namespace whole; a class the schema lacks by its name;
+    # a literal is its text, also when it reads as an IRI
+    assert values("class") == ["Breaker", other + "Breaker", "Bay", CIM + "Breaker", "5"]
+    # literal path: every member is its text
+    assert values("literal") == [CIM + "Breaker", other + "Breaker", cim16 + "Bay", CIM + "Breaker", "5"]
+    # a KEY the schema lacks: the guessed local VALUE of an IRI
+    assert values(None) == ["Breaker", "Breaker", "Bay", CIM + "Breaker", "5"]
+    enums = [rdflib.URIRef(CIM + "SwitchKind.open"), rdflib.URIRef(other + "SwitchKind.open"), "SwitchKind.open"]
+    assert member_values(enums, "enum", namespaces, CIM) == ["SwitchKind.open", other + "SwitchKind.open", "SwitchKind.open"]
+    nodes = [rdflib.URIRef("urn:uuid:b1"), rdflib.URIRef("http://example.org/x#b2")]
+    assert member_values(nodes, "reference", namespaces, CIM) == ["b1", "http://example.org/x#b2"]

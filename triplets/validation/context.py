@@ -15,7 +15,7 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from ..iri import TYPE_KEY, load_rdf_map, value_types
+from ..iri import REFERENCE, TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
 from .locations import member_name
@@ -211,7 +211,7 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
     described = violations["VALUE"].notna()
     via = described & keys.isin(via_rules)
     presented_range = violations["VIOLATION_TYPE"].eq("rdfs:range") & (
-        keys.isin(range_rules) | violations["KEY"].map(value_kinds).eq("reference"))
+        keys.isin(range_rules) | violations["KEY"].map(value_kinds).eq(REFERENCE))
     of_class = described & ~via & (violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range",
                                                                         "triplets:missing")) | presented_range)
     over_count = violations["VIOLATION_TYPE"].isin(("sh:maxCount", "xsd:maxOccurs")) & violations["KEY"].notna()
@@ -234,7 +234,7 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
         violations.loc[of_class, "TARGET_TYPE"] = refs.map(types.get)
     if over_count.any():
         violations.loc[over_count, "TARGET"] = _found_values(
-            violations.loc[over_count, ["ID", "KEY"]], data, table_name)
+            violations.loc[over_count, ["ID", "KEY", "VIOLATION_TYPE"]], data, table_name)
 
 
 def file_names(data, table_name="triplets"):
@@ -280,7 +280,10 @@ def _name_map(data, table_name="triplets"):
 
 def _found_values(pairs, data, table_name="triplets", cap=5):
     """Per violated (ID, KEY): "found N values: 'a', 'b', …" — the validator
-    sees WHICH duplicates to remove without opening the instance data."""
+    sees WHICH duplicates to remove without opening the instance data. The
+    values are what the count counted: for ``sh:maxCount`` each value once (a set
+    of value nodes), for ``xsd:maxOccurs`` every element; a row without a VALUE
+    is none."""
     kind = flavor(data)
     keys = list(pairs["KEY"].astype(str).unique())
     if kind == "duckdb":
@@ -296,17 +299,20 @@ def _found_values(pairs, data, table_name="triplets", cap=5):
             rows = data.filter(data["KEY"].is_in(keys)).to_pandas()
         else:
             rows = data.loc[data["KEY"].isin(keys)]
-    rows = rows.astype({"ID": str, "KEY": str})
+    rows = rows.loc[rows["VALUE"].notna()].astype({"ID": str, "KEY": str})
+    grouped = rows.groupby(["ID", "KEY"], observed=True)["VALUE"].apply(list)
 
-    def describe(values):
+    def describe(object_id, key, violation_type):
+        values = grouped.get((object_id, key))
+        if values is None:
+            return None
+        values = list(dict.fromkeys(values)) if violation_type == "sh:maxCount" else values
         quoted = [f"'{value}'" for value in values[:cap]]
         more = f", … ({len(values)} total)" if len(values) > cap else ""
         return f"found {len(values)} values: {', '.join(quoted)}{more}"
 
-    grouped = (rows.groupby(["ID", "KEY"], observed=True)["VALUE"]
-               .apply(lambda values: describe(list(values))))
-    return pandas.Series(list(zip(pairs["ID"].astype(str), pairs["KEY"].astype(str))),
-                         index=pairs.index).map(grouped)
+    return pandas.Series([describe(*pair) for pair in zip(pairs["ID"].astype(str), pairs["KEY"].astype(str),
+                                                          pairs["VIOLATION_TYPE"])], index=pairs.index, dtype=object)
 
 
 def _type_map(data, table_name="triplets"):

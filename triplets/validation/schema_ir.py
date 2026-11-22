@@ -36,7 +36,7 @@ from urllib.parse import quote
 import pandas
 
 from .._header import _PROPERTY_TYPES
-from ..iri import _PLAIN_DATATYPES, TYPE_KEY, XSD_NS, language_tag, load_rdf_map, local_value, prefixes, xsd_base
+from ..iri import _PLAIN_DATATYPES, CLASS, TYPE_KEY, XSD_NS, language_tag, load_rdf_map, local_value, prefixes, xsd_base
 from .schema_scope import (SCOPE_KEY, _merged_entries, class_ancestors, require_entries,
                            scope_sections, scoped_rdf_map)
 from .shacl_ir import CompiledShapes, IR_COLUMNS, _COMPILE_CACHE
@@ -81,7 +81,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False, sev
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     ir["severity"] = severity
     compiled = CompiledShapes(
-        graph=None, ir=ir, hash=content, sources=(source,), language="rdfs",
+        graph=None, ir=ir, hash=content, sources=(source,), language="rdfs", count_elements=True,
         stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
                "skipped_shapes": notes["skipped_shapes"],
                "relaxed_constraints": notes["relaxed_constraints"], "unknown_components": []})
@@ -125,11 +125,11 @@ def compile_references(rdf_map, rdf_map_scope, target_rdf_map_scope=(), report_m
     accepted = {}
     for name, steps in ancestors.items():
         accepted.setdefault(name, set()).add(name)
-        for parent in (local_value(step, "class") for step in steps) if inheritance else ():
+        for parent in (local_value(step, CLASS) for step in steps) if inheritance else ():
             accepted.setdefault(parent, set()).add(name)
     rows, skipped = [], []
     for meta, prop, entry in _associations(sources, entries):
-        classes = accepted.get(local_value(entry.get("range", ""), "class"))
+        classes = accepted.get(local_value(entry.get("range", ""), CLASS))
         if not classes:
             skipped.append(f"{meta['target_on']}.{prop}: association range {entry.get('range')!r} "
                            "matches no Class entry of the source or target profiles")
