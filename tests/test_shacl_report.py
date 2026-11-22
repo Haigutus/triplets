@@ -614,6 +614,50 @@ cim:NameShape a sh:NodeShape ; sh:targetObjectsOf cim:IdentifiedObject.name ;
     assert list(zip(back["ID"], back["ID_KIND"])) == [("B 1", "literal")]
 
 
+FOCUS_CIM = "http://iec.ch/TC57/CIM100#"
+FOCUS_SCHEMA = {"Breaker": {"type": "Class", "namespace": FOCUS_CIM}, "Substation": {"type": "Class", "namespace": FOCUS_CIM},
+                "IdentifiedObject.name": {"type": "Attribute", "namespace": FOCUS_CIM},
+                "Conductor.length": {"type": "Attribute", "namespace": FOCUS_CIM, "xsd:type": "xsd:float"}}
+FOCUS_NAMES = ("cim:N a sh:NodeShape ; sh:targetObjectsOf cim:{key} ; "
+               "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .")
+FOCUS_CASES = {
+    # no schema: a name that is no IRI or UUID is a literal, as the export writes it
+    "no_schema": (FOCUS_NAMES.format(key="IdentifiedObject.name"), [], None, [("B 1", "literal")]),
+    # a KEY the schema lacks: the same text rule
+    "key_not_in_schema": (FOCUS_NAMES.format(key="Foo.bar"), [("b1", "Foo.bar", "hello", "i1")], FOCUS_SCHEMA,
+                          [("hello", "literal")]),
+    # a shape with a class target too: per row — the Substation a node, the name a literal
+    "mixed_targets": (FOCUS_NAMES.format(key="IdentifiedObject.name").replace(
+        "sh:targetObjectsOf", "sh:targetClass cim:Substation ; sh:targetObjectsOf"), [], FOCUS_SCHEMA,
+        [("B 1", "literal"), ("sub1", "reference")]),
+    # the lexical supplement next to pyshacl: its rows are nodes
+    "lexical": (FOCUS_NAMES.format(key="IdentifiedObject.name") + " cim:L a sh:NodeShape ; sh:targetClass cim:Breaker ; "
+                "sh:property [ sh:path cim:Conductor.length ; sh:datatype xsd:float ] .",
+                [("b1", "Conductor.length", "1", "i1")], FOCUS_SCHEMA, [("B 1", "literal"), ("b1", "reference")]),
+}
+
+
+@pytest.mark.parametrize("case", FOCUS_CASES)
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb", "pyshacl"])
+def test_literal_focus_node_per_row(engine, case):
+    """ID_KIND is decided per row, the same on every engine and pyshacl, and the report
+    writes the literal focus node it is."""
+    import rdflib
+    pytest.importorskip(engine)
+    shape, rows, rdf_map, expected = FOCUS_CASES[case]
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.name", "B 1", "i1"),
+                             ("sub1", "Type", "Substation", "i1"), *rows], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    shapes = rdflib.Graph().parse(data="@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> . "
+                                       "@prefix xsd: <http://www.w3.org/2001/XMLSchema#> . " + shape, format="turtle")
+    violations = triplets.validation.validate_shacl(data, shapes, rdf_map=rdf_map, rdf_map_scope=None, engine=engine)
+    assert sorted(zip(violations["ID"], violations["ID_KIND"])) == expected
+    graph = violations_to_report_graph(violations, rdf_map=rdf_map)
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    focus = {focus: rdflib.Literal(focus) if kind == "literal" else rdflib.URIRef(f"urn:uuid:{focus}")
+             for focus, kind in expected}
+    assert set(graph.objects(None, sh.focusNode)) == set(focus.values())
+
+
 GENC4_TTL = """
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
@@ -820,3 +864,21 @@ def test_report_paths_follow_the_schema_namespace():
     unknown = VIOLATIONS.assign(KEY="Custom.foo")
     graph = violations_to_report_graph(unknown, rdf_map=GRID_SCHEMA, undefined_namespace="http://acme#")
     assert {str(path) for path in graph.objects(None, sh.resultPath)} == {"http://acme#Custom.foo"}
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars", "duckdb"])
+def test_subjects_of_the_scoped_data(flavor):
+    """The ids that are a subject in the data's scoped instances, on every input flavor."""
+    from triplets.validation import _subjects
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b2", "Type", "Breaker", "i2"),
+                             ("b1", "IdentifiedObject.name", "B 1", "i1")], columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    if flavor == "polars":
+        data = pytest.importorskip("polars").from_pandas(data)
+    elif flavor == "duckdb":
+        connection = pytest.importorskip("duckdb").connect()
+        connection.register("_rows", data)
+        connection.execute("CREATE TABLE triplets AS SELECT * FROM _rows")
+        data = connection
+    assert _subjects(data, ["b1", "b2", "B 1"]) == {"b1", "b2"}
+    assert _subjects(data, ["b1", "b2", "B 1"], ["i2"]) == {"b2"}
+    assert _subjects(data, ["b1"], []) == set()

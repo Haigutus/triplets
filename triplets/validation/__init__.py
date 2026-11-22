@@ -54,7 +54,7 @@ import pandas
 
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, LITERAL, REFERENCE, is_iri, load_rdf_map, local_value, split_iri, value_types
+from ..iri import CIM_NS, LITERAL, REFERENCE, absolute_value, is_iri, load_rdf_map, local_value, split_iri, value_types
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_ir import MESSAGE_VARIABLE, _is_iri, _mark_switched_off, _term, is_literal
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
@@ -197,7 +197,8 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     violations = _run(data, compiled, engine_name, engine_mod, scoped, data_scope, lexical,
                       undefined_namespace=undefined_namespace, ancestors=ancestors,
                       abort_on_first=abort_on_first, **kwargs)
-    violations = _focus_kinds(violations, compiled.ir, value_types(scoped[SCOPE_KEY]) if rdf_map else {})
+    violations = _focus_kinds(violations, compiled.ir, value_types(scoped[SCOPE_KEY]) if rdf_map else {},
+                              lambda ids: _subjects(data, ids, data_scope, table_ref))
     violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
@@ -235,18 +236,62 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=T
     return violations.loc[~repeated].reset_index(drop=True)
 
 
-def _focus_kinds(violations, ir, types):
-    """ID_KIND (``iri.TERM_KINDS``) when a focus node is a literal: ``literal`` on the
-    findings of a shape whose every target is the objects of an Attribute KEY
-    (sh:targetObjectsOf), ``reference`` on the others; no column when no focus is a
-    literal. A frame with the column (the pyshacl report's terms) keeps it."""
-    if "ID_KIND" in violations.columns or not len(violations):
+def _focus_kinds(violations, ir, types, subjects):
+    """ID_KIND (``iri.TERM_KINDS``) per row when a focus node is a literal. A focus that
+    a ``sh:targetObjectsOf`` KEY gives has the term kind the export writes for that VALUE
+    (:func:`~triplets.iri.absolute_value`: the KEY's schema entry, else the text — an IRI
+    or UUID is a node, any other text a literal); a focus any other target gives is a
+    node. When the targets of the row's shape give its ID both kinds, the ID is a node if
+    it is a subject in the data (*subjects*: ids → the subjects among them), else a
+    literal. No column when no focus is a literal. A frame with the column (the pyshacl
+    report's terms) fills the rows without a kind (the lexical supplement) as nodes."""
+    if "ID_KIND" in violations.columns:
+        violations["ID_KIND"] = violations["ID_KIND"].fillna(REFERENCE)
         return violations
-    literal = (ir["target_by"] == "VALUE") & ir["target_on"].map(lambda key: types.get(key) == LITERAL)
-    shapes = set(ir.loc[literal, "shape_id"]) - set(ir.loc[~literal, "shape_id"])
-    if shapes:
-        violations["ID_KIND"] = violations["SOURCE_SHAPE"].isin(shapes).map({True: LITERAL, False: REFERENCE})
+    targets = {}   # shape → the KEYs of its sh:targetObjectsOf, None for any other target
+    for shape, target_by, target_on in zip(ir["shape_id"], ir["target_by"], ir["target_on"]):
+        targets.setdefault(shape, set()).add(target_on if target_by == "VALUE" else None)
+    targets = {shape: keys for shape, keys in targets.items() if keys != {None}}
+
+    def term_kinds(shape, focus):
+        """The term kinds the targets of *shape* give *focus*."""
+        if shape not in targets or pandas.isna(focus):
+            return {REFERENCE}
+        return {LITERAL if key is not None and absolute_value(key, str(focus), value_types=types)[0] == LITERAL
+                else REFERENCE for key in targets[shape]}
+
+    kinds = [term_kinds(shape, focus) for shape, focus in zip(violations["SOURCE_SHAPE"], violations["ID"])]
+    if not any(LITERAL in kind for kind in kinds):
+        return violations
+    both = {focus for focus, kind in zip(violations["ID"], kinds) if len(kind) > 1}
+    nodes = subjects(both) if both else set()
+    violations["ID_KIND"] = [LITERAL if kind == {LITERAL} or (len(kind) > 1 and focus not in nodes) else REFERENCE
+                             for focus, kind in zip(violations["ID"], kinds)]
     return violations
+
+
+def _subjects(data, ids, data_scope=None, table_name="triplets"):
+    """The *ids* that are a subject (an ID) in the data's *data_scope* instances (any input flavor)."""
+    ids = [str(identifier) for identifier in ids]
+    scope = None if data_scope is None else [str(instance) for instance in data_scope]
+    kind = flavor(data)
+    if kind == "duckdb":
+        where = f"ID IN ({', '.join('?' for _ in ids)})"
+        if scope is not None:
+            where += f" AND INSTANCE_ID IN ({', '.join('?' for _ in scope) or 'NULL'})"
+        return {row[0] for row in data.execute(f"SELECT DISTINCT ID FROM {table_name} WHERE {where}",
+                                               [*ids, *(scope or [])]).fetchall()}
+    if kind == "pyarrow":
+        data = data.to_pandas(types_mapper=pandas.ArrowDtype)
+    if kind == "polars":
+        rows = data.filter(data["ID"].is_in(ids))
+        if scope is not None:
+            rows = rows.filter(rows["INSTANCE_ID"].is_in(scope))
+        return set(rows["ID"].to_list())
+    rows = data.loc[data["ID"].isin(ids)]
+    if scope is not None:
+        rows = rows.loc[rows["INSTANCE_ID"].astype(str).isin(scope)]
+    return set(rows["ID"].astype(str))
 
 
 def _present(violations, ir, language):

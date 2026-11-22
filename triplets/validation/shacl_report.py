@@ -258,9 +258,9 @@ def violations_to_report_graph(violations, report_source=None, report_references
     ``undefined_namespace`` for names it lacks, unless already an IRI.
 
     ``sh:focusNode`` and ``sh:value`` are the terms :func:`~triplets.iri.absolute_value`
-    gives for their kind. The ID_KIND column states the focus node's (a literal, the
-    objects of an Attribute KEY under sh:targetObjectsOf); without it a focus node is a
-    reference. ``sh:value`` of a ``sh:sparql`` result has the VALUE_KIND the engines
+    gives for their kind. The ID_KIND column states the focus node's (a literal: an
+    object of a sh:targetObjectsOf KEY the export writes as a literal); without it a focus
+    node is a reference. ``sh:value`` of a ``sh:sparql`` result has the VALUE_KIND the engines
     write, the term kind of the query's ``?value``. Any other
     ``sh:value`` has the term kind the schema entry type of the KEY gives it
     (:func:`~triplets.iri.absolute_value`): the IRI of the referenced object for
