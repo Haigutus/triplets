@@ -54,6 +54,8 @@ class CompiledShapes:
     hash: str                     # content hash of the shape sources (any file name; a filtered compile keeps it)
     sources: tuple = ()           # shape file basenames, sorted, each name once (report metadata; () for a Graph)
     language: str = "shacl"       # constraint language — "rdfs" for schema-compiled IR
+    # cardinality counts every element (XSD, compile_schema), else the distinct value nodes (SHACL)
+    count_elements: bool = False
     stats: dict = field(default_factory=dict)  # coverage facts (see _shape_stats)
     plans: dict = field(default_factory=dict)  # engine name → compiled artifact (lazy)
     # shape ids switched off: on the full compile those the graph declares

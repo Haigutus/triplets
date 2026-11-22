@@ -81,7 +81,7 @@ def compile_schema(rdf_map, rdf_map_scope=None, report_undefined_keys=False, sev
     ir["message"] = ir["message"].astype(object).where(ir["message"].notna(), None)
     ir["severity"] = severity
     compiled = CompiledShapes(
-        graph=None, ir=ir, hash=content, sources=(source,), language="rdfs",
+        graph=None, ir=ir, hash=content, sources=(source,), language="rdfs", count_elements=True,
         stats={"node_shapes": int(ir["target_on"].nunique()), "constraints": len(ir),
                "skipped_shapes": notes["skipped_shapes"],
                "relaxed_constraints": notes["relaxed_constraints"], "unknown_components": []})

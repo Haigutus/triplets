@@ -44,10 +44,12 @@ _COLUMNS = ("ID", "KEY", "VALUE", "INSTANCE_ID")
 class _Context:
     """Lazy base + eagerly materialized shared indices (built once per validate)."""
 
-    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None, lexical=True, undefined_namespace=CIM_NS):
+    def __init__(self, frame, rdf_map=None, ancestors=(), targets=None, lexical=True, undefined_namespace=CIM_NS,
+                 count_elements=False):
         self.base = frame.lazy()
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
+        self.count_elements = count_elements   # cardinality: every element (XSD), else distinct value nodes
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
@@ -172,13 +174,15 @@ def _emit(plan, rule, message, violation_type=None, severity=None, value=True):
 
 # ── plan builders: (context, rule) → LazyFrame in the violations schema ──────
 
-def _distinct(column):
-    """Value nodes per group — a set: the same triple stated in two instances is one."""
-    return polars.col(column).drop_nulls().n_unique().alias("len")
+def _count(context, column):
+    """Values per group: SHACL value nodes are a set (the same triple stated in two instances
+    is one), XSD counts every element (``count_elements``); a null VALUE is none."""
+    values = polars.col(column)
+    return (values.count() if context.count_elements else values.drop_nulls().n_unique()).alias("len")
 
 
 def _counts(context, rule):
-    return context.path_rows(rule).group_by("FOCUS").agg(_distinct("PATH_VALUE"))
+    return context.path_rows(rule).group_by("FOCUS").agg(_count(context, "PATH_VALUE"))
 
 
 def _min_count(context, rule):
@@ -498,7 +502,7 @@ def _batch_max_count(context, rules):
     rules_frame = _rules_frame(rules, lambda r: f"{r.path} occurs more than {r.params} time(s)",
                                PARAM=lambda r: float(r.params))
     plan = (_batch_path_rows(context, rules_frame)
-            .group_by(["ID", *_RULE_COLUMNS, "PARAM"]).agg(_distinct("VALUE"))
+            .group_by(["ID", *_RULE_COLUMNS, "PARAM"]).agg(_count(context, "VALUE"))
             .filter(polars.col("len") > polars.col("PARAM")))
     return [_batch_emit(plan, "sh:maxCount", value=False)]
 
@@ -507,7 +511,7 @@ def _batch_min_count(context, rules):
     rules_frame = _rules_frame(rules, lambda r: f"{r.path} occurs fewer than {r.params} time(s)",
                                PARAM=lambda r: float(r.params))
     keys = ["ID", *_RULE_COLUMNS, "PARAM"]
-    counts = _batch_path_rows(context, rules_frame).group_by(keys).agg(_distinct("VALUE"))
+    counts = _batch_path_rows(context, rules_frame).group_by(keys).agg(_count(context, "VALUE"))
     universe = context.membership.join(rules_frame.lazy(), on="CLASS")   # every focus × its rules
     plan = (universe.join(counts, on=keys, how="left")
             .filter(polars.col("len").fill_null(0) < polars.col("PARAM")))
@@ -636,7 +640,8 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     targets, notes = (shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
                                                   undefined_namespace=undefined_namespace)
                       if sparql_rules else ({}, pandas.DataFrame(columns=VIOLATION_COLUMNS)))
-    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets, lexical, undefined_namespace)
+    context = _Context(frame, rdf_map, ancestor_pairs(ancestors), targets, lexical, undefined_namespace,
+                       compiled.count_elements)
     batched, plans = {}, []
     for rule in vectorized:
         # batching joins on class membership — the other targets take the per-rule path

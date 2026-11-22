@@ -77,10 +77,12 @@ class _Context:
     instead of once per rule (the polars/duckdb compilers follow the same shape).
     """
 
-    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=(), lexical=True):
+    def __init__(self, data, rdf_map=None, undefined_namespace=CIM_NS, ancestors=(), lexical=True,
+                 count_elements=False):
         self.data = data
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
+        self.count_elements = count_elements   # cardinality: every element (XSD), else distinct value nodes
         self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
@@ -232,9 +234,10 @@ def _empty():
 # ── cardinality ──────────────────────────────────────────────────────────────
 
 def _counts(context, rule):
-    """Value nodes per focus node — a set: the same triple stated in two instances is one."""
-    rows = context.path_rows(rule)
-    return (rows.groupby("FOCUS")["PATH_VALUE"].nunique()
+    """Values per focus node: SHACL value nodes are a set (the same triple stated in two
+    instances is one), XSD counts every element (``count_elements``); a null VALUE is none."""
+    values = context.path_rows(rule).groupby("FOCUS")["PATH_VALUE"]
+    return ((values.count() if context.count_elements else values.nunique())
             .reindex(context.focus(rule), fill_value=0))
 
 
@@ -931,7 +934,7 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     if skipped:
         logger.debug("pandas engine skips components: %s (pyshacl covers them)", ", ".join(sorted(skipped)))
 
-    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors), lexical)
+    context = _Context(data, rdf_map, undefined_namespace, ancestor_pairs(ancestors), lexical, compiled.count_elements)
     selected = [rule for rule in rules.itertuples() if rule.component in CONSTRAINT_VALIDATORS]
     sparql_rules = [rule for rule in selected if rule.component == "sh:sparql"]
     context.targets, notes = _sparql_targets(context, [rule for rule in selected if rule.target_by == "SPARQL"])

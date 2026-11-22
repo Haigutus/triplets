@@ -102,7 +102,7 @@ _NULL_VALUE = "CAST(NULL AS VARCHAR)"
 def _min_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
-                f"LEFT JOIN (SELECT FOCUS, COUNT(DISTINCT PV) AS n FROM ({rows}) GROUP BY FOCUS) c "
+                f"LEFT JOIN (SELECT FOCUS, {context.count} AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
     return _wrap(rule, f"{rule.path} occurs fewer than {rule.params} time(s)",
                  from_sql, [rule.target_on, *rows_params, rule.params], "TRUE", [],
@@ -111,7 +111,7 @@ def _min_count(rule, table, context):
 
 def _max_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
-    from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING COUNT(DISTINCT PV) > ?"   # a set of value nodes
+    from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING {context.count} > ?"
     return _wrap(rule, f"{rule.path} occurs more than {rule.params} time(s)",
                  from_sql, [*rows_params, rule.params], "TRUE", [], value_expr=_NULL_VALUE)
 
@@ -358,9 +358,11 @@ class _Context:
     operands' types resolve from, and the lexical flag (shared with the other
     vectorized engines)."""
 
-    def __init__(self, rdf_map, lexical=True, undefined_namespace=CIM_NS):
+    def __init__(self, rdf_map, lexical=True, undefined_namespace=CIM_NS, count_elements=False):
         self.rdf_map = rdf_map
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
+        # cardinality: every element (XSD), else distinct value nodes; a null VALUE is none
+        self.count = "COUNT(PV)" if count_elements else "COUNT(DISTINCT PV)"
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
@@ -474,7 +476,7 @@ def _validate(connection, table, compiled, rdf_map, data_scope, components, max_
         targets, notes = shacl_pandas.sparql_targets(frame, sparql_rules, rdf_map=rdf_map,
                                                      undefined_namespace=undefined_namespace)
         _create_targets_table(connection, targets)
-    context = _Context(rdf_map, lexical, undefined_namespace)
+    context = _Context(rdf_map, lexical, undefined_namespace, compiled.count_elements)
     _create_names_table(connection, table, vectorized, context)
     built = [statement for rule in vectorized
              if (statement := SQL_BUILDERS[rule.component](rule, table, context)) is not None]
