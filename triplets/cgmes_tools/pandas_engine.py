@@ -390,39 +390,43 @@ def _value_matches(values, root):
 
 
 def _walk_models(relations, profiles, root):
-    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+    """{root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
     rows of each root's dependency closure over the resolved edges.
 
-    Roots are the loaded headers nothing loaded depends on (never a resolved
-    ID_TO); *root* optionally restricts them by profile identity. BFS with a
-    visited set — dependency cycles terminate.
+    The walk runs over instances, so two files that share a header ID stay two
+    parts; a reference to a shared ID resolves to each of them. Roots are the
+    loaded instances nothing loaded depends on (never a resolved
+    INSTANCE_ID_TO); *root* optionally restricts them by profile identity. BFS
+    with a visited set — dependency cycles terminate.
     """
     resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
-    roots = (set(profiles["HEADER_ID"]) | set(relations["ID_FROM"])) - set(resolved["ID_TO"])
+    roots = (set(profiles["INSTANCE_ID"]) | set(relations["INSTANCE_ID_FROM"])) - set(resolved["INSTANCE_ID_TO"])
     if root is not None:
-        roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "HEADER_ID"])
-    adjacency = resolved.groupby("ID_FROM")["ID_TO"].agg(list)
+        roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "INSTANCE_ID"])
+    adjacency = resolved.groupby("INSTANCE_ID_FROM", observed=True)["INSTANCE_ID_TO"].agg(list)
     parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
 
     models = {}
-    for header in sorted(roots):
-        seen, queue = {header}, [header]
+    for instance in sorted(roots):
+        seen, queue = {instance}, [instance]
         for node in queue:
             for target in adjacency.get(node, ()):
                 if target not in seen:
                     seen.add(target)
                     queue.append(target)
-        models[header] = parts[parts["ID"].isin(seen)].drop_duplicates().reset_index(drop=True)
+        models[instance] = parts[parts["INSTANCE_ID"].isin(seen)].drop_duplicates().reset_index(drop=True)
     return models
 
 
 def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """Loaded models: each root header with its dependency closure.
+    """Loaded models: each root instance with its dependency closure.
 
-    A model starts from a root — a loaded header nothing loaded depends on
+    A model starts from a root — a loaded instance nothing loaded depends on
     (in-degree 0 over :func:`get_model_relations` edges): the SV part of a
     power-flow set, the process instance of a network-code set. Works across
-    header generations; a mixed frame yields one entry per root.
+    header generations; a mixed frame yields one entry per root. Two files that
+    share a header ID are two parts; a part that depends on that ID depends on
+    both.
 
     Parameters
     ----------
@@ -439,7 +443,7 @@ def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_ke
     Returns
     -------
     dict
-        {root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+        {root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
         declarations of every model part in the root's dependency closure.
 
     Examples

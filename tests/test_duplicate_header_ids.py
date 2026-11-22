@@ -444,15 +444,19 @@ def test_get_loaded_profiles(pair, engine):
 
 
 def test_dependency_on_a_shared_header_id_resolves_to_both_twins(path_pair, engine):
-    """A part that depends on the shared ID cannot tell the twins apart: one edge to each."""
+    """A part that depends on the shared ID cannot tell the twins apart: one edge to
+    each, and its model holds both."""
     dependent = (cimxml("alpha").replace(HEADER.encode(), b"c0ffee00-0000-4000-8000-000000000001")
                  .replace(b"<md:Model.description>alpha header</md:Model.description>",
                           f'<md:Model.DependentOn rdf:resource="urn:uuid:{HEADER}"/>'.encode()))
     data = triplets.parse([*path_pair.inputs(), named("dependent.xml", dependent)], engine="python_lxml_pandas")
     instances = path_pair.instances(data)
-    relations = pandas_frame(cgmes_tools.get_model_relations(build_engine(engine, data)))
+    data = build_engine(engine, data)
+    relations = pandas_frame(cgmes_tools.get_model_relations(data))
     assert set(relations["ID_TO"]) == {HEADER}
     assert sorted(relations["INSTANCE_ID_TO"].astype(str)) == sorted(instances.values())
+    [model] = cgmes_tools.get_loaded_models(data).values()
+    assert set(instances.values()) < set(pandas_frame(model)["INSTANCE_ID"].astype(str))
 
 
 def test_get_loaded_model_parts_lists_both_twins(path_pair, engine):
@@ -463,11 +467,8 @@ def test_get_loaded_model_parts_lists_both_twins(path_pair, engine):
         (instances[twin], TWINS[twin]["description"]) for twin in TWINS)
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="_walk_models keys each model by its root header ID "
-                          "(triplets/cgmes_tools/pandas_engine.py:400-414): twin roots merge into one model "
-                          "holding both instances")
 def test_get_loaded_models_one_model_per_twin(path_pair, engine):
+    """Each twin is a root of its own: models are keyed by INSTANCE_ID."""
     data, instances = flavored(path_pair, engine)
     models = cgmes_tools.get_loaded_models(data)
     assert sorted(sorted(set(pandas_frame(parts)["INSTANCE_ID"].astype(str))) for parts in models.values()) == \

@@ -106,15 +106,21 @@ class TestUpdateFullModelFromDict:
 class TestGetLoadedModels:
     SV_ID = "2ffd3555-f572-494e-b35e-e56ae740eeb2"  # Svedala SV FullModel
 
+    @staticmethod
+    def instance(data, header_id):
+        return data.loc[data["ID"] == header_id, "INSTANCE_ID"].iloc[0]
+
     def test_default_graph_roots(self, svedala_data):
         models = cgmes_tools.get_loaded_models(svedala_data)
-        assert list(models) == [self.SV_ID]  # only header nothing depends on
-        assert models[self.SV_ID]["INSTANCE_ID"].nunique() == 4  # SV, TP, SSH, EQ
+        sv = self.instance(svedala_data, self.SV_ID)
+        assert list(models) == [sv]  # only instance nothing depends on
+        assert models[sv]["INSTANCE_ID"].nunique() == 4  # SV, TP, SSH, EQ
 
     def test_root_filter(self, svedala_data):
         # "SV" matches the 3.0 StateVariables URI via the legacy section map
-        assert list(cgmes_tools.get_loaded_models(svedala_data, root="SV")) == [self.SV_ID]
-        assert list(cgmes_tools.get_loaded_models(svedala_data, root="StateVariables")) == [self.SV_ID]
+        sv = self.instance(svedala_data, self.SV_ID)
+        assert list(cgmes_tools.get_loaded_models(svedala_data, root="SV")) == [sv]
+        assert list(cgmes_tools.get_loaded_models(svedala_data, root="StateVariables")) == [sv]
         assert cgmes_tools.get_loaded_models(svedala_data, root="ZZ") == {}
 
     def test_mixed_frames_are_two_models(self, mixed_data):
@@ -134,8 +140,8 @@ class TestGetLoadedModels:
             {"ID": "c", "KEY": "requires", "VALUE": "b", "INSTANCE_ID": "i3"},  # cycle b <-> c
         ])
         models = cgmes_tools.get_loaded_models(rows)
-        assert list(models) == ["a"]
-        assert set(models["a"]["ID"]) == {"a", "b", "c"}
+        assert list(models) == ["i1"]
+        assert set(models["i1"]["ID"]) == {"a", "b", "c"}
 
 
 class TestGetLoadedModelParts:

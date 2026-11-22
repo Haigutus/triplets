@@ -102,15 +102,15 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
 # ── model inventory ─────────────────────────────────────────────────────────────
 
 def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — see pandas engine.
+    """{root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — see pandas engine.
 
-    Roots are the loaded headers nothing loaded depends on; *root* restricts
+    Roots are the loaded instances nothing loaded depends on; *root* restricts
     them by profile identity. The walk runs on the tiny relation/profile
     frames via pandas; dict values stay polars.
     """
     models = _walk_models(get_model_relations(data, reference_keys, profile_keys).to_pandas(),
                           get_loaded_profiles(data, profile_keys).to_pandas(), root)
-    return {header: pl.from_pandas(parts) for header, parts in models.items()}
+    return {instance: pl.from_pandas(parts) for instance, parts in models.items()}
 
 
 def get_model_triplets(data, model_instances_dataframe):
