@@ -54,7 +54,7 @@ import pandas
 
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, load_rdf_map, split_iri
+from ..iri import CIM_NS, LITERAL, REFERENCE, load_rdf_map, split_iri, value_types
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_ir import MESSAGE_VARIABLE, _is_iri, _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
@@ -197,6 +197,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     violations = _run(data, compiled, engine_name, engine_mod, scoped, data_scope, lexical,
                       undefined_namespace=undefined_namespace, ancestors=ancestors,
                       abort_on_first=abort_on_first, **kwargs)
+    violations = _focus_kinds(violations, compiled.ir, value_types(scoped[SCOPE_KEY]) if rdf_map else {})
     violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
@@ -232,6 +233,20 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=T
     repeated = violations.assign(MESSAGE=solution).duplicated(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
                                                                       "SOURCE_SHAPE", "SEVERITY", "MESSAGE"])
     return violations.loc[~repeated].reset_index(drop=True)
+
+
+def _focus_kinds(violations, ir, types):
+    """ID_KIND (``iri.TERM_KINDS``) when a focus node is a literal: ``literal`` on the
+    findings of a shape whose every target is the objects of an Attribute KEY
+    (sh:targetObjectsOf), ``reference`` on the others; no column when no focus is a
+    literal. A frame with the column (the pyshacl report's terms) keeps it."""
+    if "ID_KIND" in violations.columns or not len(violations):
+        return violations
+    literal = (ir["target_by"] == "VALUE") & ir["target_on"].map(lambda key: types.get(key) == LITERAL)
+    shapes = set(ir.loc[literal, "shape_id"]) - set(ir.loc[~literal, "shape_id"])
+    if shapes:
+        violations["ID_KIND"] = violations["SOURCE_SHAPE"].isin(shapes).map({True: LITERAL, False: REFERENCE})
+    return violations
 
 
 def _present(violations, ir, language):

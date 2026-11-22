@@ -576,7 +576,7 @@ def test_report_paths_and_sparql_values_round_trip(tmp_path, fmt):
     # the paths of a report we wrote resolve in the report, also next to the shapes graph
     assert rows(report_to_violations(graph, shapes_graph=rdflib.Graph().parse(shapes), rdf_map=rdf_map)) == rows(violations)
     assert {(row[2], row[3]) for row in rows(back)} == {
-        ("Substation", None), ("b1", None), ("b1", "reference"), ("B1", "literal"), ("Breaker", "name")}
+        ("Substation", None), ("b1", None), ("b1", "reference"), ("B1", "literal"), ("Breaker", "class")}
 
     # pyshacl's report of the same run reads to the same rows (its own messages aside)
     pyshacl = pytest.importorskip("pyshacl")
@@ -585,6 +585,33 @@ def test_report_paths_and_sparql_values_round_trip(tmp_path, fmt):
     report = pyshacl.validate(dataset, shacl_graph=rdflib.Graph().parse(shapes), advanced=True)[1]
     assert ({row[:5] for row in rows(report_to_violations(report, rdf_map=rdf_map))}
             == {row[:5] for row in rows(violations)})
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb", "pyshacl"])
+def test_literal_focus_node_round_trip(tmp_path, engine):
+    """The objects of an Attribute KEY as focus nodes (sh:targetObjectsOf) are literals:
+    ID_KIND literal, a literal sh:focusNode, read back as the same rows."""
+    import rdflib
+    pytest.importorskip(engine)
+    shapes = tmp_path / "names.ttl"
+    shapes.write_text("""
+@prefix sh:  <http://www.w3.org/ns/shacl#> .
+@prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:NameShape a sh:NodeShape ; sh:targetObjectsOf cim:IdentifiedObject.name ;
+    sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] .
+""")
+    cim = "http://iec.ch/TC57/CIM100#"
+    rdf_map = {"Breaker": {"type": "Class", "namespace": cim},
+               "IdentifiedObject.name": {"type": "Attribute", "namespace": cim}}
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "i1"), ("b1", "IdentifiedObject.name", "B 1", "i1")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_shacl(data, shapes, rdf_map=rdf_map, engine=engine)
+    assert list(zip(violations["ID"], violations["ID_KIND"])) == [("B 1", "literal")]
+    graph = violations_to_report_graph(violations, rdf_map=rdf_map)
+    sh = rdflib.Namespace("http://www.w3.org/ns/shacl#")
+    assert list(graph.objects(None, sh.focusNode)) == [rdflib.Literal("B 1")]
+    back = report_to_violations(graph, rdf_map=rdf_map)
+    assert list(zip(back["ID"], back["ID_KIND"])) == [("B 1", "literal")]
 
 
 GENC4_TTL = """

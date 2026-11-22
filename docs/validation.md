@@ -572,9 +572,12 @@ conforms** — identical across all engines:
 
 plus `EXPECTED` (what the constraint requires, worded from the rule) and
 `MESSAGE_SOURCE` (authored `sh:message` or engine text) — both from the rules
-alone —, on a frame with `sh:sparql` findings `VALUE_KIND` (the term kind of a
-`?value` binding, which no schema entry gives: `name`, `reference` or `literal`;
-empty on other rows — the SHACL report writes `sh:value` by it) and, for the schema validations, `PROFILE` (the list of scoped
+alone —, the term-kind columns where no schema entry gives the kind — `VALUE_KIND`
+on a frame with `sh:sparql` findings (the kind of the `?value` binding; empty on
+other rows) and `ID_KIND` on a frame with a literal focus node (`literal` for the
+objects of an Attribute KEY under `sh:targetObjectsOf`, `reference` on the other
+rows); their values are `triplets.iri.TERM_KINDS` (`class`, `enum`, `reference`,
+`literal`), and the SHACL report writes `sh:value` / `sh:focusNode` by them — and, for the schema validations, `PROFILE` (the list of scoped
 section keys, `["EQ", "OP", "SC"]`; the reports format it for display). What
 a finding found in the data (`TARGET`) is added by `enrich`.
 

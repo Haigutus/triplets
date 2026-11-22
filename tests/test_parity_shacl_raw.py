@@ -51,9 +51,6 @@ EXPECTED = {case: reason for (case, engine), reason in XFAIL.items() if engine =
 # a skip no run metadata names: sh:BlankNodeOrIRI is only debug-logged
 UNLISTED = {"nodeKind_blank_or_iri": "#180 sh:nodeKind sh:BlankNodeOrIRI not evaluated and no skipped_shapes entry"}
 EXPECTED |= UNLISTED
-# report-graph divergences on rows the frames agree on
-REPORT_EXPECTED = {"target_objects_of_literal": "a literal focus node is written as a urn:uuid: IRI: "
-                                                "the frame's ID does not say a node from a literal"}
 # skipped_shapes reasons that name one component of a shape otherwise evaluated
 PART = re.compile(r"(?:node-level (sh:\w+)|(sh:node) target|(sh:(?:and|or|xone|not)) member|(sh:(?:min|max)(?:In|Ex)clusive) )")
 
@@ -227,9 +224,9 @@ def synthetic(shape, rows, kwargs, report=False):
 
 
 # ── synthetic: every matrix case ──────────────────────────────────────────────
-def matrix_cases(expected=EXPECTED):
+def matrix_cases():
     return [pytest.param(case, id=case,
-                         marks=[pytest.mark.xfail(strict=True, reason=expected[case])] if case in expected else [])
+                         marks=[pytest.mark.xfail(strict=True, reason=EXPECTED[case])] if case in EXPECTED else [])
             for case in {**CASES, **SKIPPED} if case != "target_without_select"]
 
 
@@ -241,7 +238,7 @@ def test_matrix_raw(case):
     assert compare(*synthetic(shape, rows, kwargs)) == (set(), set())
 
 
-@pytest.mark.parametrize("case", matrix_cases(EXPECTED | REPORT_EXPECTED))
+@pytest.mark.parametrize("case", matrix_cases())
 def test_matrix_report_raw(case):
     """The report graph we write states every result as pyshacl's does: the shape's
     sh:path as sh:resultPath (sequence, inverse, alternative), sh:value the data's node."""
@@ -270,7 +267,7 @@ def test_raw_pyshacl_rejects_target_without_select():
 
 
 def test_expected_entries_name_cases():
-    assert set(EXPECTED | REPORT_EXPECTED) <= set(CASES) | set(SKIPPED)
+    assert set(EXPECTED) <= set(CASES) | set(SKIPPED)
 
 
 # ── real data: one shape file x one EQ instance ───────────────────────────────

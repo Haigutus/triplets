@@ -50,8 +50,8 @@ import pandas
 
 from .._header import without_metadata
 from ..export.nquads_utils import make_subject
-from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, split_iri,
-                   value_types)
+from ..iri import (CIM_NS, LITERAL, REFERENCE, REFERENCE_LIKE, TYPE_KEY, iri_pandas, name_kind, namespaces, node_kind,
+                   prefixes, rdf_map_entries, split_iri, value_types)
 from .schema_scope import ancestor_pairs
 from .shacl_ir import MESSAGE_VARIABLE, holds_names
 from .shacl_report import VIOLATION_COLUMNS, has_violation
@@ -491,9 +491,9 @@ def _sparql_query_text(rule, focus_ids):
 def _sparql_violations(rule, result):
     """Each SELECT result row is one violation: $this = focus node, ?value = value,
     the sh:message with the row's variables filled in (``_solution_messages``).
-    VALUE_KIND keeps the term kind of ?value, which no schema entry gives: ``name``
-    (an IRI shortened to its local name), ``reference`` (a node IRI, ``local_id``)
-    or ``literal``."""
+    VALUE_KIND keeps the term kind of ?value (``iri.TERM_KINDS``), which no schema
+    entry gives: ``reference`` (a node IRI, its ``local_id``), ``class`` / ``enum``
+    (an IRI shortened to its local name, ``iri.name_kind``) or ``literal``."""
     if result is None or len(result) == 0 or "this" not in result.columns:
         return _empty()
     result = result[result["this"].notna()]   # a row without a focus node is no violation
@@ -504,9 +504,9 @@ def _sparql_violations(rule, result):
     violations = _frame(rule, focus, values, "sparql constraint violated")
     if values is not None:
         terms = result["value"].astype(str)
-        kinds = numpy.where(~iri_pandas.is_iri(terms), "literal",
-                            numpy.where(values != _shorten(terms, iri_pandas.local_id), "name", "reference"))
-        violations["VALUE_KIND"] = pandas.Series(kinds).where(violations["VALUE"].notna())
+        kinds = values.map(name_kind, na_action="ignore").where(values != _shorten(terms, iri_pandas.local_id), REFERENCE)
+        violations["VALUE_KIND"] = kinds.where(iri_pandas.is_iri(terms), LITERAL).to_numpy()
+        violations["VALUE_KIND"] = violations["VALUE_KIND"].where(violations["VALUE"].notna())
     if rule.message and MESSAGE_VARIABLE.search(rule.message):
         violations["MESSAGE"] = _solution_messages(rule.message, result, node_level=rule.path is None)
     return violations

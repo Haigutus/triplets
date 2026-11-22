@@ -142,9 +142,19 @@ def local_key(iri, type_key=TYPE_KEY):
     return type_key if str(iri) == RDF_TYPE else split_iri(iri)[1]
 
 
-VALUE_KINDS = ("class", "enum", "reference")
+CLASS, ENUM, REFERENCE, LITERAL = "class", "enum", "reference", "literal"
+VALUE_KINDS = (CLASS, ENUM, REFERENCE)
 """``local_value`` kinds: ``class`` (a ``Type`` VALUE) and ``enum`` are names,
 ``reference`` a node; ``None`` guesses without a schema."""
+TERM_KINDS = (*VALUE_KINDS, LITERAL)
+"""The kind of a VALUE or ID term: a :data:`VALUE_KINDS` IRI or a ``literal`` (the
+``value_types`` kind of an Attribute KEY) — the VALUE_KIND / ID_KIND column values."""
+
+
+def name_kind(name):
+    """The kind of an IRI held as its local name, schema-free: ``enum`` for the CIM
+    enumeration value form ``Enumeration.value``, else ``class``."""
+    return ENUM if "." in name else CLASS
 
 
 def local_value(iri, kind=None):
@@ -350,7 +360,7 @@ def languages(rdf_map):
     return {name: language_tag(name, tag, declared.get(name), bound) for name, tag in tags.items()}
 
 
-_VALUE_TYPES = {"Attribute": "literal", "Association": "reference", "Enumeration": "enum"}
+_VALUE_TYPES = {"Attribute": LITERAL, "Association": REFERENCE, "Enumeration": ENUM}
 
 
 def value_types(rdf_map):
@@ -391,31 +401,31 @@ def defined(key, value, namespaces=None, value_types=None):
     return key in value_types and (value_types[key] != "enum" or is_iri(value) or value in namespaces)
 
 
-def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
+def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS,
+                   kind=None):
     """VALUE → ``("iri", iri)`` or ``("literal", datatype_iri_or_None)``.
 
-    Type → class IRI. Otherwise the schema entry type of the KEY decides, never
-    the shape of the text: enum → enum IRI, reference → :func:`absolute_id` of
-    the value (absolute passes through, else ``urn:uuid:``), literal → datatype
-    annotation (an Attribute stays a literal even when its text looks like an
-    IRI or a UUID). An undefined KEY falls to the shape heuristic: absolute IRI
-    or canonical UUID → reference, else plain literal. Quoting and escaping
-    belong to the serializer, not here.
+    The term kind (:data:`TERM_KINDS`) is *kind* when given, else the KEY's: Type →
+    class, otherwise the schema entry type of the KEY, never the shape of the text.
+    class / enum → the name's IRI, reference → :func:`absolute_id` of the value
+    (absolute passes through, else ``urn:uuid:``), literal → datatype annotation
+    (an Attribute stays a literal even when its text looks like an IRI or a UUID).
+    An undefined KEY falls to the shape heuristic: absolute IRI or canonical UUID →
+    reference, else plain literal. Quoting and escaping belong to the serializer,
+    not here.
     """
     if value is None:                    # no term — same answer as the flavors' null rows
-        return "literal", None
-    if key == TYPE_KEY:
+        return LITERAL, None
+    kind = kind or (CLASS if key == TYPE_KEY else (value_types or {}).get(key))
+    if kind in (CLASS, ENUM):
         return "iri", absolute_name(value, namespaces, undefined_namespace)
-    kind = (value_types or {}).get(key)
-    if kind == "enum":
-        return "iri", absolute_name(value, namespaces, undefined_namespace)
-    if kind == "reference":
+    if kind == REFERENCE:
         return "iri", absolute_id(value)
-    if kind == "literal":
-        return "literal", (datatypes or {}).get(key)
+    if kind == LITERAL:
+        return LITERAL, (datatypes or {}).get(key)
     if is_iri(value) or UUID_RE.match(str(value)):
         return "iri", absolute_id(str(value))
-    return "literal", None
+    return LITERAL, None
 
 
 def node_kind(key, value_types):

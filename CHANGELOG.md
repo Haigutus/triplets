@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **`VALUE_KIND` and `ID_KIND` columns on violations frames** where no schema entry gives the term kind: `VALUE_KIND` on `sh:sparql` findings (the `?value` binding's kind), `ID_KIND` when a focus node is a literal. Values are `triplets.iri.TERM_KINDS` — `class`, `enum`, `reference`, `literal` (`VALUE_KINDS` plus the `value_types` literal kind); `absolute_value(kind=)` takes one.
 - **`string_to_number=` on `export_to_excel` and `export_to_csv`** (default `False`: every
   VALUE is written as its text). `True` writes the columns that hold only numbers as
   numbers — number cells in Excel, for sums and charts — and does not keep the text form
@@ -577,7 +578,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 - **SHACL report `sh:resultPath` is the shape's own path** (sequence, inverse, alternative, …) as pyshacl writes it, not the path's first predicate.
-- **SHACL report `sh:value` of a `sh:sparql` result has the `?value` binding's term kind** (new `VALUE_KIND` column): a node on an `rdf:type` path is `urn:uuid:…`, not a class IRI; an inverse path's value is the node.
+- **SHACL report `sh:value` of a `sh:sparql` result has the `?value` binding's term kind**: a node on an `rdf:type` path is `urn:uuid:…`, not a class IRI; an inverse path's value is the node.
+- **SHACL report `sh:focusNode` of a literal focus node** (`sh:targetObjectsOf` an Attribute KEY) is the literal, not `urn:uuid:<text>`.
 - **`engine="pyshacl"` reports a reference or class of another namespace whole**, as the
   other engines do: VALUE `http://example.org/ns#vl1`, where the bridge read `vl1`. With
   an `rdf_map` it reads `sh:value` back exactly (`report_to_violations(rdf_map=…)`);
