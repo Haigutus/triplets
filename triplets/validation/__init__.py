@@ -47,7 +47,6 @@ from __future__ import annotations
 
 import logging
 import re
-from collections import Counter
 from datetime import datetime, timezone
 from typing import Any
 
@@ -546,7 +545,6 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
         "skipped_shapes": skipped_shapes,
         "relaxed_constraints": list(notes["relaxed_constraints"]),
         "skipped_components": skipped_components,
-        "shared_shape_names": _shared_shape_names(compiled),
         "anonymous_shapes": _anonymous_shapes(violations, compiled),
         # the violated shapes' definitions as N-Triples — the SHACL report embeds
         # them; SARIF properties and the csv/excel sidecars skip this key
@@ -554,21 +552,13 @@ def _report_metadata(violations, data, compiled, engine_name, started, table_nam
     }
 
 
-def _shared_shape_names(compiled):
-    """The local names that several shape IRIs of the compiled shapes have, sorted —
-    of every shape, switched off for this run or not, so the SARIF ruleId of a shape
-    (sarif._shape_name) is the same in every run of the shape files."""
-    shapes = (compiled.base or compiled).ir["shape_id"].dropna().unique()
-    names = Counter(split_iri(shape)[1] for shape in shapes)
-    return sorted(name for name, count in names.items() if count > 1)
-
-
 def _anonymous_shapes(violations, compiled):
-    """{blank-node label: stable id} of the violated shapes without an IRI — the label
-    is new at every parse, the stable id is what the SARIF ruleId is made of: the
-    nearest named shape above it and its path (``…#BreakerShape.IdentifiedObject.name``);
-    a shape without a path, or with no named shape above it, takes eight hex digits of
-    the SHA-1 of its canonical definition instead of the path."""
+    """{blank-node label: stable name} of the violated shapes without an IRI — the label
+    is new at every parse, the stable name is the shape part of the SARIF ruleId: the
+    nearest named shape above it, its path, and eight hex digits of the SHA-1 of that
+    shape's IRI and the canonical definition (``BreakerShape.IdentifiedObject.name-5c1d07aa``;
+    ``BreakerShape-5c1d07aa`` without a path, ``shape-5c1d07aa`` with no named shape
+    above). Two anonymous shapes of one parent and path have two names."""
     labels = {shape for shape in violations["SOURCE_SHAPE"].dropna().astype(str) if not _is_iri(shape)}
     if not labels or compiled.graph is None:
         return {}
@@ -579,20 +569,21 @@ def _anonymous_shapes(violations, compiled):
         lineage = rows.at[label, "shapes"] if label in rows.index else ()
         lineage = lineage[:lineage.index(label)] if label in lineage else ()   # the shapes above it
         path = rows.at[label, "path"] if label in rows.index else None
-        named = next((shape for shape in reversed(lineage) if _is_iri(shape)), "urn:triplets:shape")
-        stable[label] = f"{named}.{path}" if isinstance(path, str) and named != "urn:triplets:shape" \
-            else f"{named}-{_definition_digest(compiled.graph, label)}"
+        named = next((shape for shape in reversed(lineage) if _is_iri(shape)), None)
+        name = ".".join(filter(None, (split_iri(named)[1] if named else "shape", path if isinstance(path, str) and named else None)))
+        stable[label] = f"{name}-{_definition_digest(compiled.graph, label, named)}"
     return stable
 
 
-def _definition_digest(graph, label):
+def _definition_digest(graph, label, parent=None):
     """Eight hex digits of the SHA-1 of a blank-node shape's definition (CBD), its
-    blank nodes labelled canonically: the same for the same Turtle in every parse."""
+    blank nodes labelled canonically, and the IRI of the named shape above it: the
+    same for the same Turtle in every parse."""
     import hashlib
     from rdflib.compare import to_canonical_graph
 
     lines = sorted(to_canonical_graph(graph.cbd(_term(label))).serialize(format="nt").splitlines())
-    return hashlib.sha1("\n".join(lines).encode("utf-8")).hexdigest()[:8]
+    return hashlib.sha1("\n".join([parent or "", *lines]).encode("utf-8")).hexdigest()[:8]
 
 
 def _iso(moment):

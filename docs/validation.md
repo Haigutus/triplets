@@ -627,8 +627,7 @@ one — and the result is the same however the runs are grouped:
 | `relaxed_constraints` | checks the profile merge loosened: cardinality relaxed, enumeration values united (every engine) |
 | `skipped_components` | constraint components the engine neither vectorizes nor delegates, and the terms the IR keeps as unimplemented rows (`sh:qualifiedValueShape`, …) |
 | `rule_sets` | joined frames only: one `{compiled_hash, deactivated_shapes, node_shapes, constraints}` entry per rule set of the joined runs, which `node_shapes` / `constraints` sum. Not exported (SARIF properties, csv / excel sidecars) |
-| `shared_shape_names` | the local names several shape IRIs of the compiled shapes have, sorted (shapes switched off included) — the SARIF ruleIds of those shapes carry a hash of the IRI. Not exported |
-| `anonymous_shapes` | `{blank-node label: stable id}` of the violated shapes without an IRI — what their SARIF ruleIds are made of. Not exported |
+| `anonymous_shapes` | `{blank-node label: stable name}` of the violated shapes without an IRI — the shape part of their SARIF ruleIds. Not exported |
 | `source_shapes` | `{shape id: N-Triples text}` — the defining triples (CBD) of each violated shape, blank-node labels as in `SOURCE_SHAPE`; `{}` for a schema run. Read by the SHACL report only (`shacl_report.shape_triples(text)` gives the graph) |
 
 Every value is a plain Python value (str, number, bool, None, list, dict):
@@ -696,21 +695,22 @@ carries them as newline-separated blocks in one `message.text`, adds
 count in the rule title (`SHACL Line completeness (8×)` — the ruleId stays stable,
 so GitHub alert matching is unaffected).
 
-The ruleId of a SHACL finding is `<shape local name>/<constraint>`
-(`ACLineSegment.r-cardinality/sh:minCount`). It is a function of the shape IRI and
-the run's shape files, never of the findings or their order: a local name that
-several shapes of the compiled files have (`AllowedClasses-property` in each
-profile's namespace) is followed by eight hex digits of the SHA-1 of the shape IRI
-(`AllowedClasses-property-1f0c9a2e/sh:in`), for each of those shapes, whether the
-others have findings or not. A frame without run metadata, and a joined frame whose
-runs hold shapes of one name, tell apart the shapes present in the frame the same way.
+The ruleId of a SHACL finding is
+`<shape local name>-<8 hex digits of the SHA-1 of the shape IRI>/<constraint>`
+(`ACLineSegment.r-cardinality-3b1f0c9a/sh:minCount`). It is a function of the shape
+IRI alone: the same in every run, parse and engine, in any row order, with or without
+findings of other shapes, for a single run, a joined frame and a frame without run
+metadata. Shapes of one local name in several namespaces (`AllowedClasses-property`
+of each profile) are separate rules.
+
 A shape without an IRI (`sh:property [ … ]`) has a blank-node label that is new at
-every parse, so its ruleId is made of the nearest named shape above it and its path
-(`BreakerShape.IdentifiedObject.name/sh:minCount`); a shape without a path, or with no
-named shape above it, of eight hex digits of the SHA-1 of its definition
-(`BreakerShape-5c1d07aa/sh:or`, `shape-9e41b2c3/sh:closed`). The same Turtle gives the
-same ruleIds in every parse and on every engine; a frame without run metadata keeps
-the label.
+every parse, so its ruleId is made of the nearest named shape above it, its path and
+eight hex digits of the SHA-1 of that shape's IRI and its own canonical definition
+(`BreakerShape.IdentifiedObject.name-5c1d07aa/sh:minCount`; `BreakerShape-5c1d07aa/sh:or`
+without a path, `shape-9e41b2c3/sh:closed` with no named shape above). Two anonymous
+shapes of one parent, path and constraint are two rules. The same Turtle gives the
+same ruleIds in every parse and on every engine; the names come from the run metadata
+(`anonymous_shapes`), so a frame without it has the label in the ruleId.
 
 `enrich` and `locate` preserve the attrs. On `to_shacl_report`, explicit
 `report_source=` / `report_references=` override the stamped values (plain

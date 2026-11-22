@@ -160,14 +160,12 @@ def _run(violations, group, sources, source_root):
                                             if meta.get(key)}, source_root)
     meta = {**meta, **names}
     language = run_language(violations)
-    # one rule per ruleId: the schema shapes of one scope given in two orders are one rule
-    # (and an anonymous shape parsed twice: its stable id, not its blank-node label, names the rule)
-    stable = meta.get("anonymous_shapes") or {}
-    shapes = frame["SOURCE_SHAPE"].map(lambda shape: stable.get(shape, shape))
-    shared = _shared_names(shapes, meta.get("shared_shape_names"))
+    # one rule per ruleId: the schema shapes of one scope given in two orders are one rule,
+    # and so is an anonymous shape parsed twice (its stable name, not its blank-node label)
+    anonymous = meta.get("anonymous_shapes") or {}
     groups = {}
-    for (shape, constraint), rows in frame.groupby([shapes, "VIOLATION_TYPE"], dropna=False, sort=False):
-        groups.setdefault(_rule_id(shape, constraint, shared), []).extend(rows.to_dict("records"))
+    for (shape, constraint), rows in frame.groupby(["SOURCE_SHAPE", "VIOLATION_TYPE"], dropna=False, sort=False):
+        groups.setdefault(_rule_id(shape, constraint, anonymous), []).extend(rows.to_dict("records"))
 
     rules, results = [], []
     for identifier, records in groups.items():
@@ -247,34 +245,30 @@ def _samples(records):
     return records if len(records) <= 2 * _SAMPLES else records[:_SAMPLES] + records[-_SAMPLES:]
 
 
-def _shape_name(shape, shared=()):
-    """The shape part of a ruleId, from the shape IRI alone: its local name; a schema
-    shape keeps its scope, so one class and key checked under two scopes are two rules
-    (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` → ``EQ:OP:Breaker.Switch.open``) —
-    the profile names sorted, so the order of ``rdf_map_scope`` makes no other rule.
-    A local name in *shared* — one that several shapes have — gets eight hex digits of
-    the IRI's SHA-1 (``AllowedClasses-property-1f0c9a2e``)."""
+def _shape_name(shape, anonymous=()):
+    """The shape part of a ruleId, a function of the shape alone — the same in every
+    run, parse and frame, whatever the findings:
+
+    - a schema shape: its scope and local name, the profile names sorted, so one class
+      and key checked under two scopes are two rules and the order of ``rdf_map_scope``
+      makes no other rule (``urn:triplets:schema:EQ:OP#Breaker.Switch.open`` →
+      ``EQ:OP:Breaker.Switch.open``);
+    - a SHACL shape: its local name and eight hex digits of the SHA-1 of its IRI
+      (``AllowedClasses-property-1f0c9a2e``) — shapes of one local name in several
+      namespaces are several rules;
+    - a shape without an IRI: its stable name from the run metadata (*anonymous*,
+      ``validation._anonymous_shapes``)."""
     if shape.startswith(SCHEMA_SHAPE_STARTS):
         scope, _, name = shape.removeprefix(SCHEMA_SHAPES).partition("#")
         return ":".join((*sorted(filter(None, scope.split(":"))), name))
-    name = split_iri(shape)[1]
-    return f"{name}-{hashlib.sha1(shape.encode('utf-8')).hexdigest()[:8]}" if name in shared else name
+    if shape in anonymous:
+        return anonymous[shape]
+    return f"{split_iri(shape)[1]}-{hashlib.sha1(shape.encode('utf-8')).hexdigest()[:8]}"
 
 
-def _shared_names(shapes, declared=None):
-    """The shape local names several shapes have: the *declared* ones of the run's
-    rule set (run metadata ``shared_shape_names`` — whether their findings are in the
-    frame or not) and those of two shapes in the frame (joined runs, frames without
-    metadata)."""
-    names = {}
-    for shape in shapes.dropna().astype(str).unique():
-        names.setdefault(_shape_name(shape), set()).add(shape)
-    return {*(declared or ()), *(name for name, found in names.items() if len(found) > 1)}
-
-
-def _rule_id(shape, constraint, shared=()):
+def _rule_id(shape, constraint, anonymous=()):
     """``<shape name>/<constraint>`` (:func:`_shape_name`); the constraint alone for a row without a shape."""
-    return f"{_shape_name(str(shape), shared)}/{constraint}" if not pandas.isna(shape) else str(constraint)
+    return f"{_shape_name(str(shape), anonymous)}/{constraint}" if not pandas.isna(shape) else str(constraint)
 
 
 def _rule(identifier, records, occurrences=None, language="shacl", references=None):

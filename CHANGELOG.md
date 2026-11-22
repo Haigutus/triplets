@@ -575,14 +575,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
-- **SARIF ruleIds of anonymous shapes are the same in every parse.** The ruleId of a
-  shape without an IRI (`sh:property [ … ]`) was its blank-node label
-  (`n3f…b1/sh:minCount`), new at every parse of the shapes, so every run opened new alerts
-  and closed the old ones. It is now the nearest named shape above it and its path
-  (`BreakerShape.IdentifiedObject.name/sh:minCount`), or eight hex digits of the SHA-1 of
-  the shape's definition where there is no path or no named shape above
-  (`attrs["validation"]["anonymous_shapes"]` maps the labels). Named shapes keep their
-  ruleIds; `SOURCE_SHAPE` and `properties.sourceShape` keep the label.
 - **`engine="pyshacl"` no longer crashes on a shape pyshacl gives up on.** pyshacl returns
   its `ValidationFailure` in place of the report (a `sh:sparql` query it does not accept),
   and the run ended in `AttributeError: 'ValidationFailure' object has no attribute
@@ -600,16 +592,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a formula and lost. Only an empty cell is no value now (the CLI reads with
   `keep_default_na=False, na_values=[""]`), and `export_to_excel` writes every value as a
   text cell.
-- **SARIF ruleIds of shapes that share a local name no longer depend on the findings.**
-  Shapes of one local name in different namespaces (`AllowedClasses-property` of each
-  profile) got a counter in order of appearance (`AllowedClasses-property/sh:in-11`), so
-  a fixed alert handed its ruleId to the next shape. Such a shape's ruleId now carries
-  eight hex digits of the SHA-1 of its IRI (`AllowedClasses-property-1f0c9a2e/sh:in`),
-  the same in every run of the shape files, in any row order, with or without findings
-  of the other shapes (`attrs["validation"]["shared_shape_names"]` lists the names of the
-  compiled shapes). The ruleIds of all other shapes are unchanged; the alerts of the
-  shapes that had a counter, and of the first shape of each such name, close and re-open
-  once. Schema ruleIds hold the scope and never needed the counter.
+- **Every SARIF ruleId of a SHACL finding changes: it is now a function of the shape
+  alone.** The ruleId was the shape's local name and the constraint, with a counter in
+  order of appearance for shapes of one local name in several namespaces
+  (`AllowedClasses-property/sh:in-11`: a fixed alert handed its ruleId to the next
+  shape), and the blank-node label for a shape without an IRI (`n3f…b1/sh:minCount`, new
+  at every parse). It is now `<local name>-<8 hex digits of the SHA-1 of the shape
+  IRI>/<constraint>` (`AllowedClasses-property-1f0c9a2e/sh:in`) for every named shape,
+  and `<nearest named shape>.<path>-<8 hex digits of the SHA-1 of that IRI and the shape's
+  canonical definition>/<constraint>` for a shape without an IRI
+  (`BreakerShape.IdentifiedObject.name-5c1d07aa/sh:minCount`;
+  `attrs["validation"]["anonymous_shapes"]` maps the labels). The same in every run,
+  parse, engine and row order, with or without findings of other shapes, for joined runs
+  and frames without metadata (a blank-node shape needs the metadata). Every
+  `triplets-shacl` alert on GitHub code scanning closes and re-opens once. Schema ruleIds
+  (`triplets-rdfs`) are unchanged; `SOURCE_SHAPE` and `properties.sourceShape` are
+  unchanged.
 - **Every `sh:sparql` solution is a finding, with its `sh:message` filled in.**
   Solutions that differed only in a variable other than `?value` were reported once,
   and `{?name}` / `{$name}` in the message stayed as written (APL `ClassCount`: 9
