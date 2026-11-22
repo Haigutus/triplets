@@ -55,6 +55,7 @@ Grouped by family; each module docstring describes its tests.
 | Export | `test_export_comment.py`, `test_export_profiles.py`, `test_export_undefined.py`, `test_roundtrip_nc.py`, `test_cim_spreadsheet.py` | relicapgrid |
 | SPARQL | `test_sparql.py` (rdflib), `test_sparql_oxigraph.py`, `test_sparql_qlever.py`, `test_sparql_qlever_ingest.py`, `test_rdflib_oxigraph_store.py` | relicapgrid; qlever files skip unless the extension is built |
 | Validation | `test_validation.py`, `test_shacl_ir.py`, `test_shacl_engines.py`, `test_shacl_report.py`, `test_schema_validation.py`, `test_schema_references.py`, `test_schema_scope.py`, `test_cgmes_validation.py`, `test_validation_context.py`, `test_locations.py`, `test_sarif.py` | relicapgrid, CGMES-AP; APL cgmes-v2-4 for the CGMES 2.4 shapes in `test_shacl_ir.py` |
+| Duplicate header IDs | `test_duplicate_header_ids.py` (two files sharing a FullModel ID across parsers, loaders, exports, validation and header helpers) | none (synthetic files) |
 | RDFS tools | `test_rdfs_tools.py` | `rdfs/` snapshots in the repo |
 | Benchmarks (`-m performance`) | `test_benchmarks_realgrid.py` | RealGrid LFS |
 
