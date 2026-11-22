@@ -456,6 +456,11 @@ CASES = {
                                               "sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ]"),
                                          breaker("b1", (DESC, "urn:uuid:b1")) + breaker("b2", (DESC, "http://example.org/x#y"))
                                          + breaker("b3", (DESC, "d"))),
+    # the class Breaker and the literal "Breaker" are two values of one solution set
+    "sparql_constraint_same_text_two_kinds": (prop("sh:path rdf:type ; sh:sparql [ sh:prefixes cim: ; sh:select "
+                                                   "'SELECT $this ?value WHERE { { $this rdf:type ?value } UNION "
+                                                   "{ $this rdf:type ?t . BIND(\"Breaker\" AS ?value) } }' ]"),
+                                              breaker("b1")),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
     # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has
@@ -919,6 +924,7 @@ def test_sparql_values_keep_their_term_kind(engine, sparql_engine, monkeypatch):
     monkeypatch.setattr(triplets.sparql._REGISTRY, "auto", [sparql_engine])
     expected = [("b1", "urn:uuid:b1", "literal"), ("b2", "http://example.org/x#y", "literal"), ("b3", "d", "literal")]
     for case, rows in (("sparql_constraint_literal_values", expected),
+                       ("sparql_constraint_same_text_two_kinds", [("b1", "Breaker", "class"), ("b1", "Breaker", "literal")]),
                        ("sparql_constraint_type_values", [("b1", "Breaker", "class"), ("b1", "bay1", "reference"),
                                                           ("b2", "Breaker", "class"), ("b2", "sub1", "reference"),
                                                           ("b3", "Breaker", "class")])):

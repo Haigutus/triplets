@@ -229,10 +229,12 @@ def _run(data, compiled, engine_name, engine_mod, rdf_map, data_scope, lexical=T
     # both reach a subclass instance, the same triple sits in two instance files,
     # the lexical supplement repeats pyshacl (in its own words). The solutions of a
     # sh:sparql constraint are told apart by their message too: two that differ in
-    # another variable than ?value are two findings
+    # another variable than ?value are two findings, and by the term kind of ?value
+    # (the class Breaker and the literal "Breaker")
     solution = violations["MESSAGE"].where(violations["VIOLATION_TYPE"] == "sh:sparql")
+    kinds = ["VALUE_KIND"] if "VALUE_KIND" in violations.columns else []
     repeated = violations.assign(MESSAGE=solution).duplicated(subset=["ID", "KEY", "VALUE", "VIOLATION_TYPE",
-                                                                      "SOURCE_SHAPE", "SEVERITY", "MESSAGE"])
+                                                                      "SOURCE_SHAPE", "SEVERITY", "MESSAGE", *kinds])
     return violations.loc[~repeated].reset_index(drop=True)
 
 
