@@ -15,7 +15,7 @@ one warning for the relaxed constraints; the notes become the run's
 import logging
 
 from .._header import merge_sections, profile_identifiers
-from ..iri import _SCHEMA_METADATA, _sections, absolute_name, is_iri, load_rdf_map, local_value, namespaces
+from ..iri import _SCHEMA_METADATA, CLASS, _sections, absolute_name, is_iri, load_rdf_map, local_value, namespaces
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +88,7 @@ def class_ancestors(rdf_map, rdf_map_scope=None):
 
 def _class_ancestors(entries):
     """:func:`class_ancestors` over already-merged scope entries."""
-    direct = {name: {step for step in entry.get("inheritance", ()) if local_value(step, "class") != name}
+    direct = {name: {step for step in entry.get("inheritance", ()) if local_value(step, CLASS) != name}
               for name, entry in entries.items()
               if isinstance(entry, dict) and entry.get("type") == "Class"}
     closed = {}
@@ -97,7 +97,7 @@ def _class_ancestors(entries):
         if name not in closed:
             reached = set(direct[name])
             for step in direct[name]:
-                parent = local_value(step, "class")
+                parent = local_value(step, CLASS)
                 if parent in direct and parent not in seen:
                     reached |= walk(parent, seen | {name})
             closed[name] = frozenset(reached)
@@ -118,8 +118,8 @@ def require_entries(entries, rdf_map_scope, classes=False):
 
 def ancestor_pairs(ancestors):
     """``(Type, ancestor)`` local-name pairs — the vectorized engines' type widening."""
-    return sorted({(name, local_value(step, "class")) for name, steps in (ancestors or {}).items()
-                   for step in steps if local_value(step, "class") != name})
+    return sorted({(name, local_value(step, CLASS)) for name, steps in (ancestors or {}).items()
+                   for step in steps if local_value(step, CLASS) != name})
 
 
 def ancestor_triples(ancestors, rdf_map, undefined_namespace):
@@ -128,6 +128,6 @@ def ancestor_triples(ancestors, rdf_map, undefined_namespace):
     (schema namespace, else *undefined_namespace*); recorded parent IRIs pass through."""
     names = namespaces(rdf_map)
     return sorted({(absolute_name(name, names, undefined_namespace),
-                    step if is_iri(step) else absolute_name(local_value(step, "class"), names, undefined_namespace))
+                    step if is_iri(step) else absolute_name(local_value(step, CLASS), names, undefined_namespace))
                    for name, steps in (ancestors or {}).items()
-                   for step in steps if local_value(step, "class") != name})
+                   for step in steps if local_value(step, CLASS) != name})

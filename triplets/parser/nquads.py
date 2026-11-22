@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas
 
 from .._engine_detect import to_return_type
-from ..iri import TYPE_KEY, iri_pandas, load_rdf_map, value_types
+from ..iri import CLASS, TYPE_KEY, iri_pandas, load_rdf_map, value_types
 
 
 # N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)
@@ -136,7 +136,7 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     unquoted = _unescape(value.str.replace(r'"(\^\^<[^>]*>|@[\w-]+)?$', '"', regex=True).str.slice(1, -1))
     objects = iri_pandas.decode_iri(_term(value).where(~quoted))
     kind = frame["KEY"].map({key: kind for key, kind in (kinds or {}).items() if kind != "literal"})
-    kind = kind.astype(object).where(frame["KEY"] != type_key, "class")
+    kind = kind.astype(object).where(frame["KEY"] != type_key, CLASS)
     local = iri_pandas.local_value(objects, kind)
     # the guess cannot tell an enum from a reference to an http#… object
     local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))

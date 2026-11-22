@@ -33,7 +33,7 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import (CLASS, LITERAL, REFERENCE, SH_NS, TYPE_KEY, XSD_NS, absolute_value, is_iri, local_id, local_key,
+from ..iri import (CLASS, ENUM, LITERAL, REFERENCE, SH_NS, TYPE_KEY, XSD_NS, absolute_value, is_iri, local_id, local_key,
                    local_value, split_iri)
 from .value_space import bound_space, pair_params
 
@@ -185,7 +185,7 @@ def holds_names(key, value_types):
     ``sh:targetNode`` class, the focus of an inverse path — such a VALUE is its IRI
     (``iri.absolute_name``: the name's schema namespace, else the undefined
     namespace); a reference VALUE is a node id as it is."""
-    return key == TYPE_KEY or value_types.get(key) == "enum"
+    return key == TYPE_KEY or value_types.get(key) == ENUM
 
 
 def _mark_switched_off(graph, compiled):
@@ -379,7 +379,7 @@ def parse_ir(graph, skipped=None) -> pandas.DataFrame:
 
     SH = rdflib.Namespace(SH_NS)
     skipped = set() if skipped is None else skipped
-    targets = ((SH.targetClass, "Type", lambda node: local_value(node, "class")),
+    targets = ((SH.targetClass, "Type", lambda node: local_value(node, CLASS)),
                (SH.targetSubjectsOf, "KEY", local_key),
                (SH.targetObjectsOf, "VALUE", local_key),
                # the ID as the data spells it (urn:uuid: stripped); any other IRI
@@ -738,7 +738,7 @@ def _components(SH, shape):
         (SH.minCount, "sh:minCount", lambda g, v: int(v)),
         (SH.maxCount, "sh:maxCount", lambda g, v: int(v)),
         (SH.datatype, "sh:datatype", lambda g, v: f"xsd:{split_iri(v)[1]}"),
-        (SH["class"], "sh:class", lambda g, v: local_value(v, "class")),
+        (SH["class"], "sh:class", lambda g, v: local_value(v, CLASS)),
         (SH.minInclusive, "sh:minInclusive", lambda g, v: _bound(v)),
         (SH.maxInclusive, "sh:maxInclusive", lambda g, v: _bound(v)),
         (SH.minExclusive, "sh:minExclusive", lambda g, v: _bound(v)),

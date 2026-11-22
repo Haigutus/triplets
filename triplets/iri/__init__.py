@@ -169,7 +169,7 @@ def local_value(iri, kind=None):
     """
     if iri is None:
         return None
-    if kind in ("class", "enum"):
+    if kind in (CLASS, ENUM):
         return split_iri(iri)[1]
     iri = local_id(iri)
     if kind is None and iri.startswith("http") and "#" in iri:
@@ -398,7 +398,7 @@ def defined(key, value, namespaces=None, value_types=None):
     namespaces, value_types = namespaces or {}, value_types or {}
     if key == TYPE_KEY:
         return value in namespaces
-    return key in value_types and (value_types[key] != "enum" or is_iri(value) or value in namespaces)
+    return key in value_types and (value_types[key] != ENUM or is_iri(value) or value in namespaces)
 
 
 def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS,
@@ -432,4 +432,4 @@ def node_kind(key, value_types):
     """``sh:nodeKind`` by schema entry type, the same rule the exporters apply: Association /
     Enumeration → ``"iri"``, Attribute → ``"literal"``; ``None`` (undefined KEY) → check the
     value form."""
-    return {"reference": "iri", "enum": "iri", "literal": "literal"}.get(value_types.get(key))
+    return {REFERENCE: "iri", ENUM: "iri", LITERAL: LITERAL}.get(value_types.get(key))

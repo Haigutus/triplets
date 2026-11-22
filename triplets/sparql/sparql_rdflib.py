@@ -23,7 +23,7 @@ import pandas
 
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
-from ..iri import CIM_NS, RDF_TYPE, decode_iri, local_id, local_key, local_value
+from ..iri import CIM_NS, CLASS, RDF_TYPE, decode_iri, local_id, local_key, local_value
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
@@ -77,7 +77,7 @@ def _graph_to_triplets(graph):
         if type(obj).__name__ == "Literal":
             value = str(obj)
         elif str(predicate) == RDF_TYPE:
-            value = local_value(decode_iri(str(obj)), "class")
+            value = local_value(decode_iri(str(obj)), CLASS)
         else:
             value = (local_id if str(obj) in subjects else local_value)(decode_iri(str(obj)))
         # Tuples are faster than dicts to convert to dataframe

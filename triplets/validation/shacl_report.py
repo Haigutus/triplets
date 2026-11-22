@@ -17,7 +17,7 @@ import pandas
 
 from .locations import check_source_root, locate_missing, relative_sources
 from ..iri import (DCTERMS_NS, PROV_NS, RDFS_NS, RDF_TYPE, SCHEMA_ORG_NS, SH_NS, TRIPLETS_NS, TYPE_KEY,
-                   XSD_NS, CIM_NS, CLASS, LITERAL, REFERENCE, absolute_key, absolute_name, absolute_value, decode_iri,
+                   XSD_NS, CIM_NS, CLASS, ENUM, LITERAL, REFERENCE, absolute_key, absolute_name, absolute_value, decode_iri,
                    is_iri, load_rdf_map, local_id, local_key, local_value, name_kind, namespaces, split_iri, value_types)
 
 logger = logging.getLogger(__name__)
@@ -216,10 +216,10 @@ def _term_value(term, key=None, names=None):
         return str(term)
     iri = decode_iri(term)
     if names is None:
-        return local_value(iri, "class" if key == TYPE_KEY else None)
+        return local_value(iri, CLASS if key == TYPE_KEY else None)
     schema_namespaces, schema_value_types, undefined_namespace = names
     name = split_iri(iri)[1]
-    named = key == TYPE_KEY or schema_value_types.get(key) == "enum" or name in schema_namespaces
+    named = key == TYPE_KEY or schema_value_types.get(key) == ENUM or name in schema_namespaces
     return name if named and absolute_name(name, schema_namespaces, undefined_namespace) == str(term) else local_id(iri)
 
 

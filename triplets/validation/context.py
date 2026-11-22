@@ -15,7 +15,7 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from ..iri import TYPE_KEY, load_rdf_map, value_types
+from ..iri import REFERENCE, TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
 from .locations import member_name
@@ -211,7 +211,7 @@ def _add_target(violations, data, ir, value_kinds, table_name="triplets"):
     described = violations["VALUE"].notna()
     via = described & keys.isin(via_rules)
     presented_range = violations["VIOLATION_TYPE"].eq("rdfs:range") & (
-        keys.isin(range_rules) | violations["KEY"].map(value_kinds).eq("reference"))
+        keys.isin(range_rules) | violations["KEY"].map(value_kinds).eq(REFERENCE))
     of_class = described & ~via & (violations["VIOLATION_TYPE"].isin(("sh:class", "triplets:range",
                                                                         "triplets:missing")) | presented_range)
     over_count = violations["VIOLATION_TYPE"].isin(("sh:maxCount", "xsd:maxOccurs")) & violations["KEY"].notna()

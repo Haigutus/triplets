@@ -5,7 +5,7 @@ Categorical first, as the N-Quads exporter does).
 """
 import polars
 
-from . import (GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPES, RDF_TYPE, SPLIT_RE, TRIPLETS_NS, TYPE_KEY,
+from . import (CLASS, ENUM, LITERAL, REFERENCE, GUESS_NAME_RE, ID_PREFIX_RE, IRI_ESCAPES, RDF_TYPE, SPLIT_RE, TRIPLETS_NS, TYPE_KEY,
                URI_PREFIX_RE, UUID_PREFIX, UUID_RE)
 
 
@@ -37,14 +37,14 @@ def local_value(column, kind=None):
     """*kind*: None (guess), one of ``VALUE_KINDS`` for every row, or an Expr of them per row."""
     expr = _col(column)
     if isinstance(kind, str):
-        return _local(expr) if kind in ("class", "enum") else local_id(expr)
+        return _local(expr) if kind in (CLASS, ENUM) else local_id(expr)
     node = local_id(expr)
     name = node.str.replace(GUESS_NAME_RE.pattern, "")
     guessed = polars.when(name == "").then(node).otherwise(name)   # a namespace IRI ("...#") has no name
     if kind is None:
         return guessed
-    return (polars.when(kind.is_in(["class", "enum"])).then(_local(expr))
-            .when(kind == "reference").then(local_id(expr))
+    return (polars.when(kind.is_in([CLASS, ENUM])).then(_local(expr))
+            .when(kind == REFERENCE).then(local_id(expr))
             .otherwise(guessed))
 
 
@@ -88,7 +88,7 @@ def defined(key, value, namespaces=None, value_types=None):
     """Boolean Expr of rows the schema accounts for — see the scalar rule."""
     key, value = _col(key), _col(value)
     schema, known = _lookup(key, value_types), value.is_in(list(namespaces or ()))
-    return ((key == TYPE_KEY) & known) | (schema.is_not_null() & ((schema != "enum") | is_iri(value) | known))
+    return ((key == TYPE_KEY) & known) | (schema.is_not_null() & ((schema != ENUM) | is_iri(value) | known))
 
 
 def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
@@ -97,7 +97,7 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     schema = _lookup(key, value_types)
     present = value.is_not_null()                        # a null VALUE is no term: ("literal", null)
     is_type = (key == TYPE_KEY) & present
-    enum, reference, typed = (schema == "enum") & present, (schema == "reference") & present, (schema == "literal") & present
+    enum, reference, typed = (schema == ENUM) & present, (schema == REFERENCE) & present, (schema == LITERAL) & present
     undefined_ref = schema.is_null() & (is_iri(value) | value.str.contains(UUID_RE.pattern))
     datatype = _lookup(key, {name: datatype for name, datatype in (datatypes or {}).items() if datatype})
 
