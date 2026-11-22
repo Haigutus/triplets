@@ -31,7 +31,8 @@ from _parity import build_engine, to_pandas
 HEADER = "6b3e2c8a-51f0-4c1d-9d2e-7a40c3e1d00b"
 # the CGMES 3.0 schema cut to the EQ and SSH entries the twins use: a small compile
 KEPT = {"ProfileMetadata", "ProfileNamespaceMap", "FullModel", "Model.scenarioTime", "Model.description",
-        "Model.version", "Model.profile", "Substation", "IdentifiedObject.mRID", "IdentifiedObject.name"}
+        "Model.version", "Model.profile", "Model.DependentOn", "Substation", "IdentifiedObject.mRID",
+        "IdentifiedObject.name"}
 SCHEMA = {section: {name: entry for name, entry in entries.items() if name in KEPT}
           for section, entries in load_rdf_map(schemas.ENTSOE_CGMES_3_0_0_552_ED1).items() if section in ("EQ", "SSH")}
 TWINS = {
@@ -266,14 +267,18 @@ BAD_HEADER = [("Model.scenarioTime", "not-a-time", "xsd:type")]
 
 def test_validate_schema_per_instance(path_pair, engine):
     """The header property invalid in beta only is found in beta's run only, and once
-    over both: each instance counts its own header rows (no maxOccurs from the twin)."""
+    over both, on beta's INSTANCE_ID: each instance counts its own header rows (no
+    maxOccurs from the twin)."""
     data, instances = flavored(path_pair, engine)
+
     def run(scope=None):
-        return header_findings(validation.validate_schema(data, SCHEMA, data_scope=scope, rdf_map_scope="EQ",
-                                                          engine=engine))
-    assert run([instances["alpha"]]) == []
-    assert run([instances["beta"]]) == BAD_HEADER
-    assert run() == BAD_HEADER
+        return validation.validate_schema(data, SCHEMA, data_scope=scope, rdf_map_scope="EQ", engine=engine)
+
+    assert header_findings(run([instances["alpha"]])) == []
+    assert header_findings(run([instances["beta"]])) == BAD_HEADER
+    both = run()
+    assert header_findings(both) == BAD_HEADER
+    assert list(both.loc[both["ID"] == HEADER, "INSTANCE_ID"]) == [instances["beta"]]
 
 
 def test_validate_by_header_per_instance(path_pair, engine):
@@ -282,8 +287,32 @@ def test_validate_by_header_per_instance(path_pair, engine):
     violations = cgmes_tools.validate_by_header(data, SCHEMA, engine=engine)
     rows = violations[violations["ID"] == HEADER]
     assert header_findings(violations) == BAD_HEADER and list(rows["PROFILE"].iloc[0]) == ["SSH"]
+    assert list(rows["INSTANCE_ID"]) == [instances["beta"]]
     scoped = cgmes_tools.validate_by_header(data, SCHEMA, data_scope=[instances["alpha"]], engine=engine)
     assert header_findings(scoped) == []
+
+
+DANGLING = "deadbeef-0000-4000-8000-000000000000"
+
+
+def test_schema_references_per_instance(path_pair, engine):
+    """beta's header depends on a part nobody loaded: validate_schema_references and
+    validate_by_header(references=True) report it once, on beta's INSTANCE_ID and file —
+    alpha's run does not see beta's association on the shared ID."""
+    beta = cimxml("beta").replace(b"<md:Model.version>",
+                                  f'<md:Model.DependentOn rdf:resource="urn:uuid:{DANGLING}"/>\n    '
+                                  "<md:Model.version>".encode())
+    inputs = [named(path_pair.label[twin], beta if twin == "beta" else cimxml(twin)) for twin in path_pair.order]
+    data = triplets.parse(inputs, engine="python_lxml_pandas")
+    instances = path_pair.instances(data)
+    data = build_engine(engine, data)
+    expected = [(HEADER, "Model.DependentOn", DANGLING, "triplets:missing", instances["beta"])]
+    for violations in (validation.validate_schema_references(data, SCHEMA, rdf_map_scope="SSH", engine=engine),
+                       cgmes_tools.validate_by_header(data, SCHEMA, references=True, engine=engine)):
+        missing = violations[violations["VIOLATION_TYPE"] == "triplets:missing"]
+        assert list(zip(missing["ID"], missing["KEY"], missing["VALUE"], missing["VIOLATION_TYPE"],
+                        missing["INSTANCE_ID"])) == expected
+        assert list(validation.enrich(missing, data=data)["INSTANCE_LABEL"]) == [path_pair.label["beta"]]
 
 
 def test_scoped_finding_enriches_and_locates_in_its_file(path_pair, engine):
@@ -305,10 +334,7 @@ def test_scoped_finding_enriches_and_locates_in_its_file(path_pair, engine):
     assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == path_pair.uri["beta"]
 
 
-# Unscoped, a header finding carries only the ID the twins share.
-FIRST_OCCURRENCE = ("validate_schema runs per instance but its frame has no INSTANCE_ID, and enrich "
-                    "attributes an ID to its first occurrence (triplets/validation/context.py:339): the "
-                    "header finding of the second-loaded twin names the first twin's instance and file")
+# Over both twins, a header finding's ID names both files; its INSTANCE_ID names one.
 FIRST_DEFINITION = ("locate keys objects by ID only, the first definition in read order wins "
                     "(triplets/validation/locations.py:105-117): the header finding of the second-loaded "
                     "twin is located at the first twin's header line")
@@ -320,26 +346,23 @@ def bad_first_only(reason):
             "beta-first"]
 
 
-def unscoped_header_finding(pair_, engine):
+def enriched_header_finding(pair_, engine):
+    """(data, {twin: INSTANCE_ID}, the header finding of validate_schema over both twins, enriched)."""
     data, instances = flavored(pair_, engine)
     violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ", engine=engine)
-    return data, instances, violations[violations["ID"] == HEADER]
+    return data, instances, validation.enrich(violations[violations["ID"] == HEADER], data=data)
 
 
 @pytest.mark.parametrize("kind", KINDS)
-@pytest.mark.parametrize("order", bad_first_only(FIRST_OCCURRENCE))
+@pytest.mark.parametrize("order", ORDERS)
 def test_enrich_names_the_instance_of_the_finding(kind, order, tmp_path, engine):
     """Over both twins, the header finding is enriched with beta's INSTANCE_ID and file."""
     pair_ = Pair(kind, order, tmp_path)
-    data, instances, violations = unscoped_header_finding(pair_, engine)
-    enriched = validation.enrich(violations, data=data)
+    _, instances, enriched = enriched_header_finding(pair_, engine)
     assert list(enriched["INSTANCE_ID"].astype(str)) == [instances["beta"]]
     assert list(enriched["INSTANCE_LABEL"]) == [pair_.uri["beta"]]
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="enrich's found values group the rows by (ID, KEY) over every instance "
-                          "(triplets/validation/context.py:303): the twin's value is counted too")
 def test_enrich_found_values_are_the_instance_values(path_pair):
     """beta writes Model.description twice: the maxOccurs finding lists beta's two values."""
     twice = cimxml("beta").replace(b"<md:Model.version>",
@@ -355,24 +378,40 @@ def test_enrich_found_values_are_the_instance_values(path_pair):
 @pytest.mark.parametrize("kind", KINDS)
 @pytest.mark.parametrize("order", bad_first_only(FIRST_DEFINITION))
 def test_locate_violations_finds_the_file_of_the_finding(kind, order, tmp_path):
-    """Over both twins, the header finding is located at beta's scenarioTime line."""
+    """Over both twins, the enriched header finding is located at beta's scenarioTime line."""
     pair_ = Pair(kind, order, tmp_path)
-    _, _, violations = unscoped_header_finding(pair_, "pandas")
-    located = validation.locate_violations(violations, pair_.inputs())
+    _, _, enriched = enriched_header_finding(pair_, "pandas")
+    located = validation.locate_violations(enriched, pair_.inputs())
     assert list(located["SOURCE_URI"]) == [pair_.uri["beta"]]
     assert "not-a-time" in located["SOURCE_SNIPPET"].iloc[0]
 
 
-@pytest.mark.parametrize("mode", ["sources", "data"])
-@pytest.mark.parametrize("order", bad_first_only(f"{FIRST_DEFINITION} (sources=); {FIRST_OCCURRENCE} (data=)"))
-def test_sarif_puts_the_finding_in_its_file(mode, order, tmp_path):
-    """Over both twins, the SARIF result of the header finding points at beta's file."""
+@pytest.mark.parametrize("order", ORDERS)
+def test_sarif_names_the_file_of_the_finding(order, tmp_path):
+    """Over both twins, without sources the SARIF result of the header finding names
+    beta's file (the instance file of the enrichment)."""
     pair_ = Pair("paths", order, tmp_path)
-    data, _, violations = unscoped_header_finding(pair_, "pandas")
-    where = {"sources": pair_.inputs()} if mode == "sources" else {"data": data}
-    log = json.loads(validation.export_to_sarif(violations, group=False, export_to_memory=True, **where).getvalue())
+    data, _ = flavored(pair_, "pandas")
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    log = json.loads(validation.export_to_sarif(violations[violations["ID"] == HEADER], data=data,
+                                                group=False, export_to_memory=True).getvalue())
     [result] = log["runs"][0]["results"]
     assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == pair_.uri["beta"]
+
+
+@pytest.mark.parametrize("order", bad_first_only(FIRST_DEFINITION))
+def test_sarif_puts_the_finding_in_its_file(order, tmp_path):
+    """Over both twins, with data and sources the SARIF result of the header finding
+    points at beta's scenarioTime line."""
+    pair_ = Pair("paths", order, tmp_path)
+    data, _ = flavored(pair_, "pandas")
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    log = json.loads(validation.export_to_sarif(violations[violations["ID"] == HEADER], data=data,
+                                                sources=pair_.inputs(), group=False, export_to_memory=True).getvalue())
+    [result] = log["runs"][0]["results"]
+    location = result["locations"][0]["physicalLocation"]
+    assert location["artifactLocation"]["uri"] == pair_.uri["beta"]
+    assert "not-a-time" in location["region"]["snippet"]["text"]
 
 
 SHAPES = """

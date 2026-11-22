@@ -796,6 +796,10 @@ finding: `"Violation"` (default), `"Warning"` or `"Info"` — SARIF
 raises `ValueError`. `triplets:lexicalForm` findings are always `Warning`.
 `validate_by_header` forwards it to both runs.
 
+Every schema finding carries the `INSTANCE_ID` it was found in (both schema
+validations and `validate_by_header` run per instance), so two files sharing an
+object ID — a header ID reused across files — report on their own instance.
+
 The applied profiles land in `attrs["validation"]["profiles"]`, each
 violation carries them as a list in the `PROFILE` column, reports carry
 `[rdfs_profile] EQ, OP, SC` entries, and SARIF alert titles read
@@ -1002,10 +1006,10 @@ saw:
 
 | Columns | Source | Content |
 |---------|--------|---------|
-| `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding. A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
+| `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding (of the row's own `INSTANCE_ID` when it has one, else of every instance). A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
 | `TARGET_ID` | data (+ shapes, rdf_map) | the id (the `VALUE`) of a reference finding's referenced object when it is in the data; null for a dangling reference and every other row |
 | `TARGET_TYPE` | data (+ shapes, rdf_map) | the Type of that referenced object; null where `TARGET_ID` is |
-| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
+| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance — the row's own (schema findings), else the first instance holding the `ID` (SHACL findings: the merged graph names no instance) — and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
 | `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
 | `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the profiles the violation was checked against — the `PROFILE` column, else `rdf_map_scope` (one scope, or `{INSTANCE_ID: scope}`), else the run's `attrs["validation"]["profiles"]` — merged like the run (the multiplicity that was checked). Rows without profiles read the root entries; a name the profiles lack stays empty |
@@ -1013,8 +1017,7 @@ saw:
 
 `enrich` reads no instance headers. Pass the *same* shapes object the
 validation ran with — anonymous property shapes get fresh blank-node ids per
-parse, so a re-parsed graph cannot be matched. An object present in several
-instances is attributed to its first occurrence.
+parse, so a re-parsed graph cannot be matched.
 
 ## SARIF 2.1.0 export (`validation/sarif.py`)
 

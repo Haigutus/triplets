@@ -148,7 +148,8 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
     own, its declared profiles merged). With *references*,
     ``validate_schema_references`` checks each instance's references against
     every loaded instance and its declared profiles. An instance whose header
-    matches no profile is skipped and named in ``skipped_shapes``.
+    matches no profile is skipped and named in ``skipped_shapes``. Every finding
+    carries the INSTANCE_ID it was found in.
 
     data_scope : iterable of INSTANCE_ID, optional
         The instances to validate; None = every instance. References are still
@@ -186,8 +187,9 @@ def validate_by_header(data, rdf_map, data_scope=None, rdf_map_scope=None, repor
                 data, rdf_map, instances, list(sections), list(loaded), target_profiles,
                 report_missing_targets=report_missing_targets, engine=engine, severity=severity, **kwargs))
     violations = validation.concat_violations(frames)
-    if "PROFILE" not in violations.columns:            # no instance resolved: no run stamped it
-        violations["PROFILE"] = pandas.Series(dtype=object)
+    for column in ("PROFILE", "INSTANCE_ID"):           # no instance resolved: no run stamped them
+        if column not in violations.columns:
+            violations[column] = pandas.Series(dtype=object)
     meta = violations.attrs.setdefault("validation", {"language": "rdfs", "skipped_shapes": []})
     meta["skipped_shapes"] = [*meta.get("skipped_shapes", []), *unresolved]
     meta["references"] = [schema_file]   # the runs were handed the loaded dict
