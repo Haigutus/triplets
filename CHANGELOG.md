@@ -596,7 +596,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`cgmes_tools.get_loaded_models` keys each model by its root's `INSTANCE_ID`**, was the
   root header ID. The dependency walk runs over instances: two files that share a header
   ID are two parts (two roots when nothing depends on them), and a part that depends on
-  that ID depends on both. They were merged into one model.
+  that ID depends on both. They were merged into one model. A twin that depends on the
+  shared ID (its own header's) is no dependency of itself: it stays a root.
 - **`cgmes_tools.get_metadata_from_FullModel` reads the first FullModel within its own
   instance.** On data with several instances, a second file sharing the header ID blended
   its values in (the last value of each KEY won).

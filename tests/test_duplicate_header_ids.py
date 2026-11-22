@@ -513,6 +513,20 @@ def test_get_loaded_models_one_model_per_twin(path_pair, engine):
         sorted([instance] for instance in instances.values())
 
 
+def test_twin_depending_on_the_shared_id_is_a_root(path_pair, engine):
+    """alpha's header depends on the shared ID — its own and beta's: the edge to itself
+    is no dependency, so alpha is the root of a model holding both twins."""
+    alpha = cimxml("alpha").replace(b"<md:Model.version>",
+                                    f'<md:Model.DependentOn rdf:resource="urn:uuid:{HEADER}"/>\n    '
+                                    "<md:Model.version>".encode())
+    inputs = [named(path_pair.label[twin], alpha if twin == "alpha" else cimxml(twin)) for twin in path_pair.order]
+    data = triplets.parse(inputs, engine="python_lxml_pandas")
+    instances = path_pair.instances(data)
+    models = cgmes_tools.get_loaded_models(build_engine(engine, data))
+    assert list(models) == [instances["alpha"]]
+    assert set(pandas_frame(models[instances["alpha"]])["INSTANCE_ID"].astype(str)) == set(instances.values())
+
+
 CGMES_NAMES = {"alpha": "20220615T2230Z_1D_ALPHA_EQ_001.xml", "beta": "20220616T0030Z_2D_BETA_SSH_002.xml"}
 
 

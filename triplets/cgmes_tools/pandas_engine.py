@@ -403,6 +403,8 @@ def _walk_models(relations, profiles, root):
     with a visited set — dependency cycles terminate.
     """
     resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
+    # an instance whose header names its own ID (a twin depending on the shared ID) is no edge
+    resolved = resolved[resolved["INSTANCE_ID_FROM"].astype(str) != resolved["INSTANCE_ID_TO"].astype(str)]
     roots = (set(profiles["INSTANCE_ID"]) | set(relations["INSTANCE_ID_FROM"])) - set(resolved["INSTANCE_ID_TO"])
     if root is not None:
         roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "INSTANCE_ID"])
