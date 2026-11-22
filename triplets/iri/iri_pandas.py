@@ -7,7 +7,7 @@ downcast is deprecated on object columns).
 import numpy
 import pandas
 
-from . import (CLASS, ENUM, REFERENCE, GUESS_NAME_RE, ID_PREFIX_RE, ID_REPLACEMENT, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
+from . import (CLASS, ENUM, LITERAL, REFERENCE, GUESS_NAME_RE, ID_PREFIX_RE, ID_REPLACEMENT, IRI_ESCAPE_RE, IRI_UNSAFE_RE, RDF_TYPE, SPLIT_RE, TRIPLETS_NS,
                TYPE_KEY, URI_PREFIXES, UUID_PREFIX, UUID_RE)
 from . import decode_iri as _decode_iri, encode_iri as _encode_iri
 
@@ -128,7 +128,7 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     present = value.notna().astype(bool)                 # a null VALUE is no term: ("literal", null)
     is_type = _eq(key, TYPE_KEY) & present
     enum, reference = _eq(schema, ENUM) & present, _eq(schema, REFERENCE) & present
-    typed = _eq(schema, "literal") & present
+    typed = _eq(schema, LITERAL) & present
     undefined_ref = schema.isna() & (is_iri(value) | value.str.match(UUID_RE.pattern, na=False).astype(bool))
 
     payload = (key.map(datatypes).astype(value.dtype) if datatypes
@@ -138,5 +138,5 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     payload = payload.mask(references, absolute_id(value.where(references)))
     payload = payload.mask(names, by_distinct(value.where(names), lambda distinct: absolute_name(
         distinct, namespaces, undefined_namespace)))
-    kind = numpy.where(references | names, "iri", "literal")
+    kind = numpy.where(references | names, "iri", LITERAL)
     return pandas.Series(kind, index=key.index, dtype=value.dtype), payload

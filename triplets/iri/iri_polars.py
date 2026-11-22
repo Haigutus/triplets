@@ -102,7 +102,7 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     datatype = _lookup(key, {name: datatype for name, datatype in (datatypes or {}).items() if datatype})
 
     kind = (polars.when(is_type | enum | reference | undefined_ref).then(polars.lit("iri"))
-            .otherwise(polars.lit("literal")))
+            .otherwise(polars.lit(LITERAL)))
     payload = (polars.when(is_type | enum).then(absolute_name(value, namespaces, undefined_namespace))
                .when(reference | undefined_ref).then(absolute_id(value))
                .when(typed).then(datatype)
