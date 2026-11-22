@@ -191,7 +191,7 @@ def load(loader, inputs):
     return triplets.parse(inputs, engine=engine, return_type=return_type)
 
 
-LOADERS = ([f"{engine}-{return_type}" for engine in PARSERS for return_type in ("pandas", "polars")]
+LOADERS = ([f"{engine}-{return_type}" for engine in PARSERS for return_type in ("pandas", "arrow", "polars")]
            + ["load_RDF_to_dataframe"] + [f"duckdb-{engine}" for engine in PARSERS if engine.endswith("_arrow")])
 
 
@@ -337,6 +337,21 @@ def test_enrich_names_the_instance_of_the_finding(kind, order, tmp_path, engine)
     assert list(enriched["INSTANCE_LABEL"]) == [pair_.uri["beta"]]
 
 
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="enrich's found values group the rows by (ID, KEY) over every instance "
+                          "(triplets/validation/context.py:303): the twin's value is counted too")
+def test_enrich_found_values_are_the_instance_values(path_pair):
+    """beta writes Model.description twice: the maxOccurs finding lists beta's two values."""
+    twice = cimxml("beta").replace(b"<md:Model.version>",
+                                   b"<md:Model.description>beta again</md:Model.description>\n    <md:Model.version>")
+    inputs = [named(TWINS[twin]["path"], twice if twin == "beta" else cimxml(twin)) for twin in path_pair.order]
+    data = triplets.parse(inputs, engine="python_lxml_pandas")
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    enriched = validation.enrich(violations[violations["ID"] == HEADER], data=data)
+    found = enriched.loc[enriched["VIOLATION_TYPE"] == "xsd:maxOccurs", "TARGET"]
+    assert list(found) == ["found 2 values: 'beta header', 'beta again'"]
+
+
 @pytest.mark.parametrize("kind", KINDS)
 @pytest.mark.parametrize("order", bad_first_only(FIRST_DEFINITION))
 def test_locate_violations_finds_the_file_of_the_finding(kind, order, tmp_path):
@@ -415,7 +430,7 @@ def test_dependency_on_a_shared_header_id_resolves_to_both_twins(path_pair, engi
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,
                    reason="get_loaded_model_parts is a type_tableview pivoted on ID "
-                          "(triplets/cgmes_tools/pandas_engine.py:535): the twins become one row with "
+                          "(triplets/tools/pandas_engine.py:110): the twins become one row with "
                           "the first twin's values")
 def test_get_loaded_model_parts_lists_both_twins(path_pair, engine):
     data, _ = flavored(path_pair, engine)
@@ -453,6 +468,19 @@ def test_filename_metadata_round_trip_per_instance(flavor):
          (CGMES_NAMES["beta"], "Model.messageType", "SSH"), (CGMES_NAMES["beta"], "Model.modelingEntity", "BETA")])
     renamed = distribution_labels(pandas_frame(cgmes_tools.update_filename_from_FullModel(updated)))
     assert dict(zip(renamed["INSTANCE_ID"].astype(str), renamed["VALUE"])) == label
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+@pytest.mark.xfail(strict=True, raises=AssertionError,
+                   reason="get_metadata_from_FullModel takes the first header's ID, then reads that object by "
+                          "ID over every instance (triplets/cgmes_tools/pandas_engine.py:266-267, "
+                          "polars_engine.py:60-62): the twins' rows blend, the last value of each KEY wins")
+def test_get_metadata_from_FullModel_reads_the_first_header(path_pair, flavor):
+    """Over several instances the metadata is the first-loaded header's, as it is for
+    files with distinct header IDs."""
+    data = build_engine(flavor, parsed(path_pair))
+    metadata = cgmes_tools.get_metadata_from_FullModel(data)
+    assert set(metadata.items()) == header_rows(path_pair.order[0]) - {("Type", "FullModel")}
 
 
 @pytest.mark.parametrize("flavor", ["pandas", "polars"])
