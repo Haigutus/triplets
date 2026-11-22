@@ -15,6 +15,7 @@ import io
 import json
 import zipfile
 
+import pandas
 import pytest
 
 import triplets
@@ -353,6 +354,27 @@ def test_enrich_without_data_keeps_the_instance(path_pair):
     enriched = validation.enrich(violations, rdf_map=SCHEMA)
     assert list(enriched["INSTANCE_ID"]) == list(violations["INSTANCE_ID"])
     assert list(enriched.loc[enriched["ID"] == HEADER, "INSTANCE_ID"]) == [instances["beta"]]
+
+
+MAX_DESCRIPTION = """
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix md: <http://iec.ch/TC57/61970-552/ModelDescription/1#> .
+md:FullModelShape a sh:NodeShape ; sh:targetClass md:FullModel ;
+    sh:property [ sh:path md:Model.description ; sh:maxCount 1 ] .
+"""
+
+
+def test_enrich_twice_equals_enrich_once(path_pair, engine):
+    """SHACL over both twins merges the two headers: two descriptions break maxCount 1
+    on the shared ID, and enrich lists both values. Enriching the result again keeps
+    every filled cell."""
+    rdflib = pytest.importorskip("rdflib")
+    data, _ = flavored(path_pair, engine)
+    shapes = rdflib.Graph().parse(data=MAX_DESCRIPTION, format="turtle")
+    once = validation.enrich(validation.validate_shacl(data, shapes, engine=engine), data=data)
+    values = ", ".join(repr(TWINS[twin]["description"]) for twin in path_pair.order)
+    assert list(once["TARGET"]) == [f"found 2 values: {values}"]
+    pandas.testing.assert_frame_equal(validation.enrich(once, data=data), once, check_dtype=False)
 
 
 def test_enrich_found_values_are_the_instance_values(path_pair):

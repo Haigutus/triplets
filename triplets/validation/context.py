@@ -39,6 +39,10 @@ ENRICHMENT_COLUMNS = [
 def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None, data_scope=None, **kwargs):
     """Return a copy of the violations frame with ENRICHMENT_COLUMNS added.
 
+    A cell the frame already fills is kept, only empty ones are filled: enriching
+    an enriched frame again changes nothing, and a second call with other
+    sources adds what the first could not.
+
     Parameters
     ----------
     violations : DataFrame from validate_shacl / validate_schema / validate_schema_references.
@@ -76,10 +80,11 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
         so TARGET finds exactly what the run saw (data outside is not loaded).
     """
     enriched = violations.copy()
-    own = violations.get("INSTANCE_ID", pandas.Series(None, index=violations.index, dtype=object)).astype(object)
+    filled = {column: violations[column].astype(object) for column in ENRICHMENT_COLUMNS if column in violations}
+    own = filled.get("INSTANCE_ID", pandas.Series(None, index=violations.index, dtype=object))
     for column in ENRICHMENT_COLUMNS:
         enriched[column] = pandas.NA
-    enriched["INSTANCE_ID"] = own
+    enriched["INSTANCE_ID"] = own                # the schema context below reads it
     rdf_map = load_rdf_map(rdf_map) if rdf_map is not None else None
     compiled = None if shapes is None else shapes if isinstance(shapes, CompiledShapes) else compile_shapes(shapes)
 
@@ -95,6 +100,8 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
         _add_shape_context(enriched, compiled.ir)
     if rdf_map is not None:
         _add_schema_context(enriched, rdf_map, _row_scopes(enriched, rdf_map_scope))
+    for column, values in filled.items():      # a filled cell is kept: enriching again changes nothing
+        enriched[column] = values.where(values.notna(), enriched[column])
     return enriched
 
 

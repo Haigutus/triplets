@@ -1006,7 +1006,8 @@ exports with source locations — `uv run examples/shacl_reports.py`).
 `enrich(violations, data=, shapes=, rdf_map=, rdf_map_scope=, data_scope=)` —
 a separate call after any validation — appends `ENRICHMENT_COLUMNS` to the
 report. Every source is optional; absent sources leave their columns null, so
-the output schema is stable. `data_scope` reads only those instances of
+the output schema is stable. A cell the frame already fills is kept and only
+empty ones are filled: enriching twice equals enriching once. `data_scope` reads only those instances of
 `data` — pass the validation's own scope so TARGET finds exactly what the run
 saw:
 
