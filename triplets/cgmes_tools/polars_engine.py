@@ -57,10 +57,10 @@ def _pd_merge(left, right, left_on, right_on, suffixes=("_x", "_y"), how="inner"
 # ── metadata ──────────────────────────────────────────────────────────────────
 
 def get_metadata_from_FullModel(data):
-    """Metadata dict for the FullModel instance (KEY→VALUE, 'Type' dropped)."""
-    fm = data.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == "FullModel"))
-    uuid = fm["ID"][0]
-    obj = data.filter(pl.col("ID") == uuid).select(["KEY", "VALUE"])
+    """Metadata dict of the first FullModel, read within its own instance (KEY→VALUE, 'Type' dropped)."""
+    header = data.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == "FullModel")).row(0, named=True)
+    own = (pl.col("ID") == header["ID"]) & (pl.col("INSTANCE_ID") == header["INSTANCE_ID"])
+    obj = data.filter(own).select(["KEY", "VALUE"])
     metadata = dict(zip(obj["KEY"].cast(pl.Utf8).to_list(), obj["VALUE"].cast(pl.Utf8).to_list()))
     metadata.pop("Type", None)
     return metadata

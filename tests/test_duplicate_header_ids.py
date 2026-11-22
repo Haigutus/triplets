@@ -10,8 +10,6 @@ read from memory, from paths and as two members of one zip, in both load orders.
 
 ``validate_shacl`` over both instances merges the two header nodes (one IRI is one RDF
 node); its findings on the content objects still locate in their own files.
-
-A helper that keys by header ID is ``xfail(strict=True)`` with the line that does it.
 """
 import io
 import json
@@ -497,10 +495,6 @@ def test_filename_metadata_round_trip_per_instance(flavor):
 
 
 @pytest.mark.parametrize("flavor", ["pandas", "polars"])
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="get_metadata_from_FullModel takes the first header's ID, then reads that object by "
-                          "ID over every instance (triplets/cgmes_tools/pandas_engine.py:266-267, "
-                          "polars_engine.py:60-62): the twins' rows blend, the last value of each KEY wins")
 def test_get_metadata_from_FullModel_reads_the_first_header(path_pair, flavor):
     """Over several instances the metadata is the first-loaded header's, as it is for
     files with distinct header IDs."""

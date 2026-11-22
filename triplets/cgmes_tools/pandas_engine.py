@@ -251,7 +251,9 @@ def get_metadata_from_FullModel(data):
     Returns
     -------
     dict
-        Dictionary of metadata key-value pairs for the FullModel instance.
+        Dictionary of metadata key-value pairs of the first FullModel, read
+        within its own instance (another file sharing its header ID is not
+        read).
 
     Notes
     -----
@@ -264,8 +266,9 @@ def get_metadata_from_FullModel(data):
     >>> print(meta)
     {'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}
     """
-    UUID = data.query("KEY == 'Type' and VALUE == 'FullModel'").ID.iloc[0]
-    metadata = data.get_object_data(UUID).to_dict()
+    header = data.loc[(data["KEY"] == "Type") & (data["VALUE"] == "FullModel")].iloc[0]
+    rows = data.loc[(data["ID"] == header["ID"]) & (data["INSTANCE_ID"] == header["INSTANCE_ID"])]
+    metadata = dict(zip(rows["KEY"], rows["VALUE"]))
     metadata.pop("Type", None)  # Remove Type form metadata
 
     return metadata
