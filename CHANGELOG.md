@@ -576,6 +576,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`engine="pyshacl"` reports a reference or class of another namespace whole**, as the
+  other engines do: VALUE `http://example.org/ns#vl1`, where the bridge read `vl1`. With
+  an `rdf_map` it reads `sh:value` back exactly (`report_to_violations(rdf_map=…)`);
+  without one the form is still guessed.
 - **`engine="pyshacl"` no longer crashes on a shape pyshacl gives up on.** pyshacl returns
   its `ValidationFailure` in place of the report (a `sh:sparql` query it does not accept),
   and the run ended in `AttributeError: 'ValidationFailure' object has no attribute

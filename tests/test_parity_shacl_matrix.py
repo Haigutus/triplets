@@ -220,6 +220,12 @@ CASES = {
                                           "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 2 ] .",
                                           TRIO + breaker("x1", instance="other") + obj("l1", "Line", instance="other"),
                                           {"data_scope": ["eq"]}),
+    # a reference and a class in another namespace stay whole in VALUE, on pyshacl too
+    "value_reference_other_namespace": (prop("sh:path cim:Equipment.EquipmentContainer ; sh:class cim:Bay"),
+                                        TRIO + breaker("b4", (CONT, "http://example.org/ns#vl1"))),
+    "value_type_other_namespace": ("cim:A a sh:NodeShape ; sh:targetSubjectsOf rdf:type ; "
+                                   "sh:property [ sh:path rdf:type ; sh:in ( cim:Breaker cim:Bay ) ] .",
+                                   TRIO + obj("t1", "http://other.example/ns#Thing")),
     "target_sparql": (sparql_target(HAS_CONTAINER, NAME_MIN), TRIO),
     "target_sparql_plus_class": (sparql_target(HAS_CONTAINER, f"sh:targetClass cim:Breaker ; {NAME_MIN}"), TRIO),
     "target_sparql_node": (sparql_target(HAS_CONTAINER, "sh:node cim:Named .") + NAMED, TRIO),

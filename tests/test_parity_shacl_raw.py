@@ -139,7 +139,9 @@ def pyshacl_rows(data, shapes, ontology):
 def engine_rows(data, compiled, **kwargs):
     violations = triplets.validation.validate_shacl(data, compiled, engine="polars", lexical=False, **kwargs)
     found = violations[violations["VIOLATION_TYPE"] != LEXICAL_ALLOWANCE].astype(object)
-    rows = {(local(row.ID), "type" if row.KEY == "Type" else row.KEY, row.VALUE, stem(row.VIOLATION_TYPE), row.SEVERITY,
+    # an IRI VALUE (a reference or class of another namespace) by its local name, as local() reads the reference leg
+    name = lambda value: value.rsplit("#", 1)[-1] if isinstance(value, str) and value.startswith("http") else value  # noqa: E731
+    rows = {(local(row.ID), "type" if row.KEY == "Type" else row.KEY, name(row.VALUE), stem(row.VIOLATION_TYPE), row.SEVERITY,
              row.SOURCE_SHAPE) for row in found.where(found.notna(), None).itertuples(index=False)}
     return rows, violations.attrs["validation"]
 

@@ -36,7 +36,9 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
         From ``triplets.validation.compile`` — this engine uses the shapes graph.
     rdf_map : dict, optional
         Scoped export schema (``schema_scope.scoped_rdf_map``) — xsd-typed
-        literals and class IRIs in the data graph.
+        literals and class IRIs in the data graph, and the exact reading of an
+        IRI ``sh:value`` back into VALUE (``report_to_violations``); without it
+        the form is guessed, and an ``http`` IRI with a ``#`` loses its namespace.
     ancestors : dict, optional
         ``schema_scope.class_ancestors`` map, given to pyshacl as ``rdfs:subClassOf``
         in ``ont_graph`` (already closed, so pyshacl's own closure adds nothing):
@@ -86,7 +88,10 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
     logger.debug("SHACL conforms=%s", conforms)
     if isinstance(report_graph, Exception):   # pyshacl returns its ValidationFailure in place of the report
         return _not_validated(report_graph)
-    return report_to_violations(report_graph, shapes_graph=shapes_graph)
+    # with the schema an IRI sh:value is read exactly (a reference or a class of another
+    # namespace stays whole, as the other engines report it); without one the form is guessed
+    return report_to_violations(report_graph, shapes_graph=shapes_graph, rdf_map=rdf_map,
+                                undefined_namespace=undefined_namespace)
 
 
 def _not_validated(failure):
