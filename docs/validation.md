@@ -255,7 +255,12 @@ Known engine gaps (those a run can detect land in its coverage metadata,
   in the exports and in the graph the `sh:sparql` constraints and pyshacl read. A
   class is its local name too: on polars / pandas / duckdb a class target in
   another namespace (`cim16:Switch`) matches every class of that local name, while
-  pyshacl sees the class in the namespace the schema gives the name.
+  pyshacl sees the class in the namespace the schema gives the name. The same holds
+  for a `sh:in` / `sh:hasValue` class member on `rdf:type` or
+  `( association rdf:type )` whose class the scoped schema lacks (every class without
+  an `rdf_map`): it matches by local name, so a member in another namespace than
+  `undefined_namespace` passes on the engines where pyshacl reports it. A class the
+  schema declares is compared as its full IRI on every engine.
 - The duckdb engine streams/spills by design, but a true larger-than-RAM
   validation has not been exercised yet.
 

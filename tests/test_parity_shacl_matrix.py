@@ -497,9 +497,6 @@ CASES = {
     "path_via_type_in_other_namespace": (
         prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; "
              "sh:in ( <http://iec.ch/TC57/2013/CIM-schema-cim16#Bay> cim:Substation )"), TRIO),
-    # without a schema a class member matches by its name, as sh:targetClass does (pyshacl finds no
-    # focus node of these cim16 shapes in the data, which it reads in the undefined namespace)
-    "in_class_no_schema_other_namespace": (CIM16_CLASS_MEMBERS, TRIO, NO_SCHEMA),
     # a string literal member is no IRI, also when its text reads as one: no class matches it
     "in_literal_reading_as_iri": (prop(f"sh:path rdf:type ; sh:in ( '{CIM}Breaker' )"), TRIO),
     "has_value_literal_reading_as_iri": (prop(f"sh:path rdf:type ; sh:hasValue '{CIM}Breaker'"), TRIO),
@@ -901,7 +898,9 @@ def test_parser_metadata_is_not_validated(engine, scope):
 def test_class_members_without_schema_match_by_name(engine):
     """No schema: the cim16 class members match the data's classes by name, as the
     cim16 sh:targetClass does — every breaker is a focus node (the sh:minCount finds
-    the two without a description), none breaks sh:in / sh:hasValue."""
+    the two without a description), none breaks sh:in / sh:hasValue. Engines only:
+    pyshacl reads the data in the undefined namespace and finds no focus node of these
+    shapes (docs/validation.md, known limitations)."""
     if engine != "pandas":
         pytest.importorskip(engine)
     import rdflib
