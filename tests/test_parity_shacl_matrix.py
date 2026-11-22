@@ -467,6 +467,10 @@ CASES = {
                                           "sh:maxCount 1 ] . " + prop("sh:path cim:Equipment.EquipmentContainer ; sh:maxCount 1"),
                                           TRIO + breaker("b4", (CONT, "bay1"), (CONT, "sub1"))),
     "path_via_type": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:Bay )"), TRIO),
+    # a referenced object with two Type rows (a stub typed by its parent class beside the concrete
+    # class) is two value nodes: each type not allowed is a finding of its own
+    "path_via_type_two_types": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:VoltageLevel )"),
+                                TRIO + [("bay1", "Type", "EquipmentContainer", "eq")]),
     # a referenced object without a Type row yields no value node
     "path_via_type_untyped_minCount": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 1"),
                                        TRIO + breaker("b4", (CONT, "ghost"))),
