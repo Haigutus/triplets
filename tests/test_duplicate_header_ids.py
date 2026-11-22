@@ -81,7 +81,7 @@ def named(name, content):
 class Pair:
     """The twins as one kind of source, in one load order: ``inputs()`` gives fresh
     parser inputs, ``label`` the Distribution label and ``uri`` the located file name
-    of each twin, ``sources(twin)`` the inputs that hold only that twin (None in a zip)."""
+    of each twin."""
 
     def __init__(self, kind, order, tmp_path):
         self.kind, self.order = kind, ORDERS[order]
@@ -110,9 +110,6 @@ class Pair:
         archive.name = "twins.zip"
         archive.seek(0)
         return [archive]
-
-    def sources(self, twin):
-        return None if self.kind == "zip" else [self._one(twin)]
 
     def instances(self, data):
         """{twin: INSTANCE_ID} by the Distribution label of each parsed file."""
@@ -323,11 +320,11 @@ def test_scoped_finding_enriches_and_locates_in_its_file(path_pair, engine):
     enriched = validation.enrich(violations, data=data, data_scope=scope)
     assert list(enriched["INSTANCE_ID"].astype(str)) == scope
     assert list(enriched["INSTANCE_LABEL"]) == [path_pair.uri["beta"]]
-    located = validation.locate_violations(violations, path_pair.sources("beta"))
+    located = validation.locate_violations(enriched, path_pair.inputs())
     assert list(located["SOURCE_URI"]) == [path_pair.uri["beta"]]
     assert "not-a-time" in located["SOURCE_SNIPPET"].iloc[0]
     log = json.loads(validation.export_to_sarif(violations, data=data, data_scope=scope, group=False,
-                                                sources=path_pair.sources("beta"), export_to_memory=True).getvalue())
+                                                sources=path_pair.inputs(), export_to_memory=True).getvalue())
     [result] = log["runs"][0]["results"]
     assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == path_pair.uri["beta"]
 
@@ -370,6 +367,18 @@ def test_locate_violations_finds_the_file_of_the_finding(kind, order, tmp_path):
     located = validation.locate_violations(enriched, pair_.inputs())
     assert list(located["SOURCE_URI"]) == [pair_.uri["beta"]]
     assert "not-a-time" in located["SOURCE_SNIPPET"].iloc[0]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("order", ORDERS)
+def test_locate_without_enrich_falls_back_to_the_first_definition(kind, order, tmp_path):
+    """A schema finding not enriched names no file (INSTANCE_ID only): it is located at
+    the first definition in read order, the first-loaded twin's header."""
+    pair_ = Pair(kind, order, tmp_path)
+    data, _ = flavored(pair_, "pandas")
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    located = validation.locate_violations(violations[violations["ID"] == HEADER], pair_.inputs())
+    assert list(located["SOURCE_URI"]) == [pair_.uri[pair_.order[0]]]
 
 
 @pytest.mark.parametrize("order", ORDERS)

@@ -601,9 +601,15 @@ pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS` onto t
 both exports run it automatically when given `sources=` and stamp only what the frame
 lacks: the three `SOURCE_*` columns, when all are on the frame, are kept as they are. The
 SARIF export also locates the `TARGET_*` columns whenever the frame has a `TARGET_ID` and
-no located referenced object, so with `sources=` on that export `locate` may run before or
-after `enrich`. The SHACL report writes no referenced-object location: it reads the
-sources only when the `SOURCE_*` columns are missing. The columns:
+no located referenced object. The SHACL report writes no referenced-object location: it
+reads the sources only when the `SOURCE_*` columns are missing.
+
+**Enrich before locate.** A schema finding names its instance (`INSTANCE_ID`); `enrich`
+turns it into the instance's file name (`INSTANCE_LABEL`), and `locate` puts the finding in
+that file. A frame located before `enrich` has no file to go by: each finding lands at the
+first definition of its `ID` in read order, which for an `ID` two files share (a reused
+header ID) is the first file's. An export given `data=` and `sources=` enriches first. The
+columns:
 
 | Columns | Content |
 |---------|---------|

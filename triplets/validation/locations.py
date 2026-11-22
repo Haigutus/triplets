@@ -151,6 +151,11 @@ ABSENT_KEY_TYPES = frozenset({"sh:minCount", "sh:qualifiedMinCount", "xsd:minOcc
 def locate_violations(violations, sources, targets=True):
     """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
 
+    Enrich before locate: the schema validations name a finding's instance
+    (INSTANCE_ID), ``enrich`` turns it into its file name (INSTANCE_LABEL) —
+    the name this pass matches; a frame without INSTANCE_LABEL is located by
+    the first definition in read order.
+
     Per row (ID, KEY): a row whose INSTANCE_LABEL names one of the sources
     (``enrich`` stamps the instance's file name, a zip member as
     ``<zip file name>/<member name>``) is located in that file first — at the
