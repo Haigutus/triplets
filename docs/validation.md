@@ -316,8 +316,8 @@ registries that consume it are internal.
 |------------|----------------|
 | `sh:minCount` `sh:maxCount` `sh:minLength` `sh:maxLength` | int |
 | `sh:minInclusive` `sh:maxInclusive` `sh:minExclusive` `sh:maxExclusive` | float (the value of a numeric literal); `(space, lexical form)` for a date or dateTime bound (`("date", "2020-01-01")`, `("dateTime", "2020-01-01T00:00:00+00:00")`); a bound in no value space compiles to no row and is named in `skipped_shapes` |
-| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:hasValue`, `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str; `(KEY, space)` for `sh:lessThan` / `sh:lessThanOrEquals` on a property shape with an XSD `sh:datatype` (`("Switch.retiredDate", "date")`, `""` for a type in no value space) |
-| `sh:in` | list[str] (IRIs shortened to local names) |
+| `sh:datatype` (`"xsd:float"`), `sh:class`, `sh:nodeKind`, `sh:pattern` (`sh:flags` folded in: `q` quotes the pattern, `i` `m` `s` an inline `(?ims)` prefix; any other flag skips the shape), `sh:equals` `sh:disjoint` `sh:lessThan` `sh:lessThanOrEquals` (the other path's KEY) | str; `(KEY, space)` for `sh:lessThan` / `sh:lessThanOrEquals` on a property shape with an XSD `sh:datatype` (`("Switch.retiredDate", "date")`, `""` for a type in no value space) |
+| `sh:in` (list), `sh:hasValue` (one) | the members' rdflib terms (`URIRef` / `Literal`: the text with its term kind); the engines read them as the VALUEs they stand for on the path (`shacl_ir.member_values`). A schema enumeration's `sh:in` lists its value names |
 | `sh:closed` | list[str] — the **fully resolved** allowed KEY list: every `sh:ignoredProperties` list + every direct non-inverse `sh:property` path of the shape, resolved at compile time (paths reached through `sh:node` are not included); the vectorized engines always allow `Type` (rdf:type) on top |
 | `sh:or` / `sh:and` / `sh:xone` | list[list[dict]] — one inner list of nested IR row dicts per alternative |
 | `sh:not` | list[dict] — nested IR row dicts |
@@ -602,7 +602,7 @@ sources only when the `SOURCE_*` columns are missing. The columns:
 
 | Columns | Content |
 |---------|---------|
-| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element inside the object's definition, else of the object definition (`ID`). The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element, in whichever file holds it for the object (an SSH property of an object an EQ file defines), else of the object definition (`ID`); a finding without a `VALUE` (`sh:minCount`, `sh:maxCount`) is located at the definition. The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
 
 The name of a file in a zip holds the zip's file name only: two zips with the same
@@ -612,7 +612,7 @@ zip gives the inner zip's name.
 An object's definition is the first `rdf:ID` or `rdf:about` element with its id, in the
 order the sources are read (the plain files as given, then the members of the zips): for
 an object written in several files (an `rdf:about` element in the SSH, the `rdf:ID`
-element in the EQ) the file read first gives the position.
+element in the EQ) the file read first gives the position. The pass stops once every object and every searched property element is found.
 
 The SHACL report serializes via rdflib: `format=None` (default) derives the format
 from the path suffix (`.ttl` → turtle, `.xml`/`.rdf` → RDF/XML, …); an explicit
