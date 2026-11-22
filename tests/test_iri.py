@@ -659,6 +659,27 @@ def test_scalar_absolute_value(key, value, with_maps, kind, payload):
     assert iri.absolute_value(key, value, **(MAPS if with_maps else {})) == (kind, payload)
 
 
+@pytest.mark.parametrize("kind, value, expected", [
+    ("class", "Breaker", ("iri", CIM_NS + "Breaker")),                # a name: its IRI
+    ("enum", "SwitchKind.open", ("iri", CIM_NS + "SwitchKind.open")),
+    ("reference", "b1", ("iri", "urn:uuid:b1")),                       # a node
+    ("reference", "http://example.org/x#y", ("iri", "http://example.org/x#y")),
+    ("literal", "urn:uuid:b1", ("literal", None)),                     # a literal whatever it reads as
+    (None, "urn:uuid:b1", ("iri", "urn:uuid:b1")),                     # no kind, no KEY: the text rule
+])
+def test_scalar_absolute_value_by_kind(kind, value, expected):
+    """kind= is the term kind in place of the KEY's schema entry (an Attribute KEY given here)."""
+    value_types, namespaces = {"IdentifiedObject.name": "literal"}, {"Breaker": CIM_NS, "SwitchKind.open": CIM_NS}
+    assert iri.absolute_value("IdentifiedObject.name" if kind else None, value, namespaces, value_types,
+                              kind=kind) == expected
+
+
+@pytest.mark.parametrize("name, kind", [("Breaker", "class"), ("SwitchKind.open", "enum"), ("ACLineSegment", "class")])
+def test_name_kind(name, kind):
+    """An IRI held as its local name: the CIM Enumeration.value form is an enum, any other name a class."""
+    assert iri.name_kind(name) == kind
+
+
 @pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
 @pytest.mark.parametrize("with_maps", [True, False], ids=["schema", "no-schema"])
 def test_flavor_absolute_value_matches_scalar(flavor, with_maps):
