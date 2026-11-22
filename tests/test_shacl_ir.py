@@ -95,7 +95,9 @@ def test_ir_columns_and_components(shape_file):
     assert set(by_component.loc["sh:closed", "params"]) == {
         "IdentifiedObject.mRID", "IdentifiedObject.name", "Switch.normalOpen",
         "Equipment.EquipmentContainer"}
-    assert by_component.loc["sh:in", "params"] == ["true", "false"]
+    # sh:in members keep their rdflib term: the text and the term kind
+    assert [(str(member), type(member).__name__) for member in by_component.loc["sh:in", "params"]] \
+        == [("true", "Literal"), ("false", "Literal")]
     assert by_component.loc["sh:class", "params"] == "VoltageLevel"
     assert sorted(by_component.loc["sh:datatype", "params"]) == ["xsd:boolean", "xsd:string"]
     sparql = by_component.loc["sh:sparql", "params"]

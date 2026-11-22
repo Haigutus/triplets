@@ -490,6 +490,9 @@ CASES = {
     # without a schema a class member matches by its name, as sh:targetClass does (pyshacl finds no
     # focus node of these cim16 shapes in the data, which it reads in the undefined namespace)
     "in_class_no_schema_other_namespace": (CIM16_CLASS_MEMBERS, TRIO, NO_SCHEMA),
+    # a string literal member is no IRI, also when its text reads as one: no class matches it
+    "in_literal_reading_as_iri": (prop(f"sh:path rdf:type ; sh:in ( '{CIM}Breaker' )"), TRIO),
+    "has_value_literal_reading_as_iri": (prop(f"sh:path rdf:type ; sh:hasValue '{CIM}Breaker'"), TRIO),
     "in_enum_other_namespace": (prop("sh:path cim:Switch.kind ; sh:in ( <http://example.org/other#SwitchKind.breaker> )"),
                                 TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
     "has_value_class_other_namespace": (prop("sh:path rdf:type ; sh:hasValue <http://example.org/other#Breaker>"), TRIO),

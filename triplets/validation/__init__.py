@@ -56,7 +56,7 @@ from .._engine_detect import flavor
 from .._registry import EngineRegistry
 from ..iri import CIM_NS, LITERAL, REFERENCE, is_iri, load_rdf_map, local_value, split_iri, value_types
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
-from .shacl_ir import MESSAGE_VARIABLE, _is_iri, _mark_switched_off, _term
+from .shacl_ir import MESSAGE_VARIABLE, _is_iri, _mark_switched_off, _term, is_literal
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
 from .schema_ir import schema_name
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
@@ -275,8 +275,9 @@ def _table_ref(data, **kwargs):
 
 
 def _shown(member):
-    """A sh:in / sh:hasValue member as EXPECTED words it: an IRI by its local name."""
-    return local_value(member) if is_iri(str(member)) else str(member)
+    """A sh:in / sh:hasValue member as EXPECTED words it: an IRI by its local name, a literal
+    as its text."""
+    return local_value(str(member)) if is_iri(str(member)) and not is_literal(member) else str(member)
 
 
 # what a violated constraint requires, worded from its IR parameter — the
