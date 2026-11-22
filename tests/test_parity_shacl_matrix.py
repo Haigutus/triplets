@@ -451,6 +451,11 @@ CASES = {
     "sparql_constraint_type_values": (prop("sh:path rdf:type ; sh:sparql [ sh:prefixes cim: ; sh:select "
                                            "'SELECT $this ?value WHERE { { $this $PATH ?value } UNION "
                                            "{ $this cim:Equipment.EquipmentContainer ?value } }' ]"), TRIO),
+    # a literal ?value keeps its text and stays a literal, also when it reads as a node or an IRI
+    "sparql_constraint_literal_values": (prop("sh:path cim:IdentifiedObject.description ; sh:sparql [ sh:prefixes cim: ; "
+                                              "sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ]"),
+                                         breaker("b1", (DESC, "urn:uuid:b1")) + breaker("b2", (DESC, "http://example.org/x#y"))
+                                         + breaker("b3", (DESC, "d"))),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
     # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has
@@ -899,6 +904,45 @@ def test_class_members_without_schema_match_by_name(engine):
     violations = triplets.validation.validate_shacl(frame(TRIO), rdflib.Graph().parse(data=PREFIX + shape, format="turtle"),
                                                     engine=engine)
     assert sorted(zip(violations["ID"], violations["VIOLATION_TYPE"])) == [("b1", "sh:minCount"), ("b3", "sh:minCount")]
+
+
+@pytest.mark.parametrize("sparql_engine", ["rdflib", "oxigraph", "qlever"])
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_sparql_values_keep_their_term_kind(engine, sparql_engine, monkeypatch):
+    """The ?value bindings keep their term kind on every SPARQL engine, sequential and on
+    worker threads: literals with their full text, a node and a class shortened. (The
+    rdflib fork workers run _sparql_worker, tested on its own: a fork after the native
+    engines started their threads can hang.)"""
+    pytest.importorskip({"pandas": "pandas", "pyshacl": "pyshacl", "polars": "polars", "duckdb": "duckdb"}[engine])
+    if sparql_engine != "rdflib":
+        pytest.importorskip({"oxigraph": "pyoxigraph", "qlever": "triplets.sparql._qlever"}[sparql_engine])
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto", [sparql_engine])
+    expected = [("b1", "urn:uuid:b1", "literal"), ("b2", "http://example.org/x#y", "literal"), ("b3", "d", "literal")]
+    for case, rows in (("sparql_constraint_literal_values", expected),
+                       ("sparql_constraint_type_values", [("b1", "Breaker", "class"), ("b1", "bay1", "reference"),
+                                                          ("b2", "Breaker", "class"), ("b2", "sub1", "reference"),
+                                                          ("b3", "Breaker", "class")])):
+        for workers in (None,) if sparql_engine == "rdflib" else (None, 2):
+            violations = triplets.validation.validate_shacl(frame(CASES[case][1]), compiled(case), engine=engine,
+                                                            lexical=False, max_workers=workers, **DEFAULTS)
+            assert sorted(zip(violations["ID"], violations["VALUE"], violations["VALUE_KIND"])) == rows
+
+
+def test_sparql_fork_worker_keeps_the_term_kind(monkeypatch):
+    """The rdflib fork worker returns N-Triples terms too: its literal ?value stays a literal."""
+    from triplets.validation import shacl_pandas
+    monkeypatch.setattr(triplets.sparql._REGISTRY, "auto", ["rdflib"])   # the workers fork on rdflib only
+    case = "sparql_constraint_literal_values"
+    context = shacl_pandas._Context(frame(CASES[case][1]), SCHEMA)
+    rule = next(compiled(case).ir.itertuples())
+    shacl_pandas._FORK_DATASET = context.dataset()
+    try:
+        result = shacl_pandas._sparql_worker(shacl_pandas._sparql_query_text(rule, ["b1", "b2"]))
+    finally:
+        shacl_pandas._FORK_DATASET = None
+    violations = shacl_pandas._sparql_violations(rule, result)
+    assert sorted(zip(violations["VALUE"], violations["VALUE_KIND"])) == [
+        ("http://example.org/x#y", "literal"), ("urn:uuid:b1", "literal")]
 
 
 @pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])

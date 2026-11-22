@@ -24,6 +24,7 @@ import pandas
 from .._engine_detect import flavor, to_return_type
 from .._rdflib_loader import load_dataset, scoped_graph
 from ..iri import CIM_NS, CLASS, RDF_TYPE, decode_iri, local_id, local_key, local_value
+from . import json_terms
 
 if find_spec("rdflib") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("rdflib is not installed")
@@ -33,8 +34,9 @@ logger = logging.getLogger(__name__)
 
 
 def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto", data_unchanged=False,
-          undefined_namespace=CIM_NS):
-    """Execute query_string over data; shape the result by query type."""
+          undefined_namespace=CIM_NS, terms=False):
+    """Execute query_string over data; shape the result by query type (*terms*: SELECT
+    values as N-Triples terms, from the JSON results)."""
     dataset = load_dataset(data, rdf_map=rdf_map, data_unchanged=data_unchanged, undefined_namespace=undefined_namespace)
     graph = scoped_graph(dataset, data_scope)
     result = graph.query(query_string)
@@ -45,6 +47,8 @@ def query(data, query_string, rdf_map=None, data_scope=None, return_type="auto",
         return bool(result.askAnswer)
     if result.type in ("CONSTRUCT", "DESCRIBE"):
         return to_return_type(_graph_to_triplets(result.graph), return_type)
+    if terms:
+        return json_terms(result.serialize(format="json"), return_type)
     return to_return_type(_select_to_dataframe(result), return_type)
 
 

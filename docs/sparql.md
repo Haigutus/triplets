@@ -11,6 +11,9 @@ Know these before relying on it:
   all-string; consumers cast) — swapping engines never changes result
   dtypes. `rdf_map` types the *loaded graph* (drives comparisons and
   ORDER BY inside the query), not the returned representation.
+  `terms=True` returns N-Triples terms instead (`<iri>`, `"text"^^<datatype>`,
+  `_:label`), the same on every engine, for a consumer that needs the term
+  kind of a binding (the SHACL `sh:sparql` findings).
 - **oxigraph caveats** (details under "Behavioral caveats" below):
   a multi-instance `data_scope` yields one solution per instance for shared
   triples (`DISTINCT` dedupes); the CSV SELECT decode nulls empty-string
@@ -217,7 +220,7 @@ The result is shaped by the SPARQL query form:
 
 | Query form | Returns | Structure |
 |------------|---------|-----------|
-| `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. **All values are lexical strings in every engine** (triplets are all-string; consumers cast), unbound → null (the rdflib/oxigraph CSV decodes also null empty-string literals — the W3C CSV-results tradeoff; qlever distinguishes) |
+| `SELECT` | DataFrame (see `return_type`) | one column per projected variable (`?name` -> column `name`); IRIs as full strings. **All values are lexical strings in every engine** (triplets are all-string; consumers cast), unbound → null (the rdflib/oxigraph CSV decodes also null empty-string literals — the W3C CSV-results tradeoff; qlever distinguishes). With `terms=True` every value is its N-Triples term (`<iri>`, `"text"` with `^^<datatype>` / `@lang`, `_:label`), read from each engine's SPARQL JSON results |
 | `ASK` | `bool` | `True` / `False` |
 | `CONSTRUCT` / `DESCRIBE` | triplet DataFrame | `[ID, KEY, VALUE, INSTANCE_ID]`; shortened per column by `triplets.iri` (`local_id` on `ID`, `local_key` on `KEY` — `rdf:type` -> `Type`, `local_value` on `VALUE`: any http(s) `#fragment` namespace dropped, a namespace IRI ending in `#` kept whole; a `VALUE` IRI that is a subject of the same result shortens like its ID, `local_id`), `INSTANCE_ID` is `None` (constructed graph has no source instance) |
 

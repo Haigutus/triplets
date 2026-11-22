@@ -179,10 +179,13 @@ def engine_run(data, compiled, **kwargs):
 
 def engine_rows(violations):
     found = violations.astype(object)
-    # an IRI VALUE (a reference or class of another namespace) by its local name, as local() reads the reference leg
-    name = lambda value: value.rsplit("#", 1)[-1] if isinstance(value, str) and value.startswith("http") else value  # noqa: E731
-    rows = {(local(row.ID), "type" if row.KEY == "Type" else row.KEY, name(row.VALUE), stem(row.VIOLATION_TYPE), row.SEVERITY,
-             row.SOURCE_SHAPE) for row in found.where(found.notna(), None).itertuples(index=False)}
+    # an IRI VALUE (a reference or class of another namespace) by its local name, as local() reads the
+    # reference leg; a literal (VALUE_KIND) keeps its text
+    name = lambda value, kind: (value.rsplit("#", 1)[-1] if isinstance(value, str) and value.startswith("http")  # noqa: E731
+                                and kind != "literal" else value)
+    rows = {(local(row.ID), "type" if row.KEY == "Type" else row.KEY, name(row.VALUE, getattr(row, "VALUE_KIND", None)),
+             stem(row.VIOLATION_TYPE), row.SEVERITY, row.SOURCE_SHAPE)
+            for row in found.where(found.notna(), None).itertuples(index=False)}
     return rows, violations.attrs["validation"]
 
 
