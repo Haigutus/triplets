@@ -28,7 +28,7 @@ from .._engine_detect import flavor
 from .shacl_ir import holds_names, split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from ..iri import CIM_NS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, value_types
+from ..iri import CIM_NS, DISTRIBUTION_KEYS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -361,6 +361,18 @@ class _Context:
         self.undefined_namespace = undefined_namespace
 
 
+def _metadata_sql(table, scoped):
+    """The IDs of the objects the parsers added, among the *scoped* rows — the rule of
+    ``_header.parser_metadata_ids``: a METADATA_TYPES object no row references, a
+    ``Distribution`` only with a ``label`` and no KEY outside DISTRIBUTION_KEYS."""
+    quoted = lambda names: ", ".join(f"'{name}'" for name in names)   # noqa: E731
+    rows = f"(SELECT * FROM {table} WHERE {scoped})"
+    return (f"SELECT DISTINCT t.ID FROM {rows} t WHERE t.KEY = '{TYPE_KEY}' AND t.VALUE IN ({quoted(METADATA_TYPES)}) "
+            f"AND t.ID IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {rows} r WHERE r.VALUE = t.ID) "
+            f"AND (t.VALUE <> 'Distribution' OR (EXISTS (SELECT 1 FROM {rows} l WHERE l.ID = t.ID AND l.KEY = 'label') "
+            f"AND NOT EXISTS (SELECT 1 FROM {rows} k WHERE k.ID = t.ID AND k.KEY NOT IN ({quoted(DISTRIBUTION_KEYS)}))))")
+
+
 def _create_types_table(connection, table, ancestors):
     """Temp ``_shacl_types`` (ID, VALUE): each object's Type rows, and its ancestor
     classes from *ancestors* ``(Type, ancestor)`` pairs. A native table: a registered
@@ -422,11 +434,9 @@ def validate(data, compiled, rdf_map=None, data_scope=None, components=None, max
     if data_scope is not None:
         values = ", ".join("'" + str(instance).replace("'", "''") + "'" for instance in data_scope)
         scoped = f"INSTANCE_ID IN ({values})" if values else "FALSE"   # an empty scope loads no instance
-    metadata_types = ", ".join(f"'{name}'" for name in METADATA_TYPES)
-    connection.execute(f"CREATE OR REPLACE TEMP TABLE _shacl_metadata AS SELECT DISTINCT ID FROM {table} "
-                       f"WHERE KEY = '{TYPE_KEY}' AND VALUE IN ({metadata_types}) AND {scoped}")
-    where = f"{scoped} AND ID NOT IN (SELECT ID FROM _shacl_metadata)"
-    connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS SELECT * FROM {table} WHERE {where}")
+    connection.execute(f"CREATE OR REPLACE TEMP TABLE _shacl_metadata AS {_metadata_sql(table, scoped)}")
+    connection.execute(f"CREATE OR REPLACE TEMP VIEW _shacl_scoped AS SELECT * FROM {table} t WHERE {scoped} "
+                       f"AND NOT EXISTS (SELECT 1 FROM _shacl_metadata m WHERE m.ID = t.ID)")
     table = '"_shacl_scoped"'
 
     if "duckdb" not in compiled.plans:   # setdefault would re-split on every call

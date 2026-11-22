@@ -845,3 +845,33 @@ def test_pyshacl_validation_failure_is_a_note_row():
     assert "pre-bound variables must be selected" in violations["MESSAGE"][0]
     assert not triplets.validation.has_violation(violations)
     assert violations.shacl.to_sarif(export_to_memory=True).read()
+
+
+DCAT = "http://www.w3.org/ns/dcat#"
+DCAT_SCHEMA = {"MD": {"Dataset": {"type": "Class", "namespace": DCAT}, "Distribution": {"type": "Class", "namespace": DCAT},
+                      "distribution": {"type": "Association", "namespace": DCAT},
+                      "title": attribute("xsd:string"), "license": attribute("xsd:string")}}
+REAL_DISTRIBUTIONS = f"""@prefix dcat: <{DCAT}> .
+cim:D a sh:NodeShape ; sh:targetClass dcat:Distribution ; sh:property [ sh:path cim:license ; sh:minCount 1 ] .
+cim:S a sh:NodeShape ; sh:targetClass dcat:Dataset ;
+    sh:property [ sh:path dcat:distribution ; sh:class dcat:Distribution ; sh:minCount 1 ] ;
+    sh:sparql [ sh:prefixes cim: ; sh:select
+        'SELECT $this ?value WHERE {{ $this <{DCAT}distribution> ?value . FILTER NOT EXISTS {{ ?value ?key ?object }} }}' ] ."""
+
+
+@pytest.mark.parametrize("scope", [None, ["eq"]])
+@pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])
+def test_distributions_of_the_data_are_validated(engine, scope):
+    """A dcat:Distribution of the data is data: one with other properties than the parser
+    writes, and one with a label only that a Dataset references. The parser's own object,
+    which nothing references, is left out."""
+    import rdflib
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    rows = (obj("ds1", "Dataset", ("title", "ds"), ("distribution", "real1"), ("distribution", "real2"))
+            + obj("real1", "Distribution", ("title", "a manifest entry")) + obj("real2", "Distribution", ("label", "x.xml"))
+            + METADATA)
+    shapes = triplets.validation.compile(rdflib.Graph().parse(data=PREFIX + REAL_DISTRIBUTIONS, format="turtle"))
+    violations = triplets.validation.validate_shacl(frame(rows), shapes, engine=engine, rdf_map=DCAT_SCHEMA,
+                                                    rdf_map_scope="*", data_scope=scope, lexical=False)
+    assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {("real1", "sh:minCount"), ("real2", "sh:minCount")}

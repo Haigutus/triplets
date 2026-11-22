@@ -68,6 +68,9 @@ exported as ``rdf:Description`` in CIM XML and as no ``rdf:type`` in N-Quads."""
 METADATA_TYPES = ("NamespaceMap", "Distribution")
 """``Type`` VALUEs of the objects the parsers add to every file (its namespace prefixes, its
 file name): not model content."""
+DISTRIBUTION_KEYS = (TYPE_KEY, "label", "fileName", "belongsToContainer")
+"""Every KEY of the ``Distribution`` object the parsers write (``label`` always): a
+``dcat:Distribution`` of the data has other properties, or is referenced."""
 
 UUID_PREFIX = "urn:uuid:"
 ID_PREFIXES = ("urn:uuid:", "#_", "#", "_")      # longest first; exactly one is stripped ("#x" references rdf:ID="x")

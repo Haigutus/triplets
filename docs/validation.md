@@ -111,9 +111,14 @@ solution does not bind stays as written). Solutions that differ only in a variab
 other than `?value` stay apart when the message names that variable.
 
 The objects the parsers add to every file — `Distribution` (the file name) and
-`NamespaceMap` (the namespace prefixes), `triplets.iri.METADATA_TYPES`, the set
-`cim-diff` and `cim-spreadsheet` leave out — are not model content and are never
-validated: on every engine they are no focus node, no value node and not in the
+`NamespaceMap` (the namespace prefixes), the classes `cim-diff` and
+`cim-spreadsheet` leave out (`triplets.iri.METADATA_TYPES`) — are not model
+content and are never validated. They are told from data by what the parsers
+write: an object of one of the two classes that no row references and, for a
+`Distribution`, that has a `label` and no KEY other than `label`, `fileName` and
+`belongsToContainer`. A `dcat:Distribution` of the data (a manifest entry) has
+other properties or is referenced, and is validated like any object. For the
+parser's objects: on every engine they are no focus node, no value node and not in the
 graph the `sh:sparql` constraints, the SPARQL targets and pyshacl read. The run
 metadata and `enrich` still read the file names from them.
 

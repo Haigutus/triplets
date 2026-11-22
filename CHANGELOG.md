@@ -630,9 +630,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   profile, and dangling-reference queries reported the namespace IRIs of `NamespaceMap`.
   Their IDs are new at every parse, so those findings never matched the previous run.
   They are now left out of the validated rows (focus nodes, value nodes, the graph of
-  `sh:sparql`, SPARQL targets and pyshacl) on every engine. The set is
-  `triplets.iri.METADATA_TYPES`, the one `cim-diff` and `cim-spreadsheet` use
-  (`triplets.cli.METADATA_TYPES` is the same object). The schema validations never
+  `sh:sparql`, SPARQL targets and pyshacl) on every engine. The classes are
+  `triplets.iri.METADATA_TYPES`, the ones `cim-diff` and `cim-spreadsheet` use
+  (`triplets.cli.METADATA_TYPES` is the same object); validation leaves out only the
+  objects the parsers wrote — unreferenced, a `Distribution` with a `label` and no KEY but
+  `label` / `fileName` / `belongsToContainer` — so a `dcat:Distribution` of the data is
+  validated. The schema validations never
   reported them: no schema defines the two classes.
 - **`concat_violations` raises on a schema frame without run metadata joined with a SHACL
   frame.** Only the metadata was compared, so the result was one `triplets-shacl` run
