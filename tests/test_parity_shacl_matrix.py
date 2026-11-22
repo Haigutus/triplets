@@ -471,6 +471,14 @@ CASES = {
     # class) is two value nodes: each type not allowed is a finding of its own
     "path_via_type_two_types": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:VoltageLevel )"),
                                 TRIO + [("bay1", "Type", "EquipmentContainer", "eq")]),
+    # sh:in members are IRIs: a class of the same name in another namespace is not the data's
+    # class (the NC lists name cim16: / cim17: classes, the data a third CIM namespace)
+    "path_via_type_in_other_namespace": (
+        prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; "
+             "sh:in ( <http://iec.ch/TC57/2013/CIM-schema-cim16#Bay> cim:Substation )"), TRIO),
+    "in_enum_other_namespace": (prop("sh:path cim:Switch.kind ; sh:in ( <http://example.org/other#SwitchKind.breaker> )"),
+                                TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
+    "has_value_class_other_namespace": (prop("sh:path rdf:type ; sh:hasValue <http://example.org/other#Breaker>"), TRIO),
     # a referenced object without a Type row yields no value node
     "path_via_type_untyped_minCount": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 1"),
                                        TRIO + breaker("b4", (CONT, "ghost"))),

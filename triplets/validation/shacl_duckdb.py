@@ -25,7 +25,7 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import holds_names, split_rules, FALLBACK_COMPONENTS
+from .shacl_ir import holds_names, member_values, path_kind, split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from ..iri import CIM_NS, DISTRIBUTION_KEYS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, value_types
@@ -189,14 +189,21 @@ def _range(operator, description):
     return builder
 
 
+def _members(rule, context, members):
+    """(path kind, the members as the VALUE texts they are on the path) — ``shacl_ir.member_values``."""
+    kind = path_kind(rule, context.value_types)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+
+
 def _in(rule, table, context):
-    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
-    text; the datatype is ignored."""
+    """Each value against the members as the VALUEs they stand for on the path; on a KEY
+    the schema lacks, the value's local form (an IRI's local id); the datatype is ignored."""
     rows, rows_params = _rows_sql(rule, table, context)
-    allowed = [str(value) for value in rule.params]
-    local = f"CASE WHEN {iri_duckdb.is_iri('PV')} THEN {iri_duckdb.local_value('PV')} ELSE PV END"
+    kind, allowed = _members(rule, context, rule.params)
+    value = (f"CASE WHEN {iri_duckdb.is_iri('PV')} THEN {iri_duckdb.local_value('PV')} ELSE PV END"
+             if kind is None else "PV")
     return _wrap(rule, f"value is not one of {sorted(allowed)}",
-                 rows, rows_params, f"NOT list_contains(?, {local})", [allowed])
+                 rows, rows_params, f"NOT list_contains(?, {value})", [allowed])
 
 
 def _has_value(rule, table, context):
@@ -204,7 +211,7 @@ def _has_value(rule, table, context):
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
                 f"WHERE f.ID NOT IN (SELECT FOCUS FROM ({rows}) WHERE PV = ?)")
     return _wrap(rule, f"{rule.path} does not have required value '{rule.params}'",
-                 from_sql, [rule.target_on, *rows_params, str(rule.params)], "TRUE", [],
+                 from_sql, [rule.target_on, *rows_params, _members(rule, context, [rule.params])[1][0]], "TRUE", [],
                  value_expr=_NULL_VALUE)
 
 

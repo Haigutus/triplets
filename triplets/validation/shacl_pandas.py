@@ -53,7 +53,7 @@ from ..export.nquads_utils import make_subject
 from ..iri import (CIM_NS, LITERAL, REFERENCE, REFERENCE_LIKE, TYPE_KEY, iri_pandas, name_kind, namespaces, node_kind,
                    prefixes, rdf_map_entries, split_iri, value_types)
 from .schema_scope import ancestor_pairs
-from .shacl_ir import MESSAGE_VARIABLE, holds_names
+from .shacl_ir import MESSAGE_VARIABLE, holds_names, member_values, path_kind
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
 from .value_space import datatype_patterns
@@ -334,21 +334,29 @@ def _range(comparison, description):
     return validator
 
 
+def _members(context, rule, members):
+    """The members as the VALUE texts they are on the rule's path (``shacl_ir.member_values``)."""
+    kind = path_kind(rule, context.value_types)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+
+
 def _in(context, rule):
-    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
-    text; the datatype is ignored."""
+    """Each value against the members as the VALUEs they stand for on the path; on a KEY
+    the schema lacks, the value's local form (an IRI's local id); the datatype is ignored."""
     rows = context.path_rows(rule)
-    allowed = {str(value) for value in rule.params}
+    kind, allowed = _members(context, rule, rule.params)
     values = rows["PATH_VALUE"].astype(str)
-    local = values.mask(iri_pandas.is_iri(values), iri_pandas.local_value(values))
-    bad = ~local.isin(allowed)
+    if kind is None:
+        values = values.mask(iri_pandas.is_iri(values), iri_pandas.local_value(values))
+    bad = ~values.isin(set(allowed))
     return _frame(rule, rows.loc[bad, "FOCUS"], rows.loc[bad, "PATH_VALUE"],
                   f"value is not one of {sorted(allowed)}")
 
 
 def _has_value(context, rule):
     rows = context.path_rows(rule)
-    having = rows.loc[rows["PATH_VALUE"].astype(str) == str(rule.params), "FOCUS"]
+    value = _members(context, rule, [rule.params])[1][0]
+    having = rows.loc[rows["PATH_VALUE"].astype(str) == value, "FOCUS"]
     missing = pandas.Index(context.focus(rule)).difference(having)
     return _frame(rule, missing, None, f"{rule.path} does not have required value '{rule.params}'")
 

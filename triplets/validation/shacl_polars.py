@@ -31,7 +31,7 @@ import polars
 from .._header import without_metadata
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from .shacl_ir import holds_names, split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
+from .shacl_ir import holds_names, member_values, path_kind, split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
 from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, namespaces, node_kind, prefixes, rdf_map_entries, value_types
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
@@ -273,18 +273,24 @@ def _in_form(column):
     return polars.when(iri_polars.is_iri(column)).then(iri_polars.local_value(column)).otherwise(polars.col(column))
 
 
+def _members(context, rule, members):
+    """(path kind, the members as the VALUE texts they are on the path) — ``shacl_ir.member_values``."""
+    kind = path_kind(rule, context.value_types)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+
+
 def _in(context, rule):
-    """Value's lexical form (an IRI's local id; any other value as it is) against each member's
-    text; the datatype is ignored."""
-    local = _in_form("PATH_VALUE")
-    allowed = [str(value) for value in rule.params]
-    plan = context.path_rows(rule).filter(~local.is_in(allowed))
+    """Each value against the members as the VALUEs they stand for on the path; on a KEY
+    the schema lacks, the value's local form (an IRI's local id); the datatype is ignored."""
+    kind, allowed = _members(context, rule, rule.params)
+    values = _in_form("PATH_VALUE") if kind is None else polars.col("PATH_VALUE")
+    plan = context.path_rows(rule).filter(~values.is_in(allowed))
     return _emit(plan, rule, f"value is not one of {sorted(allowed)}")
 
 
 def _has_value(context, rule):
     having = (context.path_rows(rule)
-              .filter(polars.col("PATH_VALUE") == str(rule.params))
+              .filter(polars.col("PATH_VALUE") == _members(context, rule, [rule.params])[1][0])
               .select("FOCUS"))
     plan = context.focus_frame(rule).join(having, on="FOCUS", how="anti")
     return _emit(plan, rule, f"{rule.path} does not have required value '{rule.params}'", value=False)
@@ -578,18 +584,19 @@ def _batch_node_kind(context, rules):
 def _batch_in(context, rules):
     """Anti-join against the exploded allowed values: a path row with no
     (rule, allowed-value) match is a violation."""
-    rules_frame = _rules_frame(
-        rules, lambda r: f"value is not one of {sorted(str(v) for v in r.params)}")
+    members = {id(rule): _members(context, rule, rule.params) for rule in rules}
+    rules_frame = _rules_frame(rules, lambda r: f"value is not one of {sorted(members[id(r)][1])}",
+                               LOCAL=lambda r: members[id(r)][0] is None)
     allowed = polars.LazyFrame({
         "KEY": [rule.path for rule in rules for _ in rule.params],
         "CLASS": [rule.target_on for rule in rules for _ in rule.params],
         "SOURCE_SHAPE": [rule.shape_id for rule in rules for _ in rule.params],
-        "_LOCAL": [str(value) for rule in rules for value in rule.params],
+        "_FORM": [value for rule in rules for value in members[id(rule)][1]],
     })
-    local = _in_form("VALUE")
+    form = polars.when(polars.col("LOCAL")).then(_in_form("VALUE")).otherwise(polars.col("VALUE"))
     plan = (_batch_path_rows(context, rules_frame)
-            .with_columns(local.alias("_LOCAL"))
-            .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_LOCAL"], how="anti"))
+            .with_columns(form.alias("_FORM"))
+            .join(allowed, on=["KEY", "CLASS", "SOURCE_SHAPE", "_FORM"], how="anti"))
     return [_batch_emit(plan, "sh:in")]
 
 

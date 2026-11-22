@@ -33,7 +33,8 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import SH_NS, TYPE_KEY, XSD_NS, local_id, local_key, local_value, split_iri
+from ..iri import (CLASS, LITERAL, REFERENCE, SH_NS, TYPE_KEY, XSD_NS, absolute_value, is_iri, local_id, local_key,
+                   local_value, split_iri)
 from .value_space import bound_space, pair_params
 
 logger = logging.getLogger(__name__)
@@ -848,8 +849,37 @@ def _rdf_list(graph, head, transform):
 
 
 def _value(term):
-    """sh:in / sh:hasValue member → comparable VALUE string: literals verbatim, IRIs by the
-    VALUE rule (``local_value`` — an enum ``#`` IRI → its name, a ``/`` IRI stays whole)."""
-    if type(term).__name__ == "Literal":
-        return str(term)
-    return local_value(str(term))
+    """sh:in / sh:hasValue member → its text: a literal's lexical form, an IRI whole
+    (``member_values`` reads it as the VALUE it stands for on the rule's path)."""
+    return str(term)
+
+
+def path_kind(rule, value_types):
+    """The :data:`~triplets.iri.TERM_KINDS` kind of *rule*'s value nodes: ``class`` on a
+    ``( association rdf:type )`` path and under ``rdf:type``, ``reference`` on an inverse
+    path (the subjects), else the KEY's schema entry type; None for a KEY the schema lacks."""
+    if getattr(rule, "via_type", False) or (rule.path == TYPE_KEY and not rule.inverse):
+        return CLASS
+    if rule.inverse:
+        return REFERENCE
+    return value_types.get(rule.path)
+
+
+def member_values(members, kind, namespaces, undefined_namespace):
+    """sh:in / sh:hasValue members → the VALUE texts they are on a path of *kind*
+    (``path_kind``): an IRI member is the local VALUE of that kind
+    (:func:`~triplets.iri.local_value`) when that VALUE stands for exactly this IRI
+    (:func:`~triplets.iri.absolute_value` — a class in its schema namespace, a
+    ``urn:uuid:`` node), else the whole IRI, which only a VALUE holding the IRI
+    matches; a literal member, and every member on a literal path, is its text.
+    Without a kind (an undefined KEY) an IRI member is its guessed local VALUE
+    and the engines compare the values' local forms."""
+    def value(member):
+        if not is_iri(member) or kind == LITERAL:
+            return member
+        if kind is None:
+            return local_value(member)
+        text = local_value(member, kind)
+        same = absolute_value(None, text, namespaces, kind=kind, undefined_namespace=undefined_namespace)[1] == member
+        return text if same else member
+    return [value(str(member)) for member in members]

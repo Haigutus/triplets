@@ -54,7 +54,7 @@ import pandas
 
 from .._engine_detect import flavor
 from .._registry import EngineRegistry
-from ..iri import CIM_NS, LITERAL, REFERENCE, load_rdf_map, split_iri, value_types
+from ..iri import CIM_NS, LITERAL, REFERENCE, is_iri, load_rdf_map, local_value, split_iri, value_types
 from .shacl_ir import CompiledShapes, compile_shapes as compile  # noqa: A001 — public API name
 from .shacl_ir import MESSAGE_VARIABLE, _is_iri, _mark_switched_off, _term
 from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENTED  # noqa: F401 — public API
@@ -274,6 +274,11 @@ def _table_ref(data, **kwargs):
     return kwargs.get("table_name", "triplets")
 
 
+def _shown(member):
+    """A sh:in / sh:hasValue member as EXPECTED words it: an IRI by its local name."""
+    return local_value(member) if is_iri(str(member)) else str(member)
+
+
 # what a violated constraint requires, worded from its IR parameter — the
 # report states what IS allowed even when the authored message does not
 _EXPECTED = {
@@ -289,8 +294,8 @@ _EXPECTED = {
     "sh:datatype": "a {} value".format,
     "sh:class": "a reference to a {}".format,
     "sh:nodeKind": "an {} value".format,
-    "sh:hasValue": "value {}".format,
-    "sh:in": lambda params: "one of: " + ", ".join(map(str, params)),
+    "sh:hasValue": lambda param: f"value {_shown(param)}",
+    "sh:in": lambda params: "one of: " + ", ".join(dict.fromkeys(_shown(param) for param in params)),
     "triplets:range": lambda params: "a reference to one of: " + ", ".join(map(str, params)),
     "triplets:missing": lambda params: "a referenced object in the data, one of: " + ", ".join(map(str, params)),
     "sh:equals": "equal to {}".format,
