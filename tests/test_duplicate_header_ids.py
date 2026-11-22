@@ -346,6 +346,15 @@ def test_enrich_names_the_instance_of_the_finding(kind, order, tmp_path, engine)
     assert list(enriched["INSTANCE_LABEL"]) == [pair_.uri["beta"]]
 
 
+def test_enrich_without_data_keeps_the_instance(path_pair):
+    """enrich with only an rdf_map (no data) keeps each schema finding's INSTANCE_ID."""
+    data, instances = flavored(path_pair, "pandas")
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    enriched = validation.enrich(violations, rdf_map=SCHEMA)
+    assert list(enriched["INSTANCE_ID"]) == list(violations["INSTANCE_ID"])
+    assert list(enriched.loc[enriched["ID"] == HEADER, "INSTANCE_ID"]) == [instances["beta"]]
+
+
 def test_enrich_found_values_are_the_instance_values(path_pair):
     """beta writes Model.description twice: the maxOccurs finding lists beta's two values."""
     twice = cimxml("beta").replace(b"<md:Model.version>",

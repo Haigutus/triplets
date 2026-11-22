@@ -79,6 +79,7 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
     own = violations.get("INSTANCE_ID", pandas.Series(None, index=violations.index, dtype=object)).astype(object)
     for column in ENRICHMENT_COLUMNS:
         enriched[column] = pandas.NA
+    enriched["INSTANCE_ID"] = own
     rdf_map = load_rdf_map(rdf_map) if rdf_map is not None else None
     compiled = None if shapes is None else shapes if isinstance(shapes, CompiledShapes) else compile_shapes(shapes)
 
