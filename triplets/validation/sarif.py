@@ -58,7 +58,8 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
         SHACL run in one file (``[schema_violations, shacl_violations]``); every
         other argument applies to each frame. Runs of one constraint language
         would share a tool name: two frames of one language raise ValueError —
-        join them with ``concat_violations`` first.
+        join them with ``concat_violations`` first. An empty frame without run
+        metadata in the list is left out (no run): it does not say what ran.
     data, shapes, rdf_map : optional
         Run the context enrichment pass first (see context.enrich) — fills
         object names, source files and shape/schema descriptions into the
@@ -133,6 +134,9 @@ def build_sarif(violations, group=True, sources=None, source_root=None):
     export_to_sarif)."""
     check_source_root(source_root)
     frames = _frames(violations)
+    if not isinstance(violations, pandas.DataFrame):
+        # in a list, an empty frame without run metadata says nothing (a clean run whose attrs were lost): no run
+        frames = [frame for frame in frames if len(frame) or frame.attrs.get("validation")]
     languages = [run_language(frame) for frame in frames]
     repeated = sorted({language for language in languages if languages.count(language) > 1})
     if repeated:

@@ -18,7 +18,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   is one file with a `triplets-rdfs` run and a `triplets-shacl` run. The other arguments
   apply to every frame; a single frame gives the same log as before. Runs of one
   constraint language would share a tool name: two frames of one language raise
-  `ValueError`, so join those with `concat_violations` first.
+  `ValueError`, so join those with `concat_violations` first. An empty frame without run
+  metadata in the list is left out.
 - **`stereotype` and `rdf:type` on every bundled schema entry** — the RDFS source types
   of the entry's object, as lists in source order, deduplicated, and left out when the
   object has none. Covers classes, attributes, associations, enumeration attributes,

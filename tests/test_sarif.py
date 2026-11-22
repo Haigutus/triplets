@@ -328,6 +328,13 @@ def test_frames_of_one_language_are_joined_first(violations):
     assert [run["tool"]["driver"]["name"] for run in build_sarif((joined, violations))["runs"]] \
         == ["triplets-rdfs", "triplets-shacl"]
     assert build_sarif([])["runs"] == []
+    # an empty frame without metadata (a clean run joined with pandas.concat) is no run and no clash
+    bare = pandas.DataFrame(columns=schema_violations.columns)
+    assert [run["tool"]["driver"]["name"] for run in build_sarif([bare, violations])["runs"]] == ["triplets-shacl"]
+    assert build_sarif([bare])["runs"] == []
+    clean = schema_violations.iloc[0:0]                               # a clean run with its metadata is a run
+    assert [run["tool"]["driver"]["name"] for run in build_sarif([clean, violations])["runs"]] \
+        == ["triplets-rdfs", "triplets-shacl"]
 
 
 def test_language_of_a_frame_without_run_metadata(violations):

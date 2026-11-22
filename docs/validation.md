@@ -1016,7 +1016,9 @@ enrichment pass first (an already-enriched frame is used as-is).
   own tool name, rules and run metadata; the other arguments apply to every
   frame. Runs of one language would share a tool name, which GitHub code
   scanning does not take in one file: two frames of one language raise
-  `ValueError` — join those with `concat_violations` first.
+  `ValueError` — join those with `concat_violations` first. An empty frame without
+  run metadata in the list (a clean run whose `attrs` a `pandas.concat` dropped)
+  is left out: it has no run.
 - Every rule carries `properties.tags`: the language (`shacl` / `rdfs`), the
   constraint (`sh:minCount`, `triplets:range`, …) and each profile of the
   rule's findings (the `PROFILE` column — a list of section keys, or the
