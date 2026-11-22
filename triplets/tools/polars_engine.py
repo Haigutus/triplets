@@ -37,7 +37,8 @@ def _tableview(ids, data, string_to_number, multivalue, label, index=("ID",)):
 
     # semi join keeps data order, so keep="first" and list order match pandas run to run
     index = list(index)
-    object_data = data.join(ids.select(index), on=index, how="semi")
+    # null matches null, as in a pandas merge
+    object_data = data.join(ids.select(index), on=index, how="semi", nulls_equal=True)
 
     if multivalue:
         # Aggregate all values per (ID, KEY) into lists, then pivot (maintain_order so

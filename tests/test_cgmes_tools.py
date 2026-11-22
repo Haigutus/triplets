@@ -487,3 +487,19 @@ def test_csv_files_are_named_by_the_distribution_label(labelled):
     from triplets import export
     files = export.export_to_csv(labelled, export_to_memory=True)
     assert files and all(file.name.startswith("old_") for file in files)
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+def test_null_instance_id_is_one_instance(flavor):
+    """Rows with a null INSTANCE_ID are one instance, the same on pandas and polars: its
+    header metadata, model part, profile class and model."""
+    rows = pandas.DataFrame([("h", "Type", "FullModel", None), ("h", "Model.profile", "p1", None),
+                             ("h", "Model.DependentOn", "g", None),
+                             ("g", "Type", "FullModel", "i2"), ("g", "Model.profile", "p2", "i2")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data = rows if flavor == "pandas" else pytest.importorskip("polars").from_pandas(rows)
+    assert cgmes_tools.get_metadata_from_FullModel(data) == {"Model.profile": "p1", "Model.DependentOn": "g"}
+    assert len(cgmes_tools.get_loaded_model_parts(data)) == 2
+    assert list(cgmes_tools.get_loaded_profiles(data)["HEADER"]) == ["FullModel", "FullModel"]
+    [model] = cgmes_tools.get_loaded_models(data).values()
+    assert sorted(model["ID"].to_list()) == ["g", "h"]

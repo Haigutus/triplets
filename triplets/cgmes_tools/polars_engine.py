@@ -59,7 +59,7 @@ def _pd_merge(left, right, left_on, right_on, suffixes=("_x", "_y"), how="inner"
 def get_metadata_from_FullModel(data):
     """Metadata dict of the first FullModel, read within its own instance (KEY→VALUE, 'Type' dropped)."""
     header = data.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == "FullModel")).row(0, named=True)
-    own = (pl.col("ID") == header["ID"]) & (pl.col("INSTANCE_ID") == header["INSTANCE_ID"])
+    own = (pl.col("ID") == header["ID"]) & pl.col("INSTANCE_ID").eq_missing(header["INSTANCE_ID"])   # null-safe
     obj = data.filter(own).select(["KEY", "VALUE"])
     metadata = dict(zip(obj["KEY"].cast(pl.Utf8).to_list(), obj["VALUE"].cast(pl.Utf8).to_list()))
     metadata.pop("Type", None)
@@ -135,7 +135,9 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
              .select("ID", "INSTANCE_ID", "VALUE").unique(subset=["ID", "INSTANCE_ID"], keep="first")
              .rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
     labels = (distribution_labels(data).select("INSTANCE_ID", "VALUE").unique(subset="INSTANCE_ID", keep="first").rename({"VALUE": "label"}))
-    return hints.join(types, on=["HEADER_ID", "INSTANCE_ID"], how="left").join(labels, on="INSTANCE_ID", how="left").select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE")
+    return (hints.join(types, on=["HEADER_ID", "INSTANCE_ID"], how="left", nulls_equal=True)
+            .join(labels, on="INSTANCE_ID", how="left", nulls_equal=True)
+            .select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"))
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):

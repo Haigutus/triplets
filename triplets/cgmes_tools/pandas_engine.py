@@ -267,7 +267,9 @@ def get_metadata_from_FullModel(data):
     {'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}
     """
     header = data.loc[(data["KEY"] == "Type") & (data["VALUE"] == "FullModel")].iloc[0]
-    rows = data.loc[(data["ID"] == header["ID"]) & (data["INSTANCE_ID"] == header["INSTANCE_ID"])]
+    instance = data["INSTANCE_ID"]
+    own = instance.isna() if pandas.isna(header["INSTANCE_ID"]) else instance == header["INSTANCE_ID"]   # null-safe
+    rows = data.loc[(data["ID"] == header["ID"]) & own]
     metadata = dict(zip(rows["KEY"], rows["VALUE"]))
     metadata.pop("Type", None)  # Remove Type form metadata
 
@@ -408,7 +410,7 @@ def _walk_models(relations, profiles, root):
     roots = (set(profiles["INSTANCE_ID"]) | set(relations["INSTANCE_ID_FROM"])) - set(resolved["INSTANCE_ID_TO"])
     if root is not None:
         roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "INSTANCE_ID"])
-    adjacency = resolved.groupby("INSTANCE_ID_FROM", observed=True)["INSTANCE_ID_TO"].agg(list)
+    adjacency = resolved.groupby("INSTANCE_ID_FROM", observed=True, dropna=False)["INSTANCE_ID_TO"].agg(list)
     parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
 
     models = {}

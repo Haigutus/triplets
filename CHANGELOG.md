@@ -258,6 +258,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`INSTANCE_ID` is part of the triplet frame contract**: functions may raise on a frame
+  without the column. A null `INSTANCE_ID` is one instance, matched null-safe, the same on
+  pandas and polars (`get_metadata_from_FullModel`, `get_loaded_model_parts`,
+  `get_loaded_profiles`, `get_loaded_models`).
 - **`validate_shacl` defaults to `inheritance=False`** — `sh:targetClass` and `sh:class`
   match the exact `rdf:type`, as plain SHACL does on a data graph without
   `rdfs:subClassOf` (CIM files carry none, and the ENTSO-E shapes list concrete classes).
