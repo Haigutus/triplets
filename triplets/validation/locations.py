@@ -72,10 +72,10 @@ def locate(wanted, sources, files=None):
         own lines are worth pinpointing (may be empty).
     sources : str/Path to .xml/.rdf/.zip, file-like, or a list of those —
         the same shapes ``parse()``/``read_rdf`` accept.
-    files : dict {ID: {source name: set of KEYs}}, optional
-        The files whose own position of the ID (and of those KEYs) is wanted
-        too — the file of the instance a finding was found in; a name that is
-        no source's is ignored.
+    files : dict {ID: set of source names}, optional
+        The files whose own positions of the ID and its KEYs are wanted too —
+        the file of the instance a finding was found in; a name that is no
+        source's is ignored.
 
     Returns
     -------
@@ -91,9 +91,9 @@ def locate(wanted, sources, files=None):
         A KEY's position is that of its element in the first object window
         of the ID that holds it, in whichever file (an SSH property of an
         object an EQ file defines). "files" holds the definition and KEY
-        positions within each of the ID's *files* that defines it, when they are
-        not the top-level ones: a file it lacks (always the file of the first
-        definition) has its positions at the top level. IDs not present in the sources
+        positions within each of the ID's *files* that defines it, other than
+        the file of the first definition, whose positions are the top-level
+        ones. IDs not present in the sources
         are absent from the result; a KEY in none of the ID's windows is absent
         from "keyLines". The sources are read in that order until every wanted
         ID, KEY and file is found; one missing makes the pass read them all.
@@ -101,13 +101,12 @@ def locate(wanted, sources, files=None):
     from ..parser.utils import find_all_xml
 
     sources = [(_name(source), source) for source in find_all_xml(sources)]
-    names = {name for name, _ in sources}
     ids = {str(object_id).encode(): object_id for object_id in wanted}
-    missing = {object_id: _searched(found) for object_id, found in wanted.items()}
-    # per (ID, file): the KEYs to search there, and whether a finding there needs the definition
-    own_files = {object_id: {name: _own(found) for name, found in in_files.items() if name in names}
-                 for object_id, in_files in (files or {}).items()}
-    unread = {name for in_files in own_files.values() for name in in_files}       # the instance files to read
+    keys = {object_id: {key for key in found if key and key != TYPE_KEY}   # the type is the definition itself
+            for object_id, found in wanted.items()}
+    missing = {object_id: set(found) for object_id, found in keys.items()}
+    files = files or {}
+    unread = {name for names in files.values() for name in names} & {name for name, _ in sources}
     located = {}
     for uri, source in sources:
         if len(located) == len(ids) and not any(missing.values()) and not unread:
@@ -126,48 +125,23 @@ def locate(wanted, sources, files=None):
             if entry is None:
                 entry = located[object_id] = {"uri": uri, "startLine": line, "snippet": _line_text(text, match.start()),
                                               "keyLines": {}, "files": {}}
-            # in the defining file the top-level positions are the instance file's own
-            own, definition = (_NO_FILE if uri == entry["uri"] or object_id not in own_files
-                               else own_files[object_id].get(uri, _NO_FILE))
-            if own is None and not missing[object_id]:
+            # an instance file other than the first definition's: its own positions
+            own = uri != entry["uri"] and uri in files.get(object_id, ())
+            if not own and not missing[object_id]:
                 continue
             window_end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
-            searched = missing[object_id]
-            if own is not None:
-                searched = searched | own if searched else own
+            searched = keys[object_id] if own else missing[object_id]
             found = {key: (uri, *found_at)
                      for key, found_at in _key_lines(text, match.start(), window_end, line, searched).items()}
-            if missing[object_id]:
-                entry["keyLines"] |= {key: found[key] for key in missing[object_id] & found.keys()}
-                missing[object_id] -= found.keys()
-            if own is None:
-                continue
-            in_file = entry["files"].get(uri)
-            if in_file is None:
-                if not definition and all(entry["keyLines"].get(key, ("",))[0] == uri for key in own):
-                    continue                                   # every KEY's top-level position is in this file
-                entry["files"][uri] = {"startLine": line, "snippet": _line_text(text, match.start()),
-                                       "keyLines": found}
-            else:
+            entry["keyLines"] |= {key: found[key] for key in missing[object_id] & found.keys()}
+            missing[object_id] -= found.keys()
+            if own:
+                in_file = entry["files"].setdefault(uri, {"startLine": line, "snippet": _line_text(text, match.start()),
+                                                          "keyLines": {}})
                 in_file["keyLines"] = found | in_file["keyLines"]          # the first window holding a KEY wins
     if len(located) < len(ids):
         logger.debug("%d violating object(s) not found in the sources", len(ids) - len(located))
     return located
-
-
-_NO_FILE = (None, False)        # no instance file position wanted: (KEYs, definition needed)
-
-
-def _searched(keys):
-    """The KEYs worth a search: not None, not the type (the definition itself)."""
-    return {key for key in keys if key and key != TYPE_KEY}
-
-
-def _own(keys):
-    """(the KEYs to search in an instance file, whether a finding there is located at
-    the definition — a KEY not searched)."""
-    searched = _searched(keys)
-    return searched, bool(set(keys) - searched)
 
 
 # findings of a property the object lacks: their KEY is searched in no file
@@ -219,7 +193,7 @@ def locate_violations(violations, sources, targets=True):
         if object_id is not None:
             wanted.setdefault(object_id, set()).add(key)
             if label is not None:
-                files.setdefault(object_id, {}).setdefault(label, set()).add(key)
+                files.setdefault(object_id, set()).add(label)
     for target in targets:
         if target is not None:
             wanted.setdefault(target, set())

@@ -588,8 +588,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one of the sources (also a member of a zip) is located at its KEY's element or its
   object's definition in that file; a KEY only another file holds is still located
   there. Two files that share an object ID (a header ID reused across files) were both
-  located in the first file read. `locate()` takes `files=` and returns the positions
-  within those files under `"files"`.
+  located in the first file read. `locate()` takes `files=` (`{ID: source names}`) and
+  returns the positions within those files under `"files"`.
 - **`cgmes_tools.get_loaded_model_parts` lists one row per header of each instance**,
   with an `INSTANCE_ID` column (pandas: header IDs stay the index). Two files that share
   a header ID were one row with the first file's values.
