@@ -579,6 +579,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 - **SHACL `sh:in` / `sh:hasValue` compare IRIs, not local names** (pandas / polars / duckdb): a class, enumeration value or node of the same name in another namespace no longer passes (`( assoc rdf:type ) sh:in ( cim16:ACLineSegment cim17:ACLineSegment )` on data in a third CIM namespace), as pyshacl reports.
 - **`locate` (SARIF / SHACL report locations) points a finding on a KEY at the file holding that KEY's element** (an SSH property of an object the EQ file defines), not at the first file defining the ID; the definition stays the fallback.
+- **A row without a VALUE counts for no cardinality** (`sh:minCount` / `sh:maxCount`, `xsd:minOccurs` / `xsd:maxOccurs`, pandas / polars / duckdb): it states no triple, as pyshacl sees it.
 - **SHACL count constraints count a triple stated in several instances once** (`sh:minCount` / `sh:maxCount`, every path form, pandas / polars / duckdb): value nodes are a set, as in the RDF merge pyshacl validates. `validate_schema` counts every element, as XSD does: a property written twice with the same value breaks `xsd:maxOccurs` 1.
 - **SHACL report `sh:resultPath` is the shape's own path** (sequence, inverse, alternative, …) as pyshacl writes it, not the path's first predicate.
 - **SHACL report `sh:value` of a `sh:sparql` result has the `?value` binding's term kind**: a node on an `rdf:type` path is `urn:uuid:…`, not a class IRI; an inverse path's value is the node.

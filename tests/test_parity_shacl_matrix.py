@@ -263,6 +263,9 @@ CASES = {
         breaker("b1", (CONT, "bay1")) + obj("bay1", "Bay") + [("bay1", "Type", "Bay", "other")]),
     # the same triples stated in two instances are one value node each (RDF merge): a Bay and
     # a Breaker repeated in an SSH-like instance count once on every path form
+    # a row without a VALUE is no value node (no triple)
+    "count_null_value": (prop("sh:path cim:IdentifiedObject.name ; sh:minCount 1 ; sh:maxCount 1"),
+                         breaker("b1", (NAME, None)) + breaker("b2", (NAME, "B2"), (NAME, None))),
     "count_identical_triples_in_two_instances": (
         "cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; "
         "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 2 ; sh:maxCount 1 ] ; "

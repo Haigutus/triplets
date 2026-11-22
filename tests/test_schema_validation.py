@@ -108,6 +108,13 @@ def test_max_occurs_counts_elements(engine):
     assert v.loc[v["VIOLATION_TYPE"] == "xsd:maxOccurs", "TARGET"].iloc[0] == "found 2 values: 'B', 'B'"
 
 
+def test_null_value_is_no_element(engine):
+    """A row without a VALUE counts as no element: name missing, not twice."""
+    v = run(breaker("b1", ("IdentifiedObject.mRID", "b1"), ("IdentifiedObject.name", None))
+            + breaker("b2", *OK, ("IdentifiedObject.name", None)), engine)
+    assert violating(v, "xsd:minOccurs") == {("b1", None)} and violating(v, "xsd:maxOccurs") == set()
+
+
 def test_datatype_lexical_two_levels(engine):
     rows = (breaker("b1", *OK, ("Switch.retained", "maybe"))     # invalid boolean
             + breaker("b2", ("IdentifiedObject.mRID", "b2"), ("IdentifiedObject.name", "B2"),
