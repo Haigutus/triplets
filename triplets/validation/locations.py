@@ -209,15 +209,17 @@ def locate_violations(violations, sources, targets=True):
         """The cells as str, None for a missing one."""
         return [value if isinstance(value, str) else None if pandas.isna(value) else str(value) for value in values]
 
-    ids, keys, labels = text(violations["ID"]), text(violations["KEY"]), text(column("INSTANCE_LABEL"))
+    ids, labels = text(violations["ID"]), text(column("INSTANCE_LABEL"))
+    # the KEY each row is located at: none for a finding of an absent property (its definition)
+    keys = [None if violation_type in ABSENT_KEY_TYPES else key
+            for key, violation_type in zip(text(violations["KEY"]), column("VIOLATION_TYPE"))]
     targets = text(column("TARGET_ID", targets))
     wanted, files = {}, {}
-    for object_id, key, violation_type, label in zip(ids, keys, column("VIOLATION_TYPE"), labels):
+    for object_id, key, label in zip(ids, keys, labels):
         if object_id is not None:
-            searched = None if violation_type in ABSENT_KEY_TYPES else key
-            wanted.setdefault(object_id, set()).add(searched)
+            wanted.setdefault(object_id, set()).add(key)
             if label is not None:
-                files.setdefault(object_id, {}).setdefault(label, set()).add(searched)
+                files.setdefault(object_id, {}).setdefault(label, set()).add(key)
     for target in targets:
         if target is not None:
             wanted.setdefault(target, set())

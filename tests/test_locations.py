@@ -104,6 +104,23 @@ def test_finding_is_located_in_its_instance_file(tmp_path):
                                               "grid.zip/SSH.xml"]
 
 
+def test_absent_key_finding_is_located_at_its_definition():
+    """A finding of an absent property is located at the object's definition, never at
+    the element the same KEY has in another file defining the same ID."""
+    def header(name, body):
+        source = io.BytesIO(b'<rdf:RDF xmlns:rdf="r" xmlns:md="m">\n  <md:FullModel rdf:about="urn:uuid:hhhh">\n'
+                            + body + b"  </md:FullModel>\n</rdf:RDF>\n")
+        source.name = name
+        return source
+
+    violations = pandas.DataFrame({"ID": ["hhhh", "hhhh"], "KEY": ["Model.version"] * 2, "VALUE": [None, "x"],
+                                   "VIOLATION_TYPE": ["xsd:minOccurs", "xsd:type"],
+                                   "INSTANCE_LABEL": ["a.xml", "b.xml"]})
+    sources = [header("a.xml", b""), header("b.xml", b"    <md:Model.version>x</md:Model.version>\n")]
+    located = locate_violations(violations, sources, targets=False)
+    assert list(zip(located["SOURCE_URI"], located["SOURCE_LINE"])) == [("a.xml", 2), ("b.xml", 3)]
+
+
 def test_absent_key_finding_searches_only_its_id(xml_path):
     """A finding of an absent property (sh:minCount, xsd:minOccurs) searches only its ID:
     located at the definition, and the pass stops once every ID is found — the later
