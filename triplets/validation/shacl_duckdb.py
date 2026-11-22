@@ -102,7 +102,7 @@ _NULL_VALUE = "CAST(NULL AS VARCHAR)"
 def _min_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
     from_sql = (f"SELECT f.ID AS FOCUS FROM ({_focus_sql(rule, table, context)}) f "
-                f"LEFT JOIN (SELECT FOCUS, COUNT(*) AS n FROM ({rows}) GROUP BY FOCUS) c "
+                f"LEFT JOIN (SELECT FOCUS, COUNT(DISTINCT PV) AS n FROM ({rows}) GROUP BY FOCUS) c "
                 f"ON f.ID = c.FOCUS WHERE COALESCE(c.n, 0) < ?")
     return _wrap(rule, f"{rule.path} occurs fewer than {rule.params} time(s)",
                  from_sql, [rule.target_on, *rows_params, rule.params], "TRUE", [],
@@ -111,7 +111,7 @@ def _min_count(rule, table, context):
 
 def _max_count(rule, table, context):
     rows, rows_params = _rows_sql(rule, table, context)
-    from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING COUNT(*) > ?"
+    from_sql = f"SELECT FOCUS FROM ({rows}) GROUP BY FOCUS HAVING COUNT(DISTINCT PV) > ?"   # a set of value nodes
     return _wrap(rule, f"{rule.path} occurs more than {rule.params} time(s)",
                  from_sql, [*rows_params, rule.params], "TRUE", [], value_expr=_NULL_VALUE)
 

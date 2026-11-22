@@ -172,8 +172,13 @@ def _emit(plan, rule, message, violation_type=None, severity=None, value=True):
 
 # ── plan builders: (context, rule) → LazyFrame in the violations schema ──────
 
+def _distinct(column):
+    """Value nodes per group — a set: the same triple stated in two instances is one."""
+    return polars.col(column).drop_nulls().n_unique().alias("len")
+
+
 def _counts(context, rule):
-    return context.path_rows(rule).group_by("FOCUS").len()
+    return context.path_rows(rule).group_by("FOCUS").agg(_distinct("PATH_VALUE"))
 
 
 def _min_count(context, rule):
@@ -487,7 +492,7 @@ def _batch_max_count(context, rules):
     rules_frame = _rules_frame(rules, lambda r: f"{r.path} occurs more than {r.params} time(s)",
                                PARAM=lambda r: float(r.params))
     plan = (_batch_path_rows(context, rules_frame)
-            .group_by(["ID", *_RULE_COLUMNS, "PARAM"]).len()
+            .group_by(["ID", *_RULE_COLUMNS, "PARAM"]).agg(_distinct("VALUE"))
             .filter(polars.col("len") > polars.col("PARAM")))
     return [_batch_emit(plan, "sh:maxCount", value=False)]
 
@@ -496,7 +501,7 @@ def _batch_min_count(context, rules):
     rules_frame = _rules_frame(rules, lambda r: f"{r.path} occurs fewer than {r.params} time(s)",
                                PARAM=lambda r: float(r.params))
     keys = ["ID", *_RULE_COLUMNS, "PARAM"]
-    counts = _batch_path_rows(context, rules_frame).group_by(keys).len()
+    counts = _batch_path_rows(context, rules_frame).group_by(keys).agg(_distinct("VALUE"))
     universe = context.membership.join(rules_frame.lazy(), on="CLASS")   # every focus × its rules
     plan = (universe.join(counts, on=keys, how="left")
             .filter(polars.col("len").fill_null(0) < polars.col("PARAM")))

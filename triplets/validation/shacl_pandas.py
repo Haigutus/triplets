@@ -232,8 +232,9 @@ def _empty():
 # ── cardinality ──────────────────────────────────────────────────────────────
 
 def _counts(context, rule):
+    """Value nodes per focus node — a set: the same triple stated in two instances is one."""
     rows = context.path_rows(rule)
-    return (rows.groupby("FOCUS").size()
+    return (rows.groupby("FOCUS")["PATH_VALUE"].nunique()
             .reindex(context.focus(rule), fill_value=0))
 
 

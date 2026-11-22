@@ -261,6 +261,18 @@ CASES = {
     "via_type_count_typed_in_two_instances": (
         prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 2 ; sh:maxCount 1"),
         breaker("b1", (CONT, "bay1")) + obj("bay1", "Bay") + [("bay1", "Type", "Bay", "other")]),
+    # the same triples stated in two instances are one value node each (RDF merge): a Bay and
+    # a Breaker repeated in an SSH-like instance count once on every path form
+    "count_identical_triples_in_two_instances": (
+        "cim:C a sh:NodeShape ; sh:targetClass cim:Bay ; "
+        "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 2 ; sh:maxCount 1 ] ; "
+        "sh:property [ sh:path [ sh:inversePath cim:Equipment.EquipmentContainer ] ; sh:minCount 2 ; sh:maxCount 1 ] . "
+        "cim:T a sh:NodeShape ; sh:targetNode cim:Bay ; sh:property [ sh:path [ sh:inversePath rdf:type ] ; "
+        "sh:minCount 2 ; sh:maxCount 1 ] . "
+        + prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:minCount 2 ; sh:maxCount 1"),
+        [row for instance in ("eq", "ssh")
+         for row in obj("bay1", "Bay", (NAME, "Bay 1"), instance=instance)
+         + breaker("b1", (CONT, "bay1"), instance=instance)]),
     # "1" is the lexicalForm allowance
     "datatype_float": (prop("sh:path cim:Conductor.length ; sh:datatype xsd:float"),
                        breaker("b1", (LEN, "10.5")) + breaker("b2", (LEN, "abc")) + breaker("b3", (LEN, "1"))),
