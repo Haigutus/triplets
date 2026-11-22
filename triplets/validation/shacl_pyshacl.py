@@ -16,7 +16,7 @@ from .._header import without_metadata
 from .._rdflib_loader import load_dataset
 from .context import _scoped
 from .shacl_ir import _mark_switched_off
-from .shacl_report import VIOLATION_COLUMNS, report_to_violations
+from .shacl_report import VALIDATION_FAILURE, VIOLATION_COLUMNS, report_to_violations
 
 if find_spec("pyshacl") is None:  # registry contract: an unavailable engine fails at import
     raise ImportError("pyshacl is not installed")
@@ -95,16 +95,15 @@ def validate(data, compiled, rdf_map=None, data_scope=None, inference="none",
 
 
 def _not_validated(failure):
-    """The one row of a run pyshacl gave up on (a ``ValidationFailure``: a sh:sparql
-    query it does not accept, …) — a ``triplets:invalidSparql`` Violation without a
-    focus node, as the vectorized engines flag a query no engine can run. pyshacl
-    stops at the first such shape and names none, so the row has no SOURCE_SHAPE and
-    pyshacl reports nothing else."""
+    """The one row of a run pyshacl gave up on (its ``ValidationFailure``: a sh:sparql
+    query it does not accept, or any other cause it reports that way) — a
+    ``triplets:validationFailure`` Violation without a focus node. pyshacl stops at the
+    first such shape and names none, so the row has no SOURCE_SHAPE and pyshacl
+    reports nothing else; ``validate_shacl`` lists the stop in ``skipped_shapes``."""
     reason = " ".join(str(getattr(failure, "message", failure)).split())
     logger.error("pyshacl stopped the validation: %s", reason)
-    message = (f"pyshacl stopped the validation — {reason} Nothing was evaluated: a shapes bug, "
-               f"not a data finding; the vectorized engines name the shape.")
-    return pandas.DataFrame([[None, None, None, "triplets:invalidSparql", message, "Violation", None]],
+    message = f"pyshacl stopped the validation — {reason} Nothing was evaluated: no data finding, the run is partial."
+    return pandas.DataFrame([[None, None, None, VALIDATION_FAILURE, message, "Violation", None]],
                             columns=VIOLATION_COLUMNS)
 
 

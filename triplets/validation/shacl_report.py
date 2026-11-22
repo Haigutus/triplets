@@ -28,6 +28,11 @@ SCHEMA_SHAPES = "urn:triplets:schema"
 SCHEMA_SHAPE_STARTS = (SCHEMA_SHAPES + ":", SCHEMA_SHAPES + "#")   # with a scope, without one
 
 
+VALIDATION_FAILURE = "triplets:validationFailure"   # the run stopped: the pyshacl engine's ValidationFailure
+# VIOLATION_TYPEs of rows about a shape the run could not evaluate, never about the data
+SHAPE_NOTES = ("triplets:invalidSparql", VALIDATION_FAILURE)
+
+
 def run_language(violations):
     """The constraint language of a violations frame (``"shacl"`` / ``"rdfs"``): the run
     metadata's (``attrs["validation"]["language"]``); for a frame without it (``pandas.concat``
@@ -41,9 +46,10 @@ def run_language(violations):
 
 def has_violation(violations):
     """Whether *violations* holds a data Violation — the ``abort_on_first`` stop.
-    A ``triplets:invalidSparql`` row flags a defective shape, not the data."""
+    A ``triplets:invalidSparql`` or ``triplets:validationFailure`` row flags a
+    defective shape, not the data."""
     return bool(len(violations)) and bool(((violations["SEVERITY"] == "Violation")
-                                           & (violations["VIOLATION_TYPE"] != "triplets:invalidSparql")).any())
+                                           & ~violations["VIOLATION_TYPE"].isin(SHAPE_NOTES)).any())
 
 
 # path suffix → rdflib serialize format (traversed in order for the reverse,

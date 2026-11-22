@@ -61,7 +61,7 @@ from .schema_ir import compile_references, compile_schema, PRESENTED as _PRESENT
 from .schema_ir import schema_name
 from .schema_scope import SCOPE_KEY, _class_ancestors, require_entries, scope_sections
 from .schema_scope import class_ancestors, scoped_rdf_map  # noqa: F401 — public API
-from .shacl_report import (VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
+from .shacl_report import (VALIDATION_FAILURE, VIOLATION_COLUMNS, export_to_shacl_report, has_violation,  # noqa: F401 — public API
                            violations_to_csv, violations_to_excel)
 from .context import ENRICHMENT_COLUMNS, concat_violations, enrich  # noqa: F401 — public API
 from .context import file_names as _file_names
@@ -166,7 +166,7 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
         (``CompiledShapes.active``).
     abort_on_first : bool, default False
         Stop at the first Violation — for a yes/no gate, not a full report.
-        Warning and Info findings and ``triplets:invalidSparql`` rows never
+        Warning and Info findings and ``triplets:invalidSparql`` / ``triplets:validationFailure`` rows never
         stop the run. The result holds the findings of the work finished
         before the stop, so engines agree on whether a Violation exists, not
         on the rows. polars / duckdb stop after the vectorized pass, pandas
@@ -200,6 +200,9 @@ def validate_shacl(data, shapes, rdf_map=None, data_scope=None, rdf_map_scope=No
     violations = _present(violations, compiled.ir, compiled.language)
     violations.attrs["validation"] = _report_metadata(
         violations, data, compiled, engine_name, started, table_name=table_ref, notes=notes)
+    # a run the engine gave up on (pyshacl's ValidationFailure) is partial: said where the coverage is read
+    violations.attrs["validation"]["skipped_shapes"] += list(
+        violations.loc[violations["VIOLATION_TYPE"] == VALIDATION_FAILURE, "MESSAGE"])
     violations.attrs["validation"]["aborted"] = abort_on_first and has_violation(violations)
     violations.attrs["validation"]["inheritance"] = bool(ancestors)   # applied: an rdf_map with classes, the flag on
     violations.attrs["validation"]["profiles"] = (scoped[SCOPE_KEY].get("ProfileMetadata", {}).get("sections")

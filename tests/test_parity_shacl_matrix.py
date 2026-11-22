@@ -841,16 +841,22 @@ def test_sparql_solutions_are_findings_with_their_message(engine):
 
 def test_pyshacl_validation_failure_is_a_note_row():
     """A query pyshacl does not accept (pre-bound $this missing from a nested SELECT) stops its
-    run: one triplets:invalidSparql Violation with pyshacl's reason, no crash; no data Violation."""
+    run: one triplets:validationFailure Violation with pyshacl's reason, no crash; no data Violation."""
     import rdflib
     shape = PREFIX + """cim:V a sh:NodeShape ; sh:targetClass cim:Bay ; sh:sparql [ sh:prefixes cim: ; sh:select
         'SELECT $this ?value WHERE { { SELECT ?class (COUNT(?s) AS ?value) WHERE { ?s rdf:type ?class } GROUP BY ?class } }' ] ."""
     shapes = triplets.validation.compile(rdflib.Graph().parse(data=shape, format="turtle"))
     violations = triplets.validation.validate_shacl(frame(TRIO), shapes, engine="pyshacl", rdf_map=SCHEMA, rdf_map_scope="*")
-    assert violations[["ID", "VIOLATION_TYPE", "SEVERITY"]].values.tolist() == [[None, "triplets:invalidSparql", "Violation"]]
+    assert violations[["ID", "VIOLATION_TYPE", "SEVERITY"]].values.tolist() == [[None, "triplets:validationFailure", "Violation"]]
     assert "pre-bound variables must be selected" in violations["MESSAGE"][0]
     assert not triplets.validation.has_violation(violations)
-    assert violations.shacl.to_sarif(export_to_memory=True).read()
+    assert violations.attrs["validation"]["skipped_shapes"] == [violations["MESSAGE"][0]]       # the run is partial
+    import json
+    run = json.loads(violations.shacl.to_sarif(export_to_memory=True).read())["runs"][0]
+    assert "pre-bound" in run["invocations"][0]["toolConfigurationNotifications"][0]["message"]["text"]
+    back = triplets.validation.shacl_report.report_to_violations(
+        triplets.validation.shacl_report.violations_to_report_graph(violations))
+    assert list(back["VIOLATION_TYPE"]) == ["triplets:validationFailure"]
 
 
 DCAT = "http://www.w3.org/ns/dcat#"

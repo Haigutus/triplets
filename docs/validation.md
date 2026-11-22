@@ -497,8 +497,11 @@ them too.
   evaluated on the lenient rdflib engine. `engine="pyshacl"` stops at the
   first query pyshacl itself does not accept (its `ValidationFailure`, e.g. a
   nested SELECT that does not project `$this`) and names no shape: the run
-  returns one `triplets:invalidSparql` Violation row with pyshacl's reason,
-  without a focus node or `SOURCE_SHAPE`, and no other pyshacl finding.
+  returns one `triplets:validationFailure` Violation row with pyshacl's reason,
+  without a focus node or `SOURCE_SHAPE`, and no other pyshacl finding; the
+  reason is also a `skipped_shapes` entry of the run metadata (a SARIF
+  configuration notification), so the run says it is partial. pyshacl reports
+  other causes than a query the same way, hence a type of its own.
 - **SPARQL targets** (`target_by="SPARQL"`) run the same way: each distinct
   target query once per run over the (scoped) data, its `?this` column the
   focus nodes. A target query a strict engine rejects gets the same Warning
@@ -560,7 +563,7 @@ conforms** — identical across all engines:
 | `ID` | focus node (instance UUID, `urn:uuid:` stripped — `triplets.iri.local_id`) |
 | `KEY` | property path (CIM short name, e.g. `IdentifiedObject.name`) |
 | `VALUE` | offending value |
-| `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, `triplets:invalidSparql`, ...) |
+| `VIOLATION_TYPE` | constraint component (`sh:minCount`, `sh:datatype`, `triplets:lexicalForm`, `triplets:invalidSparql`, `triplets:validationFailure`, ...) |
 | `MESSAGE` | message from the shape |
 | `SEVERITY` | `Violation` / `Warning` / `Info` |
 | `SOURCE_SHAPE` | shape URI that produced the result |
@@ -961,7 +964,7 @@ as keyword arguments. Names the schema does not declare (every name without an
 schema-less `cim:` shapes keep working; the same parameter on
 `to_shacl_report`); every
 row is loaded. `abort_on_first=True` stops every engine at the first
-Violation (Warnings and `triplets:invalidSparql` never stop it), for a yes/no
+Violation (Warnings, `triplets:invalidSparql` and `triplets:validationFailure` never stop it), for a yes/no
 gate rather than a full report. Runnable end-to-end demos live in
 `examples/shacl_validation.py` (engine behavior walkthrough) and
 `examples/shacl_reports.py` (uv-runnable: performance engines + both report

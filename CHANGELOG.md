@@ -583,9 +583,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`engine="pyshacl"` no longer crashes on a shape pyshacl gives up on.** pyshacl returns
   its `ValidationFailure` in place of the report (a `sh:sparql` query it does not accept),
   and the run ended in `AttributeError: 'ValidationFailure' object has no attribute
-  'objects'`. The run now returns one `triplets:invalidSparql` Violation row with
-  pyshacl's reason, like the vectorized engines flag a query no engine can run; pyshacl
-  names no shape, so the row has no `SOURCE_SHAPE`.
+  'objects'`. The run now returns one `triplets:validationFailure` Violation row with
+  pyshacl's reason (a type of its own: pyshacl reports other causes than a query this
+  way) and lists the reason in the run metadata's `skipped_shapes`, so the reports say
+  the run is partial; pyshacl names no shape, so the row has no `SOURCE_SHAPE`. Like
+  `triplets:invalidSparql`, the row is no data Violation for `has_violation`.
 - **`sh:targetObjectsOf rdf:type` findings carry the class IRI as `ID`** on pandas, polars
   and duckdb, as pyshacl reports them (`http://iec.ch/TC57/CIM100#Bay`; it was the local
   `Bay`), and so do the findings of `sh:targetObjectsOf` on an enumeration KEY. A class
