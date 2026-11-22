@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 
 def _write_sheets(output, tableviews, apply_formatting):
-    """One sheet per tableview into *output*. A text that starts with ``=`` stays a
-    text cell: openpyxl writes it as a formula, which reads back as no value."""
+    """One sheet per tableview into *output*. A text that starts with ``=`` and an
+    Excel error word (``#N/A``, ``#REF!``, ``#DIV/0!``) stay text cells: openpyxl
+    writes them as a formula and an error, which read back as no value."""
     from openpyxl.utils import get_column_letter
 
     with pandas.ExcelWriter(output, engine='openpyxl') as writer:
@@ -25,7 +26,7 @@ def _write_sheets(output, tableviews, apply_formatting):
             sheet = writer.sheets[class_type]
             for row in sheet.iter_rows():
                 for cell in row:
-                    if cell.data_type == "f":
+                    if cell.data_type in ("f", "e"):
                         cell.data_type = "s"
             if apply_formatting:
                 for i in range(1, len(class_data.columns) + 2):

@@ -185,7 +185,7 @@ def test_round_trip_keeps_texts_that_read_as_missing_or_formula(tmp_path, monkey
     a text starting with = is a text cell, not a formula."""
     import pandas
     monkeypatch.chdir(tmp_path)
-    texts = ["NaN", "NA", "null", "None", "N/A", "nan", "=1+2", "INF"]
+    texts = ["NaN", "NA", "null", "None", "N/A", "nan", "=1+2", "INF", "#N/A", "#REF!", "#DIV/0!"]
     rows = [(f"00000000-0000-0000-0000-{n:012d}", key, value, "i1") for n, text in enumerate(texts)
             for key, value in (("Type", "ACLineSegment"), ("IdentifiedObject.name", text))]
     data = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])

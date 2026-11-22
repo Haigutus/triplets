@@ -104,8 +104,8 @@ Notes
 -----
 - Every value is written as text and read back as text, so it returns as written:
   numbers (``1.0``, ``8e-5``, ``1.0712249999999999``), the texts ``NaN``, ``NA``,
-  ``null``, ``None`` and ``N/A``, and a text that starts with ``=`` (a text cell in
-  Excel, not a formula). A number is a text cell in Excel. A cell that is edited
+  ``null``, ``None`` and ``N/A``, a text that starts with ``=`` and the Excel error
+  words (``#N/A``, ``#REF!``, ``#DIV/0!``) — text cells in Excel, no formula and no error. A number is a text cell in Excel. A cell that is edited
   into a number cell is read as Excel stores the number (``1.0`` -> ``1``, 15
   significant digits).
 - An empty value is an empty cell, and an empty cell is no value: it is not

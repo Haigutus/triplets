@@ -595,8 +595,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `=`.** A VALUE `NaN` (a legal `xsd:float`), `NA`, `null`, `None`, `N/A` or `nan` was
   dropped on the way back from CSV and Excel, and a VALUE `=1+2` was written to Excel as
   a formula and lost. Only an empty cell is no value now (the CLI reads with
-  `keep_default_na=False, na_values=[""]`), and `export_to_excel` writes every value as a
-  text cell.
+  `keep_default_na=False, na_values=[""]`), and `export_to_excel` writes a text that
+  starts with `=` and the Excel error words (`#N/A`, `#REF!`, `#DIV/0!`) as text cells.
 - **Every SARIF ruleId of a SHACL finding changes: it is now a function of the shape
   alone.** The ruleId was the shape's local name and the constraint, with a counter in
   order of appearance for shapes of one local name in several namespaces
