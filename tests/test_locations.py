@@ -37,7 +37,7 @@ def test_definition_and_key_positions(xml_path):
     assert (line["uri"], line["startLine"]) == (xml_path, 3)
     assert line["snippet"] == '<cim:ACLineSegment rdf:ID="_aaaa">'
     assert line["keyLines"]["Conductor.length"] \
-        == (5, "<cim:Conductor.length>12.5</cim:Conductor.length>")
+        == (xml_path, 5, "<cim:Conductor.length>12.5</cim:Conductor.length>")
     assert located["bbbb"]["startLine"] == 7
 
 
@@ -52,6 +52,25 @@ def test_first_definition_wins(tmp_path, xml_path):
     other.write_bytes(XML.replace(b"12.5", b"99.9"))
     located = locate({"aaaa": set()}, [xml_path, str(other)])
     assert located["aaaa"]["uri"] == xml_path
+
+
+def test_key_in_a_later_file_is_located_there(tmp_path):
+    """An object defined in an EQ file with a property in an SSH file (rdf:about
+    continuation): a finding on the SSH KEY points at the SSH element, one on an EQ
+    KEY at the EQ element, a KEY in neither at the EQ definition."""
+    eq, ssh = tmp_path / "grid_EQ.xml", tmp_path / "grid_SSH.xml"
+    eq.write_bytes(XML)
+    ssh.write_bytes(b"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <cim:ACLineSegment rdf:about="#_aaaa">
+    <cim:Equipment.inService>true</cim:Equipment.inService>
+  </cim:ACLineSegment>
+</rdf:RDF>
+""")
+    violations = pandas.DataFrame({"ID": ["aaaa"] * 3, "KEY": ["Equipment.inService", "Conductor.length", "Missing.key"]})
+    located = locate_violations(violations, [str(eq), str(ssh)], targets=False)
+    assert list(zip(located["SOURCE_URI"], located["SOURCE_LINE"])) == [(str(ssh), 4), (str(eq), 5), (str(eq), 3)]
+    assert located["SOURCE_SNIPPET"][0] == "<cim:Equipment.inService>true</cim:Equipment.inService>"
 
 
 def test_file_like_without_seekable_and_spent_stream(xml_path, caplog):
@@ -235,17 +254,17 @@ def test_relative_sources(tmp_path, monkeypatch, caplog):
 def test_locate_violations_targets(xml_path, tmp_path):
     """The referenced object of a reference finding found in the data (TARGET_ID)
     is located in the same pass, at its definition; a dangling one (no TARGET_ID)
-    is not wanted — the pass still stops once every wanted object is found (the
-    second source, which does not exist, is never opened)."""
+    is not wanted — the pass still stops once every wanted object and KEY is found
+    (the second source, which does not exist, is never opened)."""
     violations = pandas.DataFrame([
-        ("aaaa", "Line.Breaker", "bbbb", "sh:class", "m", "Violation", "s", "bbbb"),
-        ("aaaa", "Line.Breaker", "zzzz", "triplets:missing", "m", "Violation", "s", None),
+        ("aaaa", "IdentifiedObject.name", "bbbb", "sh:class", "m", "Violation", "s", "bbbb"),
+        ("aaaa", "IdentifiedObject.name", "zzzz", "triplets:missing", "m", "Violation", "s", None),
         ("aaaa", "Conductor.length", "12.5", "sh:maxInclusive", "m", "Warning", "s", None),
     ], columns=["ID", "KEY", "VALUE", "VIOLATION_TYPE", "MESSAGE", "SEVERITY", "SOURCE_SHAPE", "TARGET_ID"])
     frame = locate_violations(violations, [xml_path, str(tmp_path / "absent.xml")])
     assert frame[["TARGET_URI", "TARGET_LINE", "TARGET_SNIPPET"]].values.tolist() == [
         [xml_path, 7, '<cim:Breaker rdf:about="urn:uuid:bbbb">'], [None, None, None], [None, None, None]]
-    assert frame["SOURCE_LINE"].tolist() == [3, 3, 5]
+    assert frame["SOURCE_LINE"].tolist() == [4, 4, 5]
 
 
 def test_located_lines_stay_integers(xml_path):

@@ -577,6 +577,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **`locate` (SARIF / SHACL report locations) points a finding on a KEY at the file holding that KEY's element** (an SSH property of an object the EQ file defines), not at the first file defining the ID; the definition stays the fallback.
 - **SHACL count constraints count a triple stated in several instances once** (`sh:minCount` / `sh:maxCount`, every path form, pandas / polars / duckdb): value nodes are a set, as in the RDF merge pyshacl validates.
 - **SHACL report `sh:resultPath` is the shape's own path** (sequence, inverse, alternative, …) as pyshacl writes it, not the path's first predicate.
 - **SHACL report `sh:value` of a `sh:sparql` result has the `?value` binding's term kind**: a node on an `rdf:type` path is `urn:uuid:…`, not a class IRI; an inverse path's value is the node.

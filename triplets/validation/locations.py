@@ -23,9 +23,10 @@ through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
 are handed to an export. When the same object is defined in several files
-(``rdf:about`` continuation across profiles), the first definition wins — a
-violated KEY living in a later profile file falls back to the definition
-position. Positions are whole lines (1-based), deliberately: RDF text
+(``rdf:about`` continuation across profiles), the first definition is the
+object's position, and a violated KEY is located at its element in the file
+that holds it (an SSH property of an EQ object); a KEY in no file falls back
+to the definition position. Positions are whole lines (1-based), deliberately: RDF text
 serializations put one statement per line, so the line IS the reference —
 columns add per-format anchor rules (byte vs UTF-16 units, element shapes)
 and broke SARIF viewers, for no extra information. Line-only is also what
@@ -73,23 +74,28 @@ def locate(wanted, sources):
     Returns
     -------
     dict {ID: {"uri": str, "startLine": int, "snippet": str,
-               "keyLines": {KEY: (line, snippet)}}}
+               "keyLines": {KEY: (uri, line, snippet)}}}
         "uri" is the source name as given (the path, a file-like's
         ``.name``); a zip member is ``<zip file name>/<member name>``, the
         zip's name without directories. The position is that of the first
         rdf:ID / rdf:about element with the ID in read order — the plain
         files as given, then the members of the zips: an rdf:about element
         in a file read earlier wins over the rdf:ID element in a later one.
-        IDs not present in the sources are absent from the result. The
-        sources are read in that order until every wanted ID is found; an
-        ID in none of them makes the pass read them all.
+        A KEY's position is that of its element in the first object window
+        of the ID that holds it, in whichever file (an SSH property of an
+        object an EQ file defines). IDs not present in the sources are absent
+        from the result; a KEY in none of the ID's windows is absent from
+        "keyLines". The sources are read in that order until every wanted ID
+        and KEY is found; one missing makes the pass read them all.
     """
     from ..parser.utils import find_all_xml
 
-    remaining = {str(object_id).encode(): object_id for object_id in wanted}
+    ids = {str(object_id).encode(): object_id for object_id in wanted}
+    missing = {object_id: {key for key in keys if key and key != TYPE_KEY}   # the type is the definition itself
+               for object_id, keys in wanted.items()}
     located = {}
     for source in find_all_xml(sources):
-        if not remaining:
+        if len(located) == len(ids) and not any(missing.values()):
             break
         uri, text = _read(source)
         matches = list(_DEFINITION.finditer(text))
@@ -97,16 +103,18 @@ def locate(wanted, sources):
         for position, match in enumerate(matches):
             line += text.count(b"\n", previous, match.start())
             previous = match.start()
-            object_id = remaining.pop(match.group(1), None)
-            if object_id is None:
+            object_id = ids.get(match.group(1))
+            if object_id is None or (object_id in located and not missing[object_id]):
                 continue
+            if object_id not in located:
+                located[object_id] = {"uri": uri, "startLine": line, "snippet": _line_text(text, match.start()),
+                                      "keyLines": {}}
             window_end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
-            located[object_id] = {
-                "uri": uri, "startLine": line, "snippet": _line_text(text, match.start()),
-                "keyLines": _key_lines(text, match.start(), window_end, line, wanted[object_id]),
-            }
-    if remaining:
-        logger.debug("%d violating object(s) not found in the sources", len(remaining))
+            found = _key_lines(text, match.start(), window_end, line, missing[object_id])
+            located[object_id]["keyLines"] |= {key: (uri, *position_) for key, position_ in found.items()}
+            missing[object_id] -= found.keys()
+    if len(located) < len(ids):
+        logger.debug("%d violating object(s) not found in the sources", len(ids) - len(located))
     return located
 
 
@@ -114,7 +122,8 @@ def locate_violations(violations, sources, targets=True):
     """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
 
     Per row (ID, KEY): the violated property element's own position when it
-    was found inside the object's text window, else the object definition's;
+    was found inside one of the object's text windows (in the file that holds
+    it, which need not be the defining one), else the object definition's;
     rows whose object is not in the sources get nulls. The referenced object
     of a reference finding found in the data (TARGET_ID — context.enrich) is
     located in the same pass, at its definition, into the TARGET_* columns; a
@@ -141,8 +150,7 @@ def locate_violations(violations, sources, targets=True):
         if entry is None:
             return None, None, None
         key = None if pandas.isna(key) else str(key)
-        line, snippet = entry["keyLines"].get(key, (entry["startLine"], entry["snippet"]))
-        return entry["uri"], line, snippet
+        return entry["keyLines"].get(key, (entry["uri"], entry["startLine"], entry["snippet"]))
 
     frame = violations.copy()
     positions = [position(object_id, key) + position(target)
@@ -188,8 +196,6 @@ def _key_lines(text, definition_start, window_end, definition_line, keys):
     """(line, snippet) of each violated property element inside the object's window."""
     lines = {}
     for key in keys:
-        if not key or key == TYPE_KEY:         # the type is the definition element itself
-            continue
         pattern = rb"<[\w.-]+:" + re.escape(str(key).encode()) + rb"[\s>/]"
         match = re.search(pattern, text[definition_start:window_end])
         if match is not None:
