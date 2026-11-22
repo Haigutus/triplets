@@ -2,7 +2,7 @@
 import pandas
 import pytest
 
-pytest.importorskip("rdflib")
+rdflib = pytest.importorskip("rdflib")
 
 import triplets
 from triplets.validation.context import ENRICHMENT_COLUMNS, enrich
@@ -232,3 +232,19 @@ def test_concat_violations_merges_run_metadata(shapes):
     partial = first.drop(columns=["SOURCE_SHAPE"])                    # a hand-made frame without the column
     partial.attrs = {}
     assert len(concat_violations([partial, first])) == 2
+
+
+@pytest.mark.parametrize("engine", ["pandas", "polars", "duckdb"])
+def test_enrich_found_values_are_the_counted_set(engine):
+    """sh:maxCount counts a set of value nodes: TARGET lists each value once (a name
+    stated in two instances is one), without the rows that have no VALUE."""
+    pytest.importorskip(engine)
+    shapes = """@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:S a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:property [ sh:path cim:IdentifiedObject.name ; sh:maxCount 1 ] ."""
+    data = pandas.DataFrame([("b1", "Type", "Breaker", "eq"), ("b1", "IdentifiedObject.name", "A", "eq"),
+                             ("b1", "Type", "Breaker", "ssh"), ("b1", "IdentifiedObject.name", "A", "ssh"),
+                             ("b1", "IdentifiedObject.name", "B", "ssh"), ("b1", "IdentifiedObject.name", None, "ssh")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    violations = triplets.validation.validate_shacl(data, rdflib.Graph().parse(data=shapes, format="turtle"),
+                                                    engine=engine)
+    assert enrich(violations, data=data)["TARGET"].tolist() == ["found 2 values: 'A', 'B'"]
