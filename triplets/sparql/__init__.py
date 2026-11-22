@@ -99,12 +99,15 @@ def query(data, query_string, rdf_map=None, data_scope=None, engine="auto", retu
         SELECT values as N-Triples terms instead of lexical strings: ``<iri>``,
         ``"text"`` with its ``^^<datatype>`` / ``@lang``, ``_:label`` (unbound →
         null) — the term kind of each binding, which a lexical string loses (a
-        literal ``"urn:uuid:b1"`` and the node ``<urn:uuid:b1>``). Every engine
-        reads them from its SPARQL JSON results (:func:`json_terms`).
+        literal ``"urn:uuid:b1"`` and the node ``<urn:uuid:b1>``). The built-in
+        engines read them from their SPARQL JSON results (:func:`json_terms`); the
+        flag reaches an engine only when set, so a registered engine without it
+        serves every other query unchanged.
     """
     engine_name, engine_mod = get_engine(engine)
     return engine_mod.query(data, query_string, rdf_map=rdf_map, data_scope=data_scope, return_type=return_type,
-                            data_unchanged=data_unchanged, undefined_namespace=undefined_namespace, terms=terms)
+                            data_unchanged=data_unchanged, undefined_namespace=undefined_namespace,
+                            **({"terms": True} if terms else {}))
 
 
 def json_terms(payload, return_type="pandas"):

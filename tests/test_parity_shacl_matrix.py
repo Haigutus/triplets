@@ -934,6 +934,20 @@ def test_sparql_values_keep_their_term_kind(engine, sparql_engine, monkeypatch):
             assert sorted(zip(violations["ID"], violations["VALUE"], violations["VALUE_KIND"])) == rows
 
 
+def test_sparql_targets_stay_lexical(monkeypatch):
+    """Only the sh:sparql constraint results are read as terms; a SPARQL target query
+    (?this is always a node) takes the lexical path."""
+    query, calls = triplets.sparql.query, []
+    monkeypatch.setattr(triplets.sparql, "query", lambda data, text, **kwargs: (
+        calls.append(("VALUES ?this" in text, kwargs.get("terms", False))) or query(data, text, **kwargs)))
+    shape = sparql_target(HAS_CONTAINER, "sh:property [ sh:path cim:IdentifiedObject.name ; sh:sparql [ sh:prefixes cim: ; "
+                                         "sh:select 'SELECT $this ?value WHERE { $this $PATH ?value }' ] ] .")
+    import rdflib
+    triplets.validation.validate_shacl(frame(TRIO), rdflib.Graph().parse(data=PREFIX + shape, format="turtle"),
+                                       engine="pandas", **DEFAULTS)
+    assert sorted(set(calls)) == [(False, False), (True, True)]   # (constraint query, terms)
+
+
 def test_sparql_fork_worker_keeps_the_term_kind(monkeypatch):
     """The rdflib fork worker returns N-Triples terms too: its literal ?value stays a literal."""
     from triplets.validation import shacl_pandas

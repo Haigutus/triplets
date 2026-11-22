@@ -552,9 +552,10 @@ def _shorten(texts, rule, node):
     return rule(iri_pandas.decode_iri(texts.where(node))).where(node, texts)
 
 
-def _select(context, query_text):
-    """One SELECT over the run's data on the auto SPARQL engine, its values N-Triples
-    terms (``sparql.query(terms=True)``: the term kinds kept) → (result,
+def _select(context, query_text, terms=False):
+    """One SELECT over the run's data on the auto SPARQL engine, its values lexical
+    strings, or with *terms* N-Triples terms (``sparql.query(terms=True)``: the term
+    kinds of a constraint's ?value kept) → (result,
     rejection): a strict engine's rejection is re-run on rdflib and returned as
     *rejection* (None when the auto engine ran it). Raises when rdflib fails
     too — the query is defective on every engine."""
@@ -563,18 +564,18 @@ def _select(context, query_text):
     # oxigraph) take the raw frame and manage their own engine-state cache
     # (one build, content-hashed)
     if sparql.get_engine("auto")[0] == "rdflib":
-        return sparql.query(context.dataset(), query_text, return_type="pandas", terms=True), None
+        return sparql.query(context.dataset(), query_text, return_type="pandas", terms=terms), None
     try:
         result = sparql.query(context.data, query_text, rdf_map=context.rdf_map, return_type="pandas",
                               data_unchanged=context.data_hashed, undefined_namespace=context.undefined_namespace,
-                              terms=True)
+                              terms=terms)
         context.data_hashed = True
         return result, None
     except Exception as error:                            # noqa: BLE001 — engine strictness
         # the engine hashes the data before loading or querying, and
         # data_unchanged only reuses a digest stored for this very object
         context.data_hashed = True
-        return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas", terms=True), error
+        return sparql.query(context.dataset(), query_text, engine="rdflib", return_type="pandas", terms=terms), error
 
 
 def _rejected(context, shape_ids, path, what, error):
@@ -607,7 +608,7 @@ def _sparql(context, rule):
     if not len(focus_ids):
         return _empty()
     try:
-        result, rejection = _select(context, _sparql_query_text(rule, focus_ids))
+        result, rejection = _select(context, _sparql_query_text(rule, focus_ids), terms=True)
     except Exception as error:                            # noqa: BLE001 — defective authored query
         logger.error("sh:sparql constraint %s fails on every engine: %s", rule.shape_id, error)
         return _invalid_sparql(rule.shape_id, rule.path, _not_evaluated(rule, error), severity="Violation")
@@ -667,8 +668,8 @@ def _sparql_targets(context, rules):
         if "this" not in result.columns:
             notes.append(_unchecked_target(shape_ids, "the query projects no ?this"))
             continue
-        this = result["this"].dropna()
-        targets[query_text] = _shorten(term_text(this), iri_pandas.local_id, is_node(this)).unique()
+        this = result["this"].dropna().astype(str)   # lexical: a focus node is always a node
+        targets[query_text] = _shorten(this, iri_pandas.local_id, iri_pandas.is_iri(this)).unique()
         if rejection is not None:
             notes.append(_rejected(context, shape_ids, None, "SPARQL target", rejection))
     return targets, pandas.concat(notes, ignore_index=True)

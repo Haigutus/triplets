@@ -278,3 +278,15 @@ def test_select_terms_keep_the_term_kind(engine):
     assert result.astype(object).where(result.notna(), None).values.tolist() == [
         ["<urn:uuid:b1>", '"urn:uuid:b1"', '"a \\"q\\"\\nx\\\\y"', '"true"^^<http://www.w3.org/2001/XMLSchema#boolean>'],
         ["<urn:uuid:b2>", '"http://example.org/x#y"', None, None]]
+
+
+def test_engine_without_terms_serves_lexical_queries(monkeypatch):
+    """terms= reaches an engine only when set: a registered engine without it keeps working."""
+    from types import SimpleNamespace
+    seen = []
+    engine = SimpleNamespace(query=lambda data, text, rdf_map=None, data_scope=None, return_type="auto",
+                             data_unchanged=False, undefined_namespace=None: seen.append(text) or "ok")
+    monkeypatch.setitem(triplets.sparql._REGISTRY.loaded, "plain", engine)   # register_engine, undone after
+    assert triplets.sparql.query(None, "ASK {}", engine="plain") == "ok" and seen == ["ASK {}"]
+    with pytest.raises(TypeError):
+        triplets.sparql.query(None, "ASK {}", engine="plain", terms=True)
