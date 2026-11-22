@@ -21,6 +21,7 @@ from uuid import uuid4
 from lxml import etree
 from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
+from triplets.tools.pandas_engine import _tableview
 from triplets._header import PROFILE_KEYS, PROFILE_URL_MAP, REFERENCE_KEYS, HEADER_TYPES, distribution_labels
 from triplets.parser import parse as load_all_to_dataframe
 
@@ -505,7 +506,8 @@ def get_EIC_to_mRID_map(data, type):
 
 
 def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
-    """Wide table of the loaded header objects (model parts), one row each.
+    """Wide table of the loaded header objects (model parts), one row per header
+    of each instance — two files that share a header ID are two rows.
 
     Parameters
     ----------
@@ -525,14 +527,17 @@ def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=Fal
     Returns
     -------
     pandas.DataFrame or None
-        Pivoted DataFrame with header IDs as index and keys as columns,
-        or None when no header object is present.
+        Pivoted DataFrame with header IDs as index, the ``INSTANCE_ID`` column
+        and the keys as columns, or None when no header object is present.
 
     Examples
     --------
     >>> model_parts = get_loaded_model_parts(data)
     """
-    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
+    types = [header_types] if isinstance(header_types, str) else list(header_types)
+    headers = data.loc[(data["KEY"] == "Type") & data["VALUE"].isin(types)]
+    parts = _tableview(headers, data, string_to_number, multivalue, "/".join(types), index=("ID", "INSTANCE_ID"))
+    return None if parts is None else parts.reset_index("INSTANCE_ID")
 
 
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):

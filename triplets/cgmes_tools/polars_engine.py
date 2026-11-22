@@ -13,6 +13,7 @@ import math
 import polars as pl
 
 from triplets import tools as rdf_parser
+from triplets.tools.polars_engine import _tableview
 from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES, distribution_labels
 from .pandas_engine import (  # pure, engine-agnostic helpers
     default_filename_mask,
@@ -119,8 +120,11 @@ def get_model_triplets(data, model_instances_dataframe):
 
 
 def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
-    """Wide table of loaded header objects (FullModel / Dataset). Repeated keys keep the first value; multivalue=True returns lists."""
-    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
+    """Wide table of loaded header objects (FullModel / Dataset), one row per header of each instance
+    (ID, INSTANCE_ID columns). Repeated keys keep the first value; multivalue=True returns lists."""
+    types = [header_types] if isinstance(header_types, str) else list(header_types)
+    headers = data.filter((pl.col("KEY") == "Type") & pl.col("VALUE").is_in(types))
+    return _tableview(headers, data, string_to_number, multivalue, "/".join(types), index=("ID", "INSTANCE_ID"))
 
 
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):

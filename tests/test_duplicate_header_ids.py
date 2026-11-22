@@ -455,14 +455,12 @@ def test_dependency_on_a_shared_header_id_resolves_to_both_twins(path_pair, engi
     assert sorted(relations["INSTANCE_ID_TO"].astype(str)) == sorted(instances.values())
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError,
-                   reason="get_loaded_model_parts is a type_tableview pivoted on ID "
-                          "(triplets/tools/pandas_engine.py:110): the twins become one row with "
-                          "the first twin's values")
 def test_get_loaded_model_parts_lists_both_twins(path_pair, engine):
-    data, _ = flavored(path_pair, engine)
+    """One row per header instance, each with its own values."""
+    data, instances = flavored(path_pair, engine)
     parts = pandas_frame(cgmes_tools.get_loaded_model_parts(data))
-    assert sorted(parts["Model.description"]) == sorted(TWINS[twin]["description"] for twin in TWINS)
+    assert sorted(zip(parts["INSTANCE_ID"].astype(str), parts["Model.description"])) == sorted(
+        (instances[twin], TWINS[twin]["description"]) for twin in TWINS)
 
 
 @pytest.mark.xfail(strict=True, raises=AssertionError,
