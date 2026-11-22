@@ -8,6 +8,7 @@ engines, so the later vectorized engines can produce it natively)::
 """
 import io
 import logging
+import re
 import os
 from datetime import datetime, timezone
 
@@ -40,6 +41,8 @@ def run_language(violations):
     language = violations.attrs.get("validation", {}).get("language")
     if language:
         return language
+    if "SOURCE_SHAPE" not in violations.columns:     # a hand-made frame: nothing says rdfs
+        return "shacl"
     shapes = violations["SOURCE_SHAPE"].dropna().astype(str)
     return "rdfs" if len(shapes) and shapes.str.startswith(SCHEMA_SHAPE_STARTS).all() else "shacl"
 
@@ -92,11 +95,8 @@ _COMPONENT_MAP = {
 }
 
 
-class _SameLabels(dict):
-    """The N-Triples parser's blank-node map (``bnode_context``) that keeps every label."""
-
-    def get(self, label, default=None):
-        return label
+# a blank-node label in N-Triples text (rdflib's serializer: at the start of a line or after a space)
+_BLANK_NODE = re.compile(r"(?:^|\s)_:([A-Za-z0-9]+)", re.MULTILINE)
 
 
 def shape_triples(text, graph=None):
@@ -106,7 +106,10 @@ def shape_triples(text, graph=None):
     import rdflib
 
     graph = rdflib.Graph() if graph is None else graph
-    return graph.parse(data=text, format="nt", bnode_context=_SameLabels())
+    # bnode_context (rdflib's N-Triples parser): label → the BNode it is read as; a label
+    # that is no node (inside a literal) is an entry nothing asks for
+    labels = {label: rdflib.BNode(label) for label in _BLANK_NODE.findall(text)}
+    return graph.parse(data=text, format="nt", bnode_context=labels)
 
 
 def report_to_violations(report_graph, shapes_graph=None, rdf_map=None, undefined_namespace=CIM_NS):

@@ -620,7 +620,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   and `{?name}` / `{$name}` in the message stayed as written (APL `ClassCount`: 9
   classes, 3 rows with the text `The class {?class} appears {?value} times …`). The
   placeholders are now replaced by the solution's values, as pyshacl writes them (an
-  IRI whole, a literal's text), on every engine, and identical findings of a
+  IRI whole, a literal's text; `{?value}` of a node shape's solution without `?value` is
+  the focus node), on every engine, and identical findings of a
   `sh:sparql` constraint are told apart by the message too. `MESSAGE_SOURCE` of a
   filled message is `shacl`.
 - **`sh:targetNode <class IRI>` with `sh:path [ sh:inversePath rdf:type ]` finds the

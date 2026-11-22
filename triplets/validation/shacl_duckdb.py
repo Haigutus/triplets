@@ -56,7 +56,7 @@ def _focus_sql(rule, table, context):
     if by == "VALUE" and holds_names(rule.target_on, context.value_types):
         return "SELECT IRI AS ID FROM _shacl_names WHERE KEY = ?"
     if by == "VALUE":
-        return f"SELECT DISTINCT VALUE AS ID FROM {table} WHERE KEY = ?"
+        return f"SELECT DISTINCT VALUE AS ID FROM {table} WHERE KEY = ? AND VALUE IS NOT NULL"
     if by == "ID":
         return "SELECT ? AS ID"
     return _class_sql()

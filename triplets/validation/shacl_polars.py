@@ -98,7 +98,7 @@ class _Context:
         cache_key = (column, key)
         if cache_key not in self._subjects:
             ids = self._frame.filter(polars.col("KEY") == key).select(
-                (self.nodes(key) if column == "VALUE" else polars.col(column)).alias("ID"))["ID"].unique()
+                (self.nodes(key) if column == "VALUE" else polars.col(column)).alias("ID"))["ID"].drop_nulls().unique()
             self._subjects[cache_key] = (ids, ids.implode())
         return self._subjects[cache_key]
 

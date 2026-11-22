@@ -229,3 +229,6 @@ def test_concat_violations_merges_run_metadata(shapes):
         concat_violations([bare, first])
     assert len(concat_violations([bare, bare, bare.iloc[0:0]])) == 2
     assert len(concat_violations([first, pandas.DataFrame(columns=first.columns)])) == 1
+    partial = first.drop(columns=["SOURCE_SHAPE"])                    # a hand-made frame without the column
+    partial.attrs = {}
+    assert len(concat_violations([partial, first])) == 2

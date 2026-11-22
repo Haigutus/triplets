@@ -216,6 +216,9 @@ CASES = {
                                "sh:property [ sh:path [ sh:inversePath cim:Switch.kind ] ; sh:minCount 2 ] .",
                                TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq"), ("b2", "Switch.kind", "SwitchKind.breaker", "eq"),
                                        ("b3", "Switch.kind", "SwitchKind.fuse", "eq")]),
+    # a row without a VALUE names no node
+    "target_objects_of_null_value": (f"cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type, cim:Equipment.EquipmentContainer ; {NAME_MIN}",
+                                     TRIO + [("z1", "Type", None, "eq"), ("b3", CONT, None, "eq")]),
     "target_objects_of_type_data_scope": ("cim:O a sh:NodeShape ; sh:targetObjectsOf rdf:type ; "
                                           "sh:property [ sh:path [ sh:inversePath rdf:type ] ; sh:minCount 2 ] .",
                                           TRIO + breaker("x1", instance="other") + obj("l1", "Line", instance="other"),
@@ -412,6 +415,15 @@ CASES = {
         TRIO + breaker("b4") + breaker("b5") + obj("vl1", "VoltageLevel") + obj("vl2", "VoltageLevel")
         + obj("l1", "Line") + obj("l2", "Line") + obj("t1", "Terminal") + obj("j1", "Junction") + obj("bs1", "BusbarSection")
         + obj("g1", "GeographicalRegion")),
+    # a solution without ?value: the focus node on a node shape, the placeholder as written on a property shape
+    "sparql_constraint_message_unbound_value": (
+        """cim:N a sh:NodeShape ; sh:targetClass cim:Breaker ; sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} n={?n}" ;
+            sh:select "SELECT $this ?value ?n WHERE { $this rdf:type ?t . OPTIONAL { $this cim:IdentifiedObject.name ?n } OPTIONAL { $this cim:IdentifiedObject.description ?value } }" ] .
+        cim:M a sh:NodeShape ; sh:targetClass cim:Bay ; sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} c={?c}" ;
+            sh:select "SELECT $this ?c WHERE { $this rdf:type ?c }" ] .
+        cim:P a sh:NodeShape ; sh:targetClass cim:Substation ; sh:property [ sh:path cim:IdentifiedObject.name ;
+            sh:sparql [ sh:prefixes cim: ; sh:message "v={?value} c={?c}" ; sh:select "SELECT $this ?c WHERE { $this rdf:type ?c }" ] ] .""",
+        TRIO),
     "sparql_constraint_node_level": (f"{B} sh:sparql [ sh:prefixes cim: ; "
                                      "sh:select 'SELECT $this WHERE { $this cim:IdentifiedObject.name ?n }' ] .", TRIO),
     # an OPTIONAL / BIND opening the group sees each focus node: b2 and b3 have no name, b1 has

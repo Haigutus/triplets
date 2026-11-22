@@ -107,7 +107,9 @@ child node shape, the same triple in two instance files).
 Every solution of a `sh:sparql` constraint is a finding, with the constraint's
 `sh:message` filled in from the solution: `{?name}` / `{$name}` becomes the
 solution's value of that variable (an IRI whole, a literal's text; a variable the
-solution does not bind stays as written). Solutions that differ only in a variable
+solution does not bind stays as written, except `{?value}` on a node shape, which
+is the focus node when the solution has no `?value` — pyshacl's forms, tested
+against it). Solutions that differ only in a variable
 other than `?value` stay apart when the message names that variable.
 
 The objects the parsers add to every file — `Distribution` (the file name) and

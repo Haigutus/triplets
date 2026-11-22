@@ -166,7 +166,7 @@ class _Context:
         if by == "KEY":
             return self.key_rows(rule.target_on)["ID"].unique()
         if by == "VALUE":
-            return self.nodes(rule.target_on, self.key_rows(rule.target_on)["VALUE"]).unique()
+            return self.nodes(rule.target_on, self.key_rows(rule.target_on)["VALUE"].dropna()).unique()   # no VALUE, no node
         if by == "ID":
             return numpy.array([rule.target_on], dtype=object)
         return self.class_ids(rule.target_on)
@@ -500,15 +500,19 @@ def _sparql_violations(rule, result):
     values = _shorten(result["value"].astype(str), iri_pandas.local_value) if "value" in result.columns else None
     violations = _frame(rule, focus, values, "sparql constraint violated")
     if rule.message and MESSAGE_VARIABLE.search(rule.message):
-        violations["MESSAGE"] = _solution_messages(rule.message, result)
+        violations["MESSAGE"] = _solution_messages(rule.message, result, node_level=rule.path is None)
     return violations
 
 
-def _solution_messages(message, result):
+def _solution_messages(message, result, node_level=False):
     """*message* once per solution, each ``{?name}`` / ``{$name}`` replaced by the
     solution's term for that variable as the query returned it (an IRI whole, a
     literal's lexical form — what pyshacl writes); a variable the solution does not
-    bind stays as written."""
+    bind stays as written. On a node shape (*node_level*) the value of a solution
+    without ``?value`` is the focus node, as in its result."""
+    if node_level:
+        value = result["value"] if "value" in result.columns else pandas.Series(None, index=result.index, dtype=object)
+        result = result.assign(value=value.astype(object).where(value.notna(), result["this"]))
     names = [name for name in dict.fromkeys(MESSAGE_VARIABLE.findall(message)) if name in result.columns]
     bound = result[names].astype(object).where(result[names].notna(), None)
     return [MESSAGE_VARIABLE.sub(lambda variable: variable[0] if solution.get(variable[1]) is None
