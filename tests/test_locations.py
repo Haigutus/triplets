@@ -67,10 +67,32 @@ def test_key_in_a_later_file_is_located_there(tmp_path):
   </cim:ACLineSegment>
 </rdf:RDF>
 """)
-    violations = pandas.DataFrame({"ID": ["aaaa"] * 3, "KEY": ["Equipment.inService", "Conductor.length", "Missing.key"]})
+    violations = pandas.DataFrame({"ID": ["aaaa"] * 3, "KEY": ["Equipment.inService", "Conductor.length", "Missing.key"],
+                               "VALUE": ["true", "12.5", "x"]})
     located = locate_violations(violations, [str(eq), str(ssh)], targets=False)
     assert list(zip(located["SOURCE_URI"], located["SOURCE_LINE"])) == [(str(ssh), 4), (str(eq), 5), (str(eq), 3)]
     assert located["SOURCE_SNIPPET"][0] == "<cim:Equipment.inService>true</cim:Equipment.inService>"
+
+
+def test_finding_without_value_searches_only_its_id(xml_path):
+    """A finding without a VALUE (sh:minCount on an absent KEY, sh:maxCount) searches
+    only its ID: located at the definition, and the pass stops once every ID is found —
+    the later sources are not read."""
+    class Counting(io.BytesIO):
+        reads = 0
+
+        def read(self, *args):
+            Counting.reads += 1
+            return super().read(*args)
+
+    sources = [xml_path]
+    for number in range(3):
+        sources.append(Counting(XML))
+        sources[-1].name = f"other{number}.xml"
+    violations = pandas.DataFrame({"ID": ["aaaa", "aaaa"], "KEY": ["Absent.key", "IdentifiedObject.name"],
+                                   "VALUE": [None, None]})
+    located = locate_violations(violations, sources, targets=False)
+    assert located["SOURCE_LINE"].tolist() == [3, 3] and Counting.reads == 0
 
 
 def test_file_like_without_seekable_and_spent_stream(xml_path, caplog):
@@ -117,7 +139,7 @@ def test_zip_member_name_is_no_file_under_the_root(tmp_path):
     with zipfile.ZipFile(root / "models" / "grid.zip", "w") as bundle:
         bundle.writestr("models/grid.xml", XML)
         bundle.writestr("nested.zip", inner.getvalue())
-    violations = pandas.DataFrame({"ID": ["aaaa", "cccc", "dddd"], "KEY": None})
+    violations = pandas.DataFrame({"ID": ["aaaa", "cccc", "dddd"], "KEY": None, "VALUE": None})
     located = locate_violations(violations, [str(root / "models" / "grid.xml"), str(root / "models" / "grid.zip")])
     frame, _ = relative_sources(located, {}, root)
     assert frame["SOURCE_URI"].tolist() == ["grid.zip/models/grid.xml", "models/grid.xml", "nested.zip/deep.xml"]

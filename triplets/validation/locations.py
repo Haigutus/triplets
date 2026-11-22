@@ -124,7 +124,9 @@ def locate_violations(violations, sources, targets=True):
     Per row (ID, KEY): the violated property element's own position when it
     was found inside one of the object's text windows (in the file that holds
     it, which need not be the defining one), else the object definition's;
-    rows whose object is not in the sources get nulls. The referenced object
+    rows whose object is not in the sources get nulls. A row without a VALUE
+    (``sh:minCount``, ``sh:maxCount``) does not search its KEY — absent, or not
+    the point — so a KEY in no file does not make the pass read every source. The referenced object
     of a reference finding found in the data (TARGET_ID — context.enrich) is
     located in the same pass, at its definition, into the TARGET_* columns; a
     frame without TARGET_ID gets nulls there. A definition is the first
@@ -138,9 +140,11 @@ def locate_violations(violations, sources, targets=True):
     targets = (violations["TARGET_ID"] if targets and "TARGET_ID" in violations.columns
                else pandas.Series(None, index=violations.index, dtype=object))
     wanted = {}
-    for object_id, key in zip(violations["ID"], violations["KEY"]):
+    for object_id, key, value in zip(violations["ID"], violations["KEY"], violations["VALUE"]):
+        # a finding without a VALUE (sh:minCount, sh:maxCount) searches only its ID: its KEY
+        # is absent or not the point, and a KEY in no file would make the pass read them all
         if not pandas.isna(object_id):
-            wanted.setdefault(str(object_id), set()).add(None if pandas.isna(key) else str(key))
+            wanted.setdefault(str(object_id), set()).add(None if pandas.isna(key) or pandas.isna(value) else str(key))
     for target in targets.dropna():
         wanted.setdefault(str(target), set())
     located = locate(wanted, sources)
