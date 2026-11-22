@@ -147,6 +147,14 @@ B = "cim:B a sh:NodeShape ; sh:targetClass cim:Breaker ;"
 NAME_MIN = "sh:property [ sh:path cim:IdentifiedObject.name ; sh:minCount 1 ] ."
 DESC_MIN = "sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ]"
 
+CIM16 = "http://iec.ch/TC57/2013/CIM-schema-cim16#"
+# class members on rdf:type, ( assoc rdf:type ) and sh:hasValue, in a namespace no schema declares
+CIM16_CLASS_MEMBERS = (f"<{CIM16}S> a sh:NodeShape ; sh:targetClass <{CIM16}Breaker> ; "
+                       f"sh:property [ sh:path rdf:type ; sh:in ( <{CIM16}Breaker> ) ] ; "
+                       f"sh:property [ sh:path ( <{CIM16}Equipment.EquipmentContainer> rdf:type ) ; "
+                       f"sh:in ( <{CIM16}Bay> <{CIM16}Substation> ) ] ; "
+                       f"sh:property [ sh:path rdf:type ; sh:hasValue <{CIM16}Breaker> ] .")
+
 
 def prop(body):
     return f"{B} sh:property [ {body} ] ."
@@ -479,6 +487,9 @@ CASES = {
     "path_via_type_in_other_namespace": (
         prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; "
              "sh:in ( <http://iec.ch/TC57/2013/CIM-schema-cim16#Bay> cim:Substation )"), TRIO),
+    # without a schema a class member matches by its name, as sh:targetClass does (pyshacl finds no
+    # focus node of these cim16 shapes in the data, which it reads in the undefined namespace)
+    "in_class_no_schema_other_namespace": (CIM16_CLASS_MEMBERS, TRIO, NO_SCHEMA),
     "in_enum_other_namespace": (prop("sh:path cim:Switch.kind ; sh:in ( <http://example.org/other#SwitchKind.breaker> )"),
                                 TRIO + [("b1", "Switch.kind", "SwitchKind.breaker", "eq")]),
     "has_value_class_other_namespace": (prop("sh:path rdf:type ; sh:hasValue <http://example.org/other#Breaker>"), TRIO),
@@ -871,6 +882,20 @@ def test_parser_metadata_is_not_validated(engine, scope):
     assert set(zip(violations["ID"], violations["VIOLATION_TYPE"])) == {
         ("sub1", "sh:in"), ("b2", "sh:minCount"), ("b3", "sh:minCount"), ("sub1", "sh:minCount")}
     assert violations.attrs["validation"]["source"] == ["grid/eq.xml"]
+
+
+@pytest.mark.parametrize("engine", ENGINES)
+def test_class_members_without_schema_match_by_name(engine):
+    """No schema: the cim16 class members match the data's classes by name, as the
+    cim16 sh:targetClass does — every breaker is a focus node (the sh:minCount finds
+    the two without a description), none breaks sh:in / sh:hasValue."""
+    if engine != "pandas":
+        pytest.importorskip(engine)
+    import rdflib
+    shape = CIM16_CLASS_MEMBERS[:-1] + f"; sh:property [ sh:path <{CIM16}IdentifiedObject.description> ; sh:minCount 1 ] ."
+    violations = triplets.validation.validate_shacl(frame(TRIO), rdflib.Graph().parse(data=PREFIX + shape, format="turtle"),
+                                                    engine=engine)
+    assert sorted(zip(violations["ID"], violations["VIOLATION_TYPE"])) == [("b1", "sh:minCount"), ("b3", "sh:minCount")]
 
 
 @pytest.mark.parametrize("engine", ["pyshacl", *ENGINES])

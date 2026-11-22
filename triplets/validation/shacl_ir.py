@@ -874,6 +874,8 @@ def member_values(members, kind, namespaces, undefined_namespace):
     (:func:`~triplets.iri.absolute_value` — a class in its schema namespace, a
     ``urn:uuid:`` node), else the whole IRI, which only a VALUE holding the IRI
     matches; a literal member, and every member on a literal path, is its text.
+    A class the schema lacks (its name not in *namespaces*, every class without a
+    schema) is its name, as ``sh:targetClass`` / ``sh:class`` match classes.
     Without a kind (an undefined KEY) an IRI member is its guessed local VALUE
     and the engines compare the values' local forms."""
     def value(member):
@@ -882,6 +884,8 @@ def member_values(members, kind, namespaces, undefined_namespace):
         if kind is None:
             return local_value(member)
         text = local_value(member, kind)
+        if kind == CLASS and text not in namespaces:
+            return text
         same = absolute_value(None, text, namespaces, kind=kind, undefined_namespace=undefined_namespace)[1] == member
         return text if same else member
     return [value(str(member)) for member in members]
