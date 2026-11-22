@@ -584,6 +584,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are that instance's. Two files that share an object ID (a header ID reused across
   files) were both attributed to the first file. A row without an `INSTANCE_ID` (SHACL
   over the merged graph) still goes to the first instance holding its ID.
+- **`locate` puts a finding in its instance's file.** A row whose `INSTANCE_LABEL` names
+  one of the sources (also a member of a zip) is located at its KEY's element or its
+  object's definition in that file; a KEY only another file holds is still located
+  there. Two files that share an object ID (a header ID reused across files) were both
+  located in the first file read. `locate()` takes `files=` and returns the positions
+  within those files under `"files"`.
 - **SHACL `sh:in` / `sh:hasValue` compare IRIs, not local names** (pandas / polars / duckdb): a class, enumeration value or node of the same name in another namespace no longer passes (`( assoc rdf:type ) sh:in ( cim16:ACLineSegment cim17:ACLineSegment )` on data in a third CIM namespace), as pyshacl reports. A class the schema lacks (every class without an `rdf_map`) matches by its name, as `sh:targetClass` and `sh:class` do. A string literal member stays a literal, also when its text reads as an IRI (`sh:in ( "http://iec.ch/TC57/CIM100#Breaker" )` on `rdf:type` matches no class).
 - **`locate` (SARIF / SHACL report locations) points a finding on a KEY at the file holding that KEY's element** (an SSH property of an object the EQ file defines), not at the first file defining the ID; the definition stays the fallback. A finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition and its KEY is not searched. `locate()`'s `keyLines` entries are `(uri, line, snippet)`, were `(line, snippet)`.
 - **A row without a VALUE counts for no cardinality** (`sh:minCount` / `sh:maxCount`, `xsd:minOccurs` / `xsd:maxOccurs`, pandas / polars / duckdb): it states no triple, as pyshacl sees it.

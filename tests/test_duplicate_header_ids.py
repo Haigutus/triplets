@@ -334,18 +334,6 @@ def test_scoped_finding_enriches_and_locates_in_its_file(path_pair, engine):
     assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == path_pair.uri["beta"]
 
 
-# Over both twins, a header finding's ID names both files; its INSTANCE_ID names one.
-FIRST_DEFINITION = ("locate keys objects by ID only, the first definition in read order wins "
-                    "(triplets/validation/locations.py:105-117): the header finding of the second-loaded "
-                    "twin is located at the first twin's header line")
-
-
-def bad_first_only(reason):
-    """The beta-first order passes by luck of order; alpha-first exposes the defect."""
-    return [pytest.param("alpha-first", marks=pytest.mark.xfail(strict=True, raises=AssertionError, reason=reason)),
-            "beta-first"]
-
-
 def enriched_header_finding(pair_, engine):
     """(data, {twin: INSTANCE_ID}, the header finding of validate_schema over both twins, enriched)."""
     data, instances = flavored(pair_, engine)
@@ -376,7 +364,7 @@ def test_enrich_found_values_are_the_instance_values(path_pair):
 
 
 @pytest.mark.parametrize("kind", KINDS)
-@pytest.mark.parametrize("order", bad_first_only(FIRST_DEFINITION))
+@pytest.mark.parametrize("order", ORDERS)
 def test_locate_violations_finds_the_file_of_the_finding(kind, order, tmp_path):
     """Over both twins, the enriched header finding is located at beta's scenarioTime line."""
     pair_ = Pair(kind, order, tmp_path)
@@ -399,7 +387,7 @@ def test_sarif_names_the_file_of_the_finding(order, tmp_path):
     assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == pair_.uri["beta"]
 
 
-@pytest.mark.parametrize("order", bad_first_only(FIRST_DEFINITION))
+@pytest.mark.parametrize("order", ORDERS)
 def test_sarif_puts_the_finding_in_its_file(order, tmp_path):
     """Over both twins, with data and sources the SARIF result of the header finding
     points at beta's scenarioTime line."""

@@ -22,17 +22,19 @@ report exports run for ``source_root=``: every file name they write goes
 through ``relative_name``.
 
 The parse/validate hot paths are untouched: nothing here runs unless sources
-are handed to an export. When the same object is defined in several files
-(``rdf:about`` continuation across profiles), the first definition is the
-object's position, and a violated KEY is located at its element in the file
-that holds it (an SSH property of an EQ object); a KEY in no file falls back
-to the definition position. Positions are whole lines (1-based), deliberately: RDF text
+are handed to an export. A finding whose instance file is known
+(INSTANCE_LABEL) is located in that file. Otherwise, when the same object is
+defined in several files (``rdf:about`` continuation across profiles), the first
+definition is the object's position, and a violated KEY is located at its
+element in the file that holds it (an SSH property of an EQ object); a KEY in no
+file falls back to the definition position. Positions are whole lines (1-based), deliberately: RDF text
 serializations put one statement per line, so the line IS the reference —
 columns add per-format anchor rules (byte vs UTF-16 units, element shapes)
 and broke SARIF viewers, for no extra information. Line-only is also what
 keeps the pass extensible beyond XML: IDs and KEYs appear as literal
 substrings in every serialization (N-Quads, Turtle, JSON-LD).
 """
+import functools
 import os
 import re
 import logging
@@ -60,7 +62,7 @@ def member_name(container, name):
     return f"{container}/{name}" if container else name
 
 
-def locate(wanted, sources):
+def locate(wanted, sources, files=None):
     """Find the wanted objects in the source XML.
 
     Parameters
@@ -70,11 +72,16 @@ def locate(wanted, sources):
         own lines are worth pinpointing (may be empty).
     sources : str/Path to .xml/.rdf/.zip, file-like, or a list of those —
         the same shapes ``parse()``/``read_rdf`` accept.
+    files : dict {ID: {source name: set of KEYs}}, optional
+        The files whose own position of the ID (and of those KEYs) is wanted
+        too — the file of the instance a finding was found in; a name that is
+        no source's is ignored.
 
     Returns
     -------
     dict {ID: {"uri": str, "startLine": int, "snippet": str,
-               "keyLines": {KEY: (uri, line, snippet)}}}
+               "keyLines": {KEY: (uri, line, snippet)},
+               "files": {uri: {"startLine": int, "snippet": str, "keyLines": {KEY: (uri, line, snippet)}}}}}
         "uri" is the source name as given (the path, a file-like's
         ``.name``); a zip member is ``<zip file name>/<member name>``, the
         zip's name without directories. The position is that of the first
@@ -83,39 +90,84 @@ def locate(wanted, sources):
         in a file read earlier wins over the rdf:ID element in a later one.
         A KEY's position is that of its element in the first object window
         of the ID that holds it, in whichever file (an SSH property of an
-        object an EQ file defines). IDs not present in the sources are absent
-        from the result; a KEY in none of the ID's windows is absent from
-        "keyLines". The sources are read in that order until every wanted ID
-        and KEY is found; one missing makes the pass read them all.
+        object an EQ file defines). "files" holds the definition and KEY
+        positions within each of the ID's *files* that defines it, when they are
+        not the top-level ones: a file it lacks (always the file of the first
+        definition) has its positions at the top level. IDs not present in the sources
+        are absent from the result; a KEY in none of the ID's windows is absent
+        from "keyLines". The sources are read in that order until every wanted
+        ID, KEY and file is found; one missing makes the pass read them all.
     """
     from ..parser.utils import find_all_xml
 
+    sources = [(_name(source), source) for source in find_all_xml(sources)]
+    names = {name for name, _ in sources}
     ids = {str(object_id).encode(): object_id for object_id in wanted}
-    missing = {object_id: {key for key in keys if key and key != TYPE_KEY}   # the type is the definition itself
-               for object_id, keys in wanted.items()}
+    missing = {object_id: _searched(found) for object_id, found in wanted.items()}
+    # per (ID, file): the KEYs to search there, and whether a finding there needs the definition
+    own_files = {object_id: {name: _own(found) for name, found in in_files.items() if name in names}
+                 for object_id, in_files in (files or {}).items()}
+    unread = {name for in_files in own_files.values() for name in in_files}       # the instance files to read
     located = {}
-    for source in find_all_xml(sources):
-        if len(located) == len(ids) and not any(missing.values()):
+    for uri, source in sources:
+        if len(located) == len(ids) and not any(missing.values()) and not unread:
             break
-        uri, text = _read(source)
+        unread.discard(uri)
+        text = _read(uri, source)
         matches = list(_DEFINITION.finditer(text))
         line, previous = 1, 0
         for position, match in enumerate(matches):
             line += text.count(b"\n", previous, match.start())
             previous = match.start()
             object_id = ids.get(match.group(1))
-            if object_id is None or (object_id in located and not missing[object_id]):
+            if object_id is None:
                 continue
-            if object_id not in located:
-                located[object_id] = {"uri": uri, "startLine": line, "snippet": _line_text(text, match.start()),
-                                      "keyLines": {}}
+            entry = located.get(object_id)
+            if entry is None:
+                entry = located[object_id] = {"uri": uri, "startLine": line, "snippet": _line_text(text, match.start()),
+                                              "keyLines": {}, "files": {}}
+            # in the defining file the top-level positions are the instance file's own
+            own, definition = (_NO_FILE if uri == entry["uri"] or object_id not in own_files
+                               else own_files[object_id].get(uri, _NO_FILE))
+            if own is None and not missing[object_id]:
+                continue
             window_end = matches[position + 1].start() if position + 1 < len(matches) else len(text)
-            found = _key_lines(text, match.start(), window_end, line, missing[object_id])
-            located[object_id]["keyLines"] |= {key: (uri, *position_) for key, position_ in found.items()}
-            missing[object_id] -= found.keys()
+            searched = missing[object_id]
+            if own is not None:
+                searched = searched | own if searched else own
+            found = {key: (uri, *found_at)
+                     for key, found_at in _key_lines(text, match.start(), window_end, line, searched).items()}
+            if missing[object_id]:
+                entry["keyLines"] |= {key: found[key] for key in missing[object_id] & found.keys()}
+                missing[object_id] -= found.keys()
+            if own is None:
+                continue
+            in_file = entry["files"].get(uri)
+            if in_file is None:
+                if not definition and all(entry["keyLines"].get(key, ("",))[0] == uri for key in own):
+                    continue                                   # every KEY's top-level position is in this file
+                entry["files"][uri] = {"startLine": line, "snippet": _line_text(text, match.start()),
+                                       "keyLines": found}
+            else:
+                in_file["keyLines"] = found | in_file["keyLines"]          # the first window holding a KEY wins
     if len(located) < len(ids):
         logger.debug("%d violating object(s) not found in the sources", len(ids) - len(located))
     return located
+
+
+_NO_FILE = (None, False)        # no instance file position wanted: (KEYs, definition needed)
+
+
+def _searched(keys):
+    """The KEYs worth a search: not None, not the type (the definition itself)."""
+    return {key for key in keys if key and key != TYPE_KEY}
+
+
+def _own(keys):
+    """(the KEYs to search in an instance file, whether a finding there is located at
+    the definition — a KEY not searched)."""
+    searched = _searched(keys)
+    return searched, bool(set(keys) - searched)
 
 
 # findings of a property the object lacks: their KEY is searched in no file
@@ -125,10 +177,16 @@ ABSENT_KEY_TYPES = frozenset({"sh:minCount", "sh:qualifiedMinCount", "xsd:minOcc
 def locate_violations(violations, sources, targets=True):
     """Stamp LOCATION_COLUMNS onto a violations frame — one locate() pass.
 
-    Per row (ID, KEY): the violated property element's own position when it
-    was found inside one of the object's text windows (in the file that holds
-    it, which need not be the defining one), else the object definition's;
-    rows whose object is not in the sources get nulls. A finding of an absent
+    Per row (ID, KEY): a row whose INSTANCE_LABEL names one of the sources
+    (``enrich`` stamps the instance's file name, a zip member as
+    ``<zip file name>/<member name>``) is located in that file first — at the
+    violated property element when the object's text window there holds it,
+    else at the object's definition there, unless the KEY is found in another
+    file (a property of an object another file defines). Every other row is
+    located at the violated property element's own position when it was found
+    inside one of the object's text windows (in the file that holds it, which
+    need not be the defining one), else at the object definition's; rows whose
+    object is not in the sources get nulls. A finding of an absent
     property (``ABSENT_KEY_TYPES``: ``sh:minCount``, ``xsd:minOccurs``) does not
     search its KEY, so a KEY in no file does not make the pass read every source;
     it is located at the definition. The referenced object
@@ -142,28 +200,45 @@ def locate_violations(violations, sources, targets=True):
     """
     import pandas
 
-    targets = (violations["TARGET_ID"] if targets and "TARGET_ID" in violations.columns
-               else pandas.Series(None, index=violations.index, dtype=object))
-    types = violations.get("VIOLATION_TYPE", pandas.Series(None, index=violations.index, dtype=object))
-    wanted = {}
-    for object_id, key, violation_type in zip(violations["ID"], violations["KEY"], types):
-        if not pandas.isna(object_id):
-            absent = pandas.isna(key) or violation_type in ABSENT_KEY_TYPES
-            wanted.setdefault(str(object_id), set()).add(None if absent else str(key))
-    for target in targets.dropna():
-        wanted.setdefault(str(target), set())
-    located = locate(wanted, sources)
+    def column(name, used=True):
+        if used and name in violations.columns:
+            return violations[name]
+        return pandas.Series(None, index=violations.index, dtype=object)
 
-    def position(object_id, key=None):
-        entry = located.get(str(object_id)) if not pandas.isna(object_id) else None
+    def text(values):
+        """The cells as str, None for a missing one."""
+        return [value if isinstance(value, str) else None if pandas.isna(value) else str(value) for value in values]
+
+    ids, keys, labels = text(violations["ID"]), text(violations["KEY"]), text(column("INSTANCE_LABEL"))
+    targets = text(column("TARGET_ID", targets))
+    wanted, files = {}, {}
+    for object_id, key, violation_type, label in zip(ids, keys, column("VIOLATION_TYPE"), labels):
+        if object_id is not None:
+            searched = None if violation_type in ABSENT_KEY_TYPES else key
+            wanted.setdefault(object_id, set()).add(searched)
+            if label is not None:
+                files.setdefault(object_id, {}).setdefault(label, set()).add(searched)
+    for target in targets:
+        if target is not None:
+            wanted.setdefault(target, set())
+    located = locate(wanted, sources, files)
+
+    def position(object_id, key=None, label=None):
+        entry = located.get(object_id)
         if entry is None:
             return None, None, None
-        key = None if pandas.isna(key) else str(key)
-        return entry["keyLines"].get(key, (entry["uri"], entry["startLine"], entry["snippet"]))
+        own = entry["files"].get(label)
+        if own is not None and key in own["keyLines"]:
+            return own["keyLines"][key]
+        if key in entry["keyLines"]:
+            return entry["keyLines"][key]
+        if own is not None:
+            return label, own["startLine"], own["snippet"]
+        return entry["uri"], entry["startLine"], entry["snippet"]
 
     frame = violations.copy()
-    positions = [position(object_id, key) + position(target)
-                 for object_id, key, target in zip(frame["ID"], frame["KEY"], targets)]
+    positions = [position(object_id, key, label) + position(target)
+                 for object_id, key, label, target in zip(ids, keys, labels, targets)]
     # object columns: a line stays an int next to the None of a row not located
     frame[LOCATION_COLUMNS] = pandas.DataFrame(positions, columns=LOCATION_COLUMNS, index=frame.index, dtype=object)
     return frame
@@ -205,13 +280,17 @@ def _key_lines(text, definition_start, window_end, definition_line, keys):
     """(line, snippet) of each violated property element inside the object's window."""
     lines = {}
     for key in keys:
-        pattern = rb"<[\w.-]+:" + re.escape(str(key).encode()) + rb"[\s>/]"
-        match = re.search(pattern, text[definition_start:window_end])
+        match = _key_element(key).search(text, definition_start, window_end)
         if match is not None:
-            start = definition_start + match.start()
-            lines[key] = (definition_line + text.count(b"\n", definition_start, start),
-                          _line_text(text, start))
+            lines[key] = (definition_line + text.count(b"\n", definition_start, match.start()),
+                          _line_text(text, match.start()))
     return lines
+
+
+@functools.cache
+def _key_element(key):
+    """The pattern of a KEY's property element, ``<prefix:KEY`` — compiled once per KEY."""
+    return re.compile(rb"<[\w.-]+:" + re.escape(str(key).encode()) + rb"[\s>/]")
 
 
 def _line_text(text, position):
@@ -278,20 +357,26 @@ def relative_sources(violations, names, source_root):
     return frame, names
 
 
-def _read(source):
-    """(uri, bytes) for a path or a file-like (zip members from find_all_xml).
-    A zip member is named ``<zip file name>/<member name>`` (its
-    ``.container``, see member_name). A seekable
-    file-like is read from its start, so one open handle serves every pass it
-    is given to; a file-like that gives no bytes (a stream that cannot be
-    rewound, read before) is named in a warning."""
+def _name(source):
+    """The name a source is located under: a path as given, a file-like's ``.name``
+    (``<memory>`` without one), a zip member ``<zip file name>/<member name>`` (its
+    ``.container``, see member_name)."""
+    if hasattr(source, "read"):
+        return member_name(getattr(source, "container", None), str(getattr(source, "name", "<memory>")))
+    return str(source)
+
+
+def _read(uri, source):
+    """The bytes of a path or a file-like (zip members from find_all_xml) named *uri*.
+    A seekable file-like is read from its start, so one open handle serves every pass
+    it is given to; a file-like that gives no bytes (a stream that cannot be rewound,
+    read before) is named in a warning."""
     if hasattr(source, "read"):
         if getattr(source, "seekable", lambda: False)():
             source.seek(0)
-        uri = member_name(getattr(source, "container", None), str(getattr(source, "name", "<memory>")))
         text = source.read()
         if not text:
             logger.warning("Nothing to read from source %s: no object is located in it", uri)
-        return uri, text
+        return text
     with open(source, "rb") as file:
-        return str(source), file.read()
+        return file.read()

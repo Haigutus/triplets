@@ -607,7 +607,7 @@ sources only when the `SOURCE_*` columns are missing. The columns:
 
 | Columns | Content |
 |---------|---------|
-| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element, in whichever file holds it for the object (an SSH property of an object an EQ file defines), else of the object definition (`ID`); a finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition. The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element, in whichever file holds it for the object (an SSH property of an object an EQ file defines), else of the object definition (`ID`). A row whose `INSTANCE_LABEL` (from `enrich`) names one of the sources is located in that file first — two files sharing an `ID` each get their own findings; a finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition. The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
 
 The name of a file in a zip holds the zip's file name only: two zips with the same

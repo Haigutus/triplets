@@ -73,6 +73,37 @@ def test_key_in_a_later_file_is_located_there(tmp_path):
     assert located["SOURCE_SNIPPET"][0] == "<cim:Equipment.inService>true</cim:Equipment.inService>"
 
 
+def test_finding_is_located_in_its_instance_file(tmp_path):
+    """A row naming its instance file (INSTANCE_LABEL) is located there: at its KEY's
+    element in that file, else at the definition there — unless another file holds the
+    KEY (a property of an object another file defines). The same name read from a zip
+    is its member name."""
+    eq, ssh = tmp_path / "grid_EQ.xml", tmp_path / "grid_SSH.xml"
+    eq.write_bytes(XML)
+    ssh.write_bytes(b"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <cim:ACLineSegment rdf:about="#_aaaa">
+    <cim:IdentifiedObject.name>L1 again</cim:IdentifiedObject.name>
+  </cim:ACLineSegment>
+</rdf:RDF>
+""")
+    violations = pandas.DataFrame({"ID": ["aaaa"] * 4,
+                                   "KEY": ["IdentifiedObject.name", "Conductor.length", "Absent.key",
+                                           "IdentifiedObject.name"],
+                                   "VIOLATION_TYPE": [None, None, "xsd:minOccurs", None],
+                                   "INSTANCE_LABEL": [str(ssh)] * 3 + [None]})
+    located = locate_violations(violations, [str(eq), str(ssh)], targets=False)
+    assert list(zip(located["SOURCE_URI"], located["SOURCE_LINE"])) \
+        == [(str(ssh), 4), (str(eq), 5), (str(ssh), 3), (str(eq), 4)]
+    archive = tmp_path / "grid.zip"
+    with zipfile.ZipFile(archive, "w") as bundle:
+        bundle.writestr("EQ.xml", eq.read_bytes())
+        bundle.writestr("SSH.xml", ssh.read_bytes())
+    located = locate_violations(violations.assign(INSTANCE_LABEL="grid.zip/SSH.xml"), [str(archive)], targets=False)
+    assert located["SOURCE_URI"].tolist() == ["grid.zip/SSH.xml", "grid.zip/EQ.xml", "grid.zip/SSH.xml",
+                                              "grid.zip/SSH.xml"]
+
+
 def test_absent_key_finding_searches_only_its_id(xml_path):
     """A finding of an absent property (sh:minCount, xsd:minOccurs) searches only its ID:
     located at the definition, and the pass stops once every ID is found — the later
