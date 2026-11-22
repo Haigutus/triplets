@@ -481,6 +481,26 @@ def test_get_loaded_profiles(pair, engine):
         (instances[twin], pair.label[twin], HEADER, TWINS[twin]["profile"]) for twin in TWINS)
 
 
+DATASET = f"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dcat="http://www.w3.org/ns/dcat#">
+  <dcat:Dataset rdf:about="urn:uuid:{HEADER}">
+    <dcat:keyword>SSH</dcat:keyword>
+  </dcat:Dataset>
+</rdf:RDF>
+""".encode()
+
+
+@pytest.mark.parametrize("order", ORDERS)
+def test_get_loaded_profiles_header_class_per_instance(order, engine):
+    """A FullModel and a dcat:Dataset sharing one ID: each declaration names its own
+    instance's header class."""
+    files = {"alpha": named("full.xml", cimxml("alpha")), "beta": named("dataset.xml", DATASET)}
+    data = triplets.parse([files[twin] for twin in ORDERS[order]], engine="python_lxml_pandas")
+    profiles = pandas_frame(cgmes_tools.get_loaded_profiles(build_engine(engine, data)))
+    assert sorted(zip(profiles["label"], profiles["HEADER"], profiles["KEY"])) == [
+        ("dataset.xml", "Dataset", "keyword"), ("full.xml", "FullModel", "Model.profile")]
+
+
 def test_dependency_on_a_shared_header_id_resolves_to_both_twins(path_pair, engine):
     """A part that depends on the shared ID cannot tell the twins apart: one edge to
     each, and its model holds both."""

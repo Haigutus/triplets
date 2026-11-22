@@ -577,9 +577,10 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
     >>> profiles[profiles.KEY == "keyword"]
     """
     hints = data.loc[data["KEY"].isin(profile_keys) & data["VALUE"].notna() & (data["VALUE"] != ""), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "HEADER_ID"})
-    types = data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "VALUE"]].drop_duplicates("ID").rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"})
+    types = (data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "INSTANCE_ID", "VALUE"]]
+             .drop_duplicates(["ID", "INSTANCE_ID"]).rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"}))
     labels = distribution_labels(data)[["INSTANCE_ID", "VALUE"]].drop_duplicates("INSTANCE_ID").rename(columns={"VALUE": "label"})
-    return hints.merge(types, on="HEADER_ID", how="left").merge(labels, on="INSTANCE_ID", how="left")[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]]
+    return hints.merge(types, on=["HEADER_ID", "INSTANCE_ID"], how="left").merge(labels, on="INSTANCE_ID", how="left")[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]]
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):

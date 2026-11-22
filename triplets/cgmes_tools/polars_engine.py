@@ -131,9 +131,11 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
     """One row per profile declaration. Header class is reported verbatim, never matched."""
     key = pl.col("KEY").cast(pl.Utf8)
     hints = (data.filter(key.is_in(list(profile_keys)) & pl.col("VALUE").is_not_null() & (pl.col("VALUE").cast(pl.Utf8) != "")).select("ID", "KEY", "VALUE", "INSTANCE_ID").rename({"ID": "HEADER_ID"}))
-    types = (data.filter((key == "Type") & pl.col("ID").is_in(hints.get_column("HEADER_ID").to_list())).select("ID", "VALUE").unique(subset="ID", keep="first").rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
+    types = (data.filter((key == "Type") & pl.col("ID").is_in(hints.get_column("HEADER_ID").to_list()))
+             .select("ID", "INSTANCE_ID", "VALUE").unique(subset=["ID", "INSTANCE_ID"], keep="first")
+             .rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
     labels = (distribution_labels(data).select("INSTANCE_ID", "VALUE").unique(subset="INSTANCE_ID", keep="first").rename({"VALUE": "label"}))
-    return hints.join(types, on="HEADER_ID", how="left").join(labels, on="INSTANCE_ID", how="left").select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE")
+    return hints.join(types, on=["HEADER_ID", "INSTANCE_ID"], how="left").join(labels, on="INSTANCE_ID", how="left").select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE")
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
