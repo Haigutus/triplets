@@ -254,6 +254,8 @@ def _focus_kinds(violations, ir, types, subjects):
     for shape, target_by, target_on in zip(ir["shape_id"], ir["target_by"], ir["target_on"]):
         targets.setdefault(shape, set()).add(target_on if target_by == "VALUE" else None)
     targets = {shape: keys for shape, keys in targets.items() if keys != {None}}
+    if not targets:                # no sh:targetObjectsOf: every focus is a node
+        return violations
 
     def term_kinds(shape, focus):
         """The term kinds the targets of *shape* give *focus*."""
