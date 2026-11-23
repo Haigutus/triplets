@@ -608,8 +608,12 @@ reads the sources only when the `SOURCE_*` columns are missing.
 turns it into the instance's file name (`INSTANCE_LABEL`), and `locate` puts the finding in
 that file. A frame located before `enrich` has no file to go by: each finding lands at the
 first definition of its `ID` in read order, which for an `ID` two files share (a reused
-header ID) is the first file's. An export given `data=` and `sources=` enriches first. The
-columns:
+header ID) is the first file's. An export given `data=` and `sources=` enriches first.
+Name the sources as they were parsed: `INSTANCE_LABEL` is the parsed file name (the path as
+given to the parser, a zip member as `<zip file name>/<member name>`) and must equal a
+source's name exactly — `grid.xml` and `./grid.xml`, or a relative and an absolute path,
+are different names, and a finding whose label names no source falls back to the first
+definition. The columns:
 
 | Columns | Content |
 |---------|---------|

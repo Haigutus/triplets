@@ -153,8 +153,9 @@ def locate_violations(violations, sources, targets=True):
 
     Enrich before locate: the schema validations name a finding's instance
     (INSTANCE_ID), ``enrich`` turns it into its file name (INSTANCE_LABEL) —
-    the name this pass matches; a frame without INSTANCE_LABEL is located by
-    the first definition in read order.
+    the name this pass matches exactly (name the sources as they were parsed);
+    a row without one, or whose label names no source, is located by the first
+    definition in read order.
 
     Per row (ID, KEY): a row whose INSTANCE_LABEL names one of the sources
     (``enrich`` stamps the instance's file name, a zip member as
