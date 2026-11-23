@@ -258,6 +258,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`cgmes_tools.get_loaded_model_parts` lists one row per header of each instance**, with
+  a new `INSTANCE_ID` column on every result flavor (pandas and duckdb input: header IDs
+  stay the index, which is not unique when two files share a header ID; arrow input: an
+  `INSTANCE_ID` column next to `ID`; polars: `ID` and `INSTANCE_ID` columns). Two files
+  that share a header ID were one row with the first file's values.
+- **`cgmes_tools.get_loaded_models` keys each model by its root's `INSTANCE_ID`**, was the
+  root header ID. The dependency walk runs over instances: two files that share a header
+  ID are two parts (two roots when nothing depends on them), and a part that depends on
+  that ID depends on both. They were merged into one model. A twin that depends on the
+  shared ID (its own header's) is no dependency of itself: it stays a root.
 - **`INSTANCE_ID` is part of the triplet frame contract**: functions may raise on a frame
   without the column. A null `INSTANCE_ID` is one instance, matched null-safe, the same on
   pandas and polars (`get_metadata_from_FullModel`, `get_loaded_model_parts`,
@@ -594,14 +604,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   there. Two files that share an object ID (a header ID reused across files) were both
   located in the first file read. `locate()` takes `files=` (`{ID: source names}`) and
   returns the positions within those files under `"files"`.
-- **`cgmes_tools.get_loaded_model_parts` lists one row per header of each instance**,
-  with an `INSTANCE_ID` column (pandas: header IDs stay the index). Two files that share
-  a header ID were one row with the first file's values.
-- **`cgmes_tools.get_loaded_models` keys each model by its root's `INSTANCE_ID`**, was the
-  root header ID. The dependency walk runs over instances: two files that share a header
-  ID are two parts (two roots when nothing depends on them), and a part that depends on
-  that ID depends on both. They were merged into one model. A twin that depends on the
-  shared ID (its own header's) is no dependency of itself: it stays a root.
 - **`cgmes_tools.get_metadata_from_FullModel` reads the first FullModel within its own
   instance.** On data with several instances, a second file sharing the header ID blended
   its values in (the last value of each KEY won).
