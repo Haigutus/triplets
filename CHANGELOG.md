@@ -597,7 +597,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `enrich` keeps it: `INSTANCE_LABEL` and the duplicate values of a maximum-count finding
   are that instance's. Two files that share an object ID (a header ID reused across
   files) were both attributed to the first file. A row without an `INSTANCE_ID` (SHACL
-  over the merged graph) still goes to the first instance holding its ID.
+  over the merged graph) goes to the first instance holding its triple (ID, KEY, VALUE) —
+  the file that states the violating value — else to the first holding its ID.
 - **`locate` puts a finding in its instance's file.** A row whose `INSTANCE_LABEL` names
   one of the sources (also a member of a zip) is located at its KEY's element or its
   object's definition in that file; a KEY only another file holds is still located

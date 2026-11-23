@@ -54,8 +54,8 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
         own INSTANCE_ID (the schema validations name the instance a finding was
         found in) is kept, and its duplicate values are that instance's; a row
         without one (``validate_shacl`` runs over the merged graph) is attributed
-        to the first instance holding its ID, and its duplicate values are those of
-        every instance. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
+        to the first instance holding its triple (ID, KEY, VALUE), else its ID, and
+        its duplicate values are those of every instance. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
         for the duckdb engine.
     shapes : CompiledShapes or shape source, optional
         Fills SHAPE_NAME / SHAPE_DESCRIPTION (sh:name / sh:description of
@@ -352,13 +352,22 @@ def _type_map(data, table_name="triplets"):
 
 
 def _add_instance_context(violations, own, data):
-    """INSTANCE_ID: the row's *own*, else the first instance holding its ID; its
-    INSTANCE_LABEL, OBJECT_TYPE and OBJECT_NAME."""
+    """INSTANCE_ID: the row's *own*, else the first instance holding its triple (ID, KEY,
+    VALUE), else the first holding its ID; its INSTANCE_LABEL, OBJECT_TYPE and OBJECT_NAME."""
     identifier = data["ID"].astype(str)
     instances = data["INSTANCE_ID"].astype(str)
 
     first = ~identifier.duplicated()
-    attributed = violations["ID"].map(pandas.Series(instances[first].values, index=identifier[first]))
+    attributed = violations["ID"].astype(str).map(pandas.Series(instances[first].values, index=identifier[first]))
+    stated = own.isna() & violations["KEY"].notna() & violations["VALUE"].notna()
+    if stated.any():                      # the rows of the violated objects only: one small lookup
+        rows = data.loc[identifier.isin(set(violations.loc[stated, "ID"].astype(str))),
+                        ["ID", "KEY", "VALUE", "INSTANCE_ID"]].astype(str).drop_duplicates(["ID", "KEY", "VALUE"])
+        holder = pandas.Series(rows["INSTANCE_ID"].values,
+                               index=pandas.MultiIndex.from_frame(rows[["ID", "KEY", "VALUE"]]))
+        triples = violations.loc[stated, ["ID", "KEY", "VALUE"]].astype(str)
+        found = holder.reindex(pandas.MultiIndex.from_frame(triples)).set_axis(triples.index)
+        attributed[stated] = found.where(found.notna(), attributed[stated])
     violations["INSTANCE_ID"] = own.where(own.notna(), attributed)
 
     # The parsed file name lives on the per-instance Distribution meta object

@@ -443,25 +443,30 @@ def test_sarif_puts_the_finding_in_its_file(order, tmp_path):
 SHAPES = """
 @prefix sh:  <http://www.w3.org/ns/shacl#> .
 @prefix cim: <http://iec.ch/TC57/CIM100#> .
+@prefix md: <http://iec.ch/TC57/61970-552/ModelDescription/1#> .
 cim:SubstationShape a sh:NodeShape ; sh:targetClass cim:Substation ;
     sh:property [ sh:path cim:IdentifiedObject.description ; sh:minCount 1 ] .
+md:FullModelShape a sh:NodeShape ; sh:targetClass md:FullModel ;
+    sh:property [ sh:path md:Model.description ; sh:pattern "^alpha" ] .
 """
 
 
 def test_shacl_findings_locate_in_their_own_files(pair, engine):
-    """validate_shacl over both twins: each content object's finding is enriched with
-    its own instance and located in its own file."""
+    """validate_shacl over both twins merges their header (the shared ID): its finding on
+    beta's description is enriched with beta's instance and located at beta's line; each
+    content object's finding goes to its own file."""
     rdflib = pytest.importorskip("rdflib")
     data, instances = flavored(pair, engine)
     shapes = rdflib.Graph().parse(data=SHAPES, format="turtle")
     violations = validation.validate_shacl(data, shapes, engine=engine)
     enriched = validation.enrich(violations, data=data)
     located = validation.locate_violations(enriched, pair.inputs())
-    by_object = {TWINS[twin]["object"]: twin for twin in TWINS}
-    assert sorted(located["ID"]) == sorted(by_object)
+    owner = {TWINS[twin]["object"]: twin for twin in TWINS} | {HEADER: "beta"}
+    assert sorted(located["ID"]) == sorted(owner)
     for object_id, instance, uri in zip(located["ID"], located["INSTANCE_ID"].astype(str), located["SOURCE_URI"]):
-        twin = by_object[object_id]
-        assert (instance, uri) == (instances[twin], pair.uri[twin])
+        assert (instance, uri) == (instances[owner[object_id]], pair.uri[owner[object_id]])
+    header = located[located["ID"] == HEADER]
+    assert list(header["SOURCE_SNIPPET"]) == ["<md:Model.description>beta header</md:Model.description>"]
 
 
 # ── header helpers ──────────────────────────────────────────────────────────
