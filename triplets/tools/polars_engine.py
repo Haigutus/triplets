@@ -12,10 +12,10 @@ from ._diff_report import print_diff
 logger = logging.getLogger(__name__)
 
 
-def _numeric_columns(data_view):
-    """Cast columns that contain only numbers to Float64."""
+def _numeric_columns(data_view, index=("ID",)):
+    """Cast columns that contain only numbers to Float64 (not the *index* columns)."""
     for col in data_view.columns:
-        if col == "ID":
+        if col in index:
             continue
         try:
             data_view = data_view.with_columns(pl.col(col).cast(pl.Float64, strict=True))
@@ -24,28 +24,32 @@ def _numeric_columns(data_view):
     return data_view
 
 
-def _tableview(ids, data, string_to_number, multivalue, label):
+def _tableview(ids, data, string_to_number, multivalue, label, index=("ID",)):
     """Shared pivot core for the three tableview functions.
 
-    ids: polars DataFrame with an ID column selecting the objects.
+    ids: polars DataFrame with the *index* columns selecting the objects. One row
+    per *index* value: ``("ID",)`` merges an object's rows from every instance,
+    ``("ID", "INSTANCE_ID")`` keeps one row per instance.
     """
     if ids.is_empty():
         logger.warning(f'No data available for {label}')
         return None
 
     # semi join keeps data order, so keep="first" and list order match pandas run to run
-    object_data = data.join(ids.select("ID"), on="ID", how="semi")
+    index = list(index)
+    # null matches null, as in a pandas merge
+    object_data = data.join(ids.select(index), on=index, how="semi", nulls_equal=True)
 
     if multivalue:
         # Aggregate all values per (ID, KEY) into lists, then pivot (maintain_order so
         # the list element order matches the pandas engine's row order).
-        agg = object_data.group_by(["ID", "KEY"], maintain_order=True).agg(pl.col("VALUE").alias("VALUE"))
-        data_view = agg.pivot(on="KEY", index="ID", values="VALUE")
+        agg = object_data.group_by([*index, "KEY"], maintain_order=True).agg(pl.col("VALUE").alias("VALUE"))
+        data_view = agg.pivot(on="KEY", index=index, values="VALUE")
         # Match pandas multivalue: single-element lists collapse to the scalar, multi-element
         # lists render as the Python list repr (e.g. "['a', 'b']") — pandas keeps a list object
         # in the cell, which str()/to_csv renders that way.
         for col in data_view.columns:
-            if col == "ID":
+            if col in index:
                 continue
             dtype = data_view[col].dtype
             if dtype == pl.List(pl.Utf8) or dtype == pl.List(pl.String):
@@ -56,12 +60,12 @@ def _tableview(ids, data, string_to_number, multivalue, label):
                     .alias(col)
                 )
     else:
-        data_view = (object_data.unique(subset=["ID", "KEY"], keep="first", maintain_order=True)
-                     .pivot(on="KEY", index="ID", values="VALUE"))
+        data_view = (object_data.unique(subset=[*index, "KEY"], keep="first", maintain_order=True)
+                     .pivot(on="KEY", index=index, values="VALUE"))
 
     # rows sorted by ID like the pandas pivot; float sums over a view are then reproducible
-    data_view = data_view.sort("ID")
-    return _numeric_columns(data_view) if string_to_number else data_view
+    data_view = data_view.sort(index)
+    return _numeric_columns(data_view, index) if string_to_number else data_view
 
 
 def type_tableview(data, type_name, string_to_number=True, type_key="Type", multivalue=False):

@@ -13,6 +13,7 @@ import math
 import polars as pl
 
 from triplets import tools as rdf_parser
+from triplets.tools.polars_engine import _tableview
 from triplets._header import PROFILE_KEYS, REFERENCE_KEYS, HEADER_TYPES, distribution_labels
 from .pandas_engine import (  # pure, engine-agnostic helpers
     default_filename_mask,
@@ -56,10 +57,10 @@ def _pd_merge(left, right, left_on, right_on, suffixes=("_x", "_y"), how="inner"
 # ── metadata ──────────────────────────────────────────────────────────────────
 
 def get_metadata_from_FullModel(data):
-    """Metadata dict for the FullModel instance (KEY→VALUE, 'Type' dropped)."""
-    fm = data.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == "FullModel"))
-    uuid = fm["ID"][0]
-    obj = data.filter(pl.col("ID") == uuid).select(["KEY", "VALUE"])
+    """Metadata dict of the first FullModel, read within its own instance (KEY→VALUE, 'Type' dropped)."""
+    header = data.filter((pl.col("KEY") == "Type") & (pl.col("VALUE") == "FullModel")).row(0, named=True)
+    own = (pl.col("ID") == header["ID"]) & pl.col("INSTANCE_ID").eq_missing(header["INSTANCE_ID"])   # null-safe
+    obj = data.filter(own).select(["KEY", "VALUE"])
     metadata = dict(zip(obj["KEY"].cast(pl.Utf8).to_list(), obj["VALUE"].cast(pl.Utf8).to_list()))
     metadata.pop("Type", None)
     return metadata
@@ -101,15 +102,15 @@ def update_filename_from_FullModel(data, filename_mask=default_filename_mask, fi
 # ── model inventory ─────────────────────────────────────────────────────────────
 
 def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — see pandas engine.
+    """{root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — see pandas engine.
 
-    Roots are the loaded headers nothing loaded depends on; *root* restricts
+    Roots are the loaded instances nothing loaded depends on; *root* restricts
     them by profile identity. The walk runs on the tiny relation/profile
     frames via pandas; dict values stay polars.
     """
     models = _walk_models(get_model_relations(data, reference_keys, profile_keys).to_pandas(),
                           get_loaded_profiles(data, profile_keys).to_pandas(), root)
-    return {header: pl.from_pandas(parts) for header, parts in models.items()}
+    return {instance: pl.from_pandas(parts) for instance, parts in models.items()}
 
 
 def get_model_triplets(data, model_instances_dataframe):
@@ -119,21 +120,29 @@ def get_model_triplets(data, model_instances_dataframe):
 
 
 def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
-    """Wide table of loaded header objects (FullModel / Dataset). Repeated keys keep the first value; multivalue=True returns lists."""
-    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
+    """Wide table of loaded header objects (FullModel / Dataset), one row per header of each instance
+    (ID, INSTANCE_ID columns). Repeated keys keep the first value; multivalue=True returns lists."""
+    types = [header_types] if isinstance(header_types, str) else list(header_types)
+    headers = data.filter((pl.col("KEY") == "Type") & pl.col("VALUE").is_in(types))
+    return _tableview(headers, data, string_to_number, multivalue, "/".join(types), index=("ID", "INSTANCE_ID"))
 
 
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
     """One row per profile declaration. Header class is reported verbatim, never matched."""
     key = pl.col("KEY").cast(pl.Utf8)
     hints = (data.filter(key.is_in(list(profile_keys)) & pl.col("VALUE").is_not_null() & (pl.col("VALUE").cast(pl.Utf8) != "")).select("ID", "KEY", "VALUE", "INSTANCE_ID").rename({"ID": "HEADER_ID"}))
-    types = (data.filter((key == "Type") & pl.col("ID").is_in(hints.get_column("HEADER_ID").to_list())).select("ID", "VALUE").unique(subset="ID", keep="first").rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
+    types = (data.filter((key == "Type") & pl.col("ID").is_in(hints.get_column("HEADER_ID").to_list()))
+             .select("ID", "INSTANCE_ID", "VALUE").unique(subset=["ID", "INSTANCE_ID"], keep="first")
+             .rename({"ID": "HEADER_ID", "VALUE": "HEADER"}))
     labels = (distribution_labels(data).select("INSTANCE_ID", "VALUE").unique(subset="INSTANCE_ID", keep="first").rename({"VALUE": "label"}))
-    return hints.join(types, on="HEADER_ID", how="left").join(labels, on="INSTANCE_ID", how="left").select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE")
+    return (hints.join(types, on=["HEADER_ID", "INSTANCE_ID"], how="left", nulls_equal=True)
+            .join(labels, on="INSTANCE_ID", how="left", nulls_equal=True)
+            .select("INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"))
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded."""
+    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded
+    (and for a part loaded under a null INSTANCE_ID)."""
     key = pl.col("KEY").cast(pl.Utf8)
     edges = (data.filter(key.is_in(list(reference_keys)))
              .select("ID", "KEY", "VALUE", "INSTANCE_ID")

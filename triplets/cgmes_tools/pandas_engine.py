@@ -21,6 +21,7 @@ from uuid import uuid4
 from lxml import etree
 from builtins import str
 from triplets import tools as rdf_parser  # backwards compat alias; tools replaces rdf_parser
+from triplets.tools.pandas_engine import _tableview
 from triplets._header import PROFILE_KEYS, PROFILE_URL_MAP, REFERENCE_KEYS, HEADER_TYPES, distribution_labels
 from triplets.parser import parse as load_all_to_dataframe
 
@@ -250,7 +251,9 @@ def get_metadata_from_FullModel(data):
     Returns
     -------
     dict
-        Dictionary of metadata key-value pairs for the FullModel instance.
+        Dictionary of metadata key-value pairs of the first FullModel, read
+        within its own instance (another file sharing its header ID is not
+        read).
 
     Notes
     -----
@@ -263,8 +266,11 @@ def get_metadata_from_FullModel(data):
     >>> print(meta)
     {'Model.scenarioTime': '20230101T0000Z', 'Model.processType': 'A01', ...}
     """
-    UUID = data.query("KEY == 'Type' and VALUE == 'FullModel'").ID.iloc[0]
-    metadata = data.get_object_data(UUID).to_dict()
+    header = data.loc[(data["KEY"] == "Type") & (data["VALUE"] == "FullModel")].iloc[0]
+    instance = data["INSTANCE_ID"]
+    own = instance.isna() if pandas.isna(header["INSTANCE_ID"]) else instance == header["INSTANCE_ID"]   # null-safe
+    rows = data.loc[(data["ID"] == header["ID"]) & own]
+    metadata = dict(zip(rows["KEY"], rows["VALUE"]))
     metadata.pop("Type", None)  # Remove Type form metadata
 
     return metadata
@@ -388,40 +394,63 @@ def _value_matches(values, root):
     return values.str.contains("|".join(re.escape(fragment) for fragment in fragments))
 
 
+def _instances(column):
+    """INSTANCE_IDs as set and dict keys: the null instance is None (NaN never equals itself)."""
+    column = column.astype(object)
+    return column.where(column.notna(), None)
+
+
 def _walk_models(relations, profiles, root):
-    """{root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+    """{root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
     rows of each root's dependency closure over the resolved edges.
 
-    Roots are the loaded headers nothing loaded depends on (never a resolved
-    ID_TO); *root* optionally restricts them by profile identity. BFS with a
-    visited set — dependency cycles terminate.
+    The walk runs over instances, so two files that share a header ID stay two
+    parts; a reference to a shared ID resolves to each of them, except from a
+    header of that ID (a twin naming the shared ID depends on no twin). An edge
+    is resolved when its ID_TO is a loaded header (one declaring a profile or a
+    dependency), whatever its INSTANCE_ID_TO — the null instance is loaded too.
+    Roots are the loaded instances nothing loaded depends on, in load order;
+    *root* optionally restricts them by profile identity. BFS with a visited
+    set — dependency cycles terminate.
     """
-    resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
-    roots = (set(profiles["HEADER_ID"]) | set(relations["ID_FROM"])) - set(resolved["ID_TO"])
+    source, target = _instances(relations["INSTANCE_ID_FROM"]), _instances(relations["INSTANCE_ID_TO"])
+    header_to = relations["ID_TO"].astype(str)
+    loaded = header_to.isin(set(relations["ID_FROM"].astype(str)) | set(profiles["HEADER_ID"].astype(str)))
+    # a header naming its own ID (to itself and to its twins) and a part of its own instance are no edges
+    edge = loaded & (relations["ID_FROM"].astype(str) != header_to) & (source.astype(str) != target.astype(str))
+    adjacency = {}
+    for instance_from, instance_to in zip(source[edge], target[edge]):
+        adjacency.setdefault(instance_from, []).append(instance_to)
+
+    instance = _instances(profiles["INSTANCE_ID"])
+    depended_on = set(target[edge])
+    roots = [node for node in dict.fromkeys([*instance, *source]) if node not in depended_on]
     if root is not None:
-        roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "HEADER_ID"])
-    adjacency = resolved.groupby("ID_FROM")["ID_TO"].agg(list)
+        matching = set(instance[_value_matches(profiles["VALUE"], root)])
+        roots = [node for node in roots if node in matching]
     parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
 
     models = {}
-    for header in sorted(roots):
-        seen, queue = {header}, [header]
-        for node in queue:
-            for target in adjacency.get(node, ()):
-                if target not in seen:
-                    seen.add(target)
-                    queue.append(target)
-        models[header] = parts[parts["ID"].isin(seen)].drop_duplicates().reset_index(drop=True)
+    for node in roots:
+        seen, queue = {node}, [node]
+        for current in queue:
+            for dependency in adjacency.get(current, ()):
+                if dependency not in seen:
+                    seen.add(dependency)
+                    queue.append(dependency)
+        models[node] = parts[instance.isin(seen)].drop_duplicates().reset_index(drop=True)
     return models
 
 
 def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """Loaded models: each root header with its dependency closure.
+    """Loaded models: each root instance with its dependency closure.
 
-    A model starts from a root — a loaded header nothing loaded depends on
+    A model starts from a root — a loaded instance nothing loaded depends on
     (in-degree 0 over :func:`get_model_relations` edges): the SV part of a
     power-flow set, the process instance of a network-code set. Works across
-    header generations; a mixed frame yields one entry per root.
+    header generations; a mixed frame yields one entry per root. Two files that
+    share a header ID are two parts; a part that depends on that ID depends on
+    both, a twin that names the shared ID depends on neither.
 
     Parameters
     ----------
@@ -438,8 +467,9 @@ def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_ke
     Returns
     -------
     dict
-        {root header ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
-        declarations of every model part in the root's dependency closure.
+        {root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
+        declarations of every model part in the root's dependency closure, roots
+        in load order. A root with a null INSTANCE_ID is keyed None.
 
     Examples
     --------
@@ -505,7 +535,8 @@ def get_EIC_to_mRID_map(data, type):
 
 
 def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=False, multivalue=False):
-    """Wide table of the loaded header objects (model parts), one row each.
+    """Wide table of the loaded header objects (model parts), one row per header
+    of each instance — two files that share a header ID are two rows.
 
     Parameters
     ----------
@@ -525,14 +556,17 @@ def get_loaded_model_parts(data, header_types=HEADER_TYPES, string_to_number=Fal
     Returns
     -------
     pandas.DataFrame or None
-        Pivoted DataFrame with header IDs as index and keys as columns,
-        or None when no header object is present.
+        Pivoted DataFrame with header IDs as index, the ``INSTANCE_ID`` column
+        and the keys as columns, or None when no header object is present.
 
     Examples
     --------
     >>> model_parts = get_loaded_model_parts(data)
     """
-    return data.type_tableview(header_types, string_to_number=string_to_number, multivalue=multivalue)
+    types = [header_types] if isinstance(header_types, str) else list(header_types)
+    headers = data.loc[(data["KEY"] == "Type") & data["VALUE"].isin(types)]
+    parts = _tableview(headers, data, string_to_number, multivalue, "/".join(types), index=("ID", "INSTANCE_ID"))
+    return None if parts is None else parts.reset_index("INSTANCE_ID")
 
 
 def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
@@ -563,9 +597,10 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
     >>> profiles[profiles.KEY == "keyword"]
     """
     hints = data.loc[data["KEY"].isin(profile_keys) & data["VALUE"].notna() & (data["VALUE"] != ""), ["ID", "KEY", "VALUE", "INSTANCE_ID"]].rename(columns={"ID": "HEADER_ID"})
-    types = data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "VALUE"]].drop_duplicates("ID").rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"})
+    types = (data.loc[(data["KEY"] == "Type") & data["ID"].isin(hints["HEADER_ID"]), ["ID", "INSTANCE_ID", "VALUE"]]
+             .drop_duplicates(["ID", "INSTANCE_ID"]).rename(columns={"ID": "HEADER_ID", "VALUE": "HEADER"}))
     labels = distribution_labels(data)[["INSTANCE_ID", "VALUE"]].drop_duplicates("INSTANCE_ID").rename(columns={"VALUE": "label"})
-    return hints.merge(types, on="HEADER_ID", how="left").merge(labels, on="INSTANCE_ID", how="left")[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]]
+    return hints.merge(types, on=["HEADER_ID", "INSTANCE_ID"], how="left").merge(labels, on="INSTANCE_ID", how="left")[["INSTANCE_ID", "label", "HEADER", "HEADER_ID", "KEY", "VALUE"]]
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
@@ -587,7 +622,8 @@ def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFIL
     pandas.DataFrame
         One row per reference, columns
         ``ID_FROM | KEY | ID_TO | INSTANCE_ID_FROM | INSTANCE_ID_TO``.
-        INSTANCE_ID_TO is NA when the referenced part is not loaded.
+        INSTANCE_ID_TO is NA when the referenced part is not loaded (and for a
+        part loaded under a null INSTANCE_ID).
 
     Examples
     --------

@@ -106,15 +106,21 @@ class TestUpdateFullModelFromDict:
 class TestGetLoadedModels:
     SV_ID = "2ffd3555-f572-494e-b35e-e56ae740eeb2"  # Svedala SV FullModel
 
+    @staticmethod
+    def instance(data, header_id):
+        return data.loc[data["ID"] == header_id, "INSTANCE_ID"].iloc[0]
+
     def test_default_graph_roots(self, svedala_data):
         models = cgmes_tools.get_loaded_models(svedala_data)
-        assert list(models) == [self.SV_ID]  # only header nothing depends on
-        assert models[self.SV_ID]["INSTANCE_ID"].nunique() == 4  # SV, TP, SSH, EQ
+        sv = self.instance(svedala_data, self.SV_ID)
+        assert list(models) == [sv]  # only instance nothing depends on
+        assert models[sv]["INSTANCE_ID"].nunique() == 4  # SV, TP, SSH, EQ
 
     def test_root_filter(self, svedala_data):
         # "SV" matches the 3.0 StateVariables URI via the legacy section map
-        assert list(cgmes_tools.get_loaded_models(svedala_data, root="SV")) == [self.SV_ID]
-        assert list(cgmes_tools.get_loaded_models(svedala_data, root="StateVariables")) == [self.SV_ID]
+        sv = self.instance(svedala_data, self.SV_ID)
+        assert list(cgmes_tools.get_loaded_models(svedala_data, root="SV")) == [sv]
+        assert list(cgmes_tools.get_loaded_models(svedala_data, root="StateVariables")) == [sv]
         assert cgmes_tools.get_loaded_models(svedala_data, root="ZZ") == {}
 
     def test_mixed_frames_are_two_models(self, mixed_data):
@@ -134,8 +140,8 @@ class TestGetLoadedModels:
             {"ID": "c", "KEY": "requires", "VALUE": "b", "INSTANCE_ID": "i3"},  # cycle b <-> c
         ])
         models = cgmes_tools.get_loaded_models(rows)
-        assert list(models) == ["a"]
-        assert set(models["a"]["ID"]) == {"a", "b", "c"}
+        assert list(models) == ["i1"]
+        assert set(models["i1"]["ID"]) == {"a", "b", "c"}
 
 
 class TestGetLoadedModelParts:
@@ -481,3 +487,45 @@ def test_csv_files_are_named_by_the_distribution_label(labelled):
     from triplets import export
     files = export.export_to_csv(labelled, export_to_memory=True)
     assert files and all(file.name.startswith("old_") for file in files)
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+def test_null_instance_id_is_one_instance(flavor):
+    """Rows with a null INSTANCE_ID are one instance, the same on pandas and polars: its
+    header metadata, model part, profile class and model."""
+    rows = pandas.DataFrame([("h", "Type", "FullModel", None), ("h", "Model.profile", "p1", None),
+                             ("h", "Model.DependentOn", "g", None),
+                             ("g", "Type", "FullModel", "i2"), ("g", "Model.profile", "p2", "i2")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    data = rows if flavor == "pandas" else pytest.importorskip("polars").from_pandas(rows)
+    assert cgmes_tools.get_metadata_from_FullModel(data) == {"Model.profile": "p1", "Model.DependentOn": "g"}
+    assert len(cgmes_tools.get_loaded_model_parts(data)) == 2
+    assert len(cgmes_tools.get_loaded_model_parts(data, multivalue=True)) == 2
+    assert list(cgmes_tools.get_loaded_profiles(data)["HEADER"]) == ["FullModel", "FullModel"]
+    [model] = cgmes_tools.get_loaded_models(data).values()
+    assert sorted(model["ID"].to_list()) == ["g", "h"]
+
+
+def _null_instance_headers(flavor, dependency):
+    """h in the null instance, g in i2; g depends on *dependency* (None: on nothing)."""
+    rows = [("h", "Type", "FullModel", None), ("h", "Model.profile", "p1", None),
+            ("g", "Type", "FullModel", "i2"), ("g", "Model.profile", "p2", "i2")]
+    if dependency:
+        rows.append(("g", "Model.DependentOn", dependency, "i2"))
+    rows = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    return rows if flavor == "pandas" else pytest.importorskip("polars").from_pandas(rows)
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+def test_null_instance_root_beside_another_root(flavor):
+    """The null instance and i2 are two roots, keyed None and "i2" in load order."""
+    models = cgmes_tools.get_loaded_models(_null_instance_headers(flavor, None))
+    assert {instance: parts["ID"].to_list() for instance, parts in models.items()} == {None: ["h"], "i2": ["g"]}
+    assert list(models) == [None, "i2"]
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+def test_dependency_on_the_null_instance_is_loaded(flavor):
+    """g depends on h, loaded with a null INSTANCE_ID: one model rooted at i2 holding both."""
+    models = cgmes_tools.get_loaded_models(_null_instance_headers(flavor, "h"))
+    assert {instance: sorted(parts["ID"].to_list()) for instance, parts in models.items()} == {"i2": ["g", "h"]}

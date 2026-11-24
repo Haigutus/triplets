@@ -601,13 +601,23 @@ pass — `violations.shacl.locate(sources=...)` stamps `LOCATION_COLUMNS` onto t
 both exports run it automatically when given `sources=` and stamp only what the frame
 lacks: the three `SOURCE_*` columns, when all are on the frame, are kept as they are. The
 SARIF export also locates the `TARGET_*` columns whenever the frame has a `TARGET_ID` and
-no located referenced object, so with `sources=` on that export `locate` may run before or
-after `enrich`. The SHACL report writes no referenced-object location: it reads the
-sources only when the `SOURCE_*` columns are missing. The columns:
+no located referenced object. The SHACL report writes no referenced-object location: it
+reads the sources only when the `SOURCE_*` columns are missing.
+
+**Enrich before locate.** A schema finding names its instance (`INSTANCE_ID`); `enrich`
+turns it into the instance's file name (`INSTANCE_LABEL`), and `locate` puts the finding in
+that file. A frame located before `enrich` has no file to go by: each finding lands at the
+first definition of its `ID` in read order, which for an `ID` two files share (a reused
+header ID) is the first file's. An export given `data=` and `sources=` enriches first.
+Name the sources as they were parsed: `INSTANCE_LABEL` is the parsed file name (the path as
+given to the parser, a zip member as `<zip file name>/<member name>`) and must equal a
+source's name exactly — `grid.xml` and `./grid.xml`, or a relative and an absolute path,
+are different names, and a finding whose label names no source falls back to the first
+definition. The columns:
 
 | Columns | Content |
 |---------|---------|
-| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element, in whichever file holds it for the object (an SSH property of an object an EQ file defines), else of the object definition (`ID`); a finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition. The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
+| `SOURCE_URI`, `SOURCE_LINE`, `SOURCE_SNIPPET` | the finding: file, line and line text of the violated property element, in whichever file holds it for the object (an SSH property of an object an EQ file defines), else of the object definition (`ID`). A row whose `INSTANCE_LABEL` (from `enrich`) names one of the sources is located in that file first — two files sharing an `ID` each get their own findings; a finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition. The file is the source name as given; a file in a zip is `<zip file name>/<member name>` (`grid.zip/models/grid.xml`, the zip's name without directories) — the name `INSTANCE_LABEL` and the run's `source` have for it |
 | `TARGET_URI`, `TARGET_LINE`, `TARGET_SNIPPET` | the referenced object of a reference finding found in the data (`TARGET_ID`, from `enrich`): its definition, from the same pass; null without a `TARGET_ID` |
 
 The name of a file in a zip holds the zip's file name only: two zips with the same
@@ -795,6 +805,10 @@ finding: `"Violation"` (default), `"Warning"` or `"Info"` — SARIF
 `has_violation` is False for a `"Warning"` or `"Info"` run. Any other value
 raises `ValueError`. `triplets:lexicalForm` findings are always `Warning`.
 `validate_by_header` forwards it to both runs.
+
+Every schema finding carries the `INSTANCE_ID` it was found in (both schema
+validations and `validate_by_header` run per instance), so two files sharing an
+object ID — a header ID reused across files — report on their own instance.
 
 The applied profiles land in `attrs["validation"]["profiles"]`, each
 violation carries them as a list in the `PROFILE` column, reports carry
@@ -996,32 +1010,33 @@ exports with source locations — `uv run examples/shacl_reports.py`).
 `enrich(violations, data=, shapes=, rdf_map=, rdf_map_scope=, data_scope=)` —
 a separate call after any validation — appends `ENRICHMENT_COLUMNS` to the
 report. Every source is optional; absent sources leave their columns null, so
-the output schema is stable. `data_scope` reads only those instances of
+the output schema is stable. A cell the frame already fills is kept and only
+empty ones are filled: enriching twice equals enriching once. `data_scope` reads only those instances of
 `data` — pass the validation's own scope so TARGET finds exactly what the run
 saw:
 
 | Columns | Source | Content |
 |---------|--------|---------|
-| `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding. A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
+| `TARGET` | data (+ shapes, rdf_map) | what the finding found: the referenced object's id, Type and name — or that it is not in the data — for `sh:class` / reference-range / `triplets:missing` findings; the found type of a valueType row (needs *shapes*); the duplicate values of a maximum-count finding (of the row's own `INSTANCE_ID` when it has one, else of every instance). A presented `rdfs:range` counts as a reference when its rule or the schema says the KEY is an Association |
 | `TARGET_ID` | data (+ shapes, rdf_map) | the id (the `VALUE`) of a reference finding's referenced object when it is in the data; null for a dangling reference and every other row |
 | `TARGET_TYPE` | data (+ shapes, rdf_map) | the Type of that referenced object; null where `TARGET_ID` is |
-| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
-| `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
+| `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance — the row's own (schema findings), else the first instance holding its triple (`ID`, `KEY`, `VALUE`) — the file stating the violating value — else the first holding the `ID` (SHACL findings: the merged graph names no instance) — and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
+| `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` in the row's instance (else the first instance stating them) |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
 | `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the profiles the violation was checked against — the `PROFILE` column, else `rdf_map_scope` (one scope, or `{INSTANCE_ID: scope}`), else the run's `attrs["validation"]["profiles"]` — merged like the run (the multiplicity that was checked). Rows without profiles read the root entries; a name the profiles lack stays empty |
 | `CLASS_DESCRIPTION` | rdf_map | the object's class description |
 
 `enrich` reads no instance headers. Pass the *same* shapes object the
 validation ran with — anonymous property shapes get fresh blank-node ids per
-parse, so a re-parsed graph cannot be matched. An object present in several
-instances is attributed to its first occurrence.
+parse, so a re-parsed graph cannot be matched.
 
 ## SARIF 2.1.0 export (`validation/sarif.py`)
 
 `triplets.validation.export_to_sarif(violations, ...)` /
 `violations.shacl.to_sarif(...)` — a spec-valid SARIF 2.1.0 log for GitHub,
 SonarQube or any SARIF viewer. Passing `data=`/`shapes=`/`rdf_map=` runs the
-enrichment pass first (an already-enriched frame is used as-is).
+enrichment pass first (an enriched frame keeps its filled cells and gets the
+empty ones filled).
 
 - **Grouped by default** (`group=True`): a model can carry 100k identical
   findings that are really *one* issue — each rule becomes one result with

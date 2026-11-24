@@ -86,17 +86,22 @@ def _numeric_columns(data_view):
     return data_view
 
 
-def _tableview(rows, data, string_to_number, multivalue, label):
+def _tableview(rows, data, string_to_number, multivalue, label, index=("ID",)):
     """Shared pivot core for the three tableview functions.
 
-    rows: triplet rows whose IDs select the objects; data: full dataset
-    providing all triplets of the selected objects.
+    rows: triplet rows whose *index* columns select the objects; data: full dataset
+    providing all triplets of the selected objects. One row per *index* value:
+    ``("ID",)`` merges an object's rows from every instance, ``("ID", "INSTANCE_ID")``
+    keeps one row per instance.
     """
     if rows.empty:
         logger.warning(f'No data available for {label}')
         return None
 
-    object_data = pandas.merge(rows[["ID"]].drop_duplicates(), data, on="ID")
+    index = list(index)
+    selected = rows[index].drop_duplicates()
+    # the selected IDs' rows first: the merge then runs on them, not on the whole frame
+    object_data = pandas.merge(selected, data[data["ID"].isin(selected["ID"])], on=index)
 
     if multivalue:
         def _aggregate(x):
@@ -105,9 +110,11 @@ def _tableview(rows, data, string_to_number, multivalue, label):
                 return x_list[0]
             return x_list
 
-        data_view = object_data.pivot_table(index="ID", columns="KEY", values="VALUE", aggfunc=_aggregate)
+        # groupby + unstack keeps a null INSTANCE_ID group (pivot_table drops it)
+        data_view = (object_data.groupby([*index, "KEY"], dropna=False, observed=True)["VALUE"]
+                     .agg(_aggregate).unstack("KEY"))
     else:
-        data_view = object_data.drop_duplicates(["ID", "KEY"]).pivot(index="ID", columns="KEY")["VALUE"]
+        data_view = object_data.drop_duplicates([*index, "KEY"]).pivot(index=index, columns="KEY")["VALUE"]
 
     return _numeric_columns(data_view) if string_to_number else data_view
 

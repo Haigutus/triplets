@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Docs: persistent instance IDs** (`docs/parsers.md`): why a parse gives each file a random `INSTANCE_ID`, and a tested recipe that gives persistent IDs after parsing by header ID, header hash, content hash or file label, per use case, with a check that no two instances share an ID.
 - **`sparql.query(terms=True)`**: SELECT values as N-Triples terms (`<iri>`, `"text"^^<datatype>`, `_:label`), the same on rdflib, oxigraph and qlever (read from their SPARQL JSON results) — the term kind a lexical string loses.
 - **`VALUE_KIND` and `ID_KIND` columns on violations frames** where no schema entry gives the term kind: `VALUE_KIND` on `sh:sparql` findings (the `?value` binding's kind), `ID_KIND` when a focus node is a literal. Values are `triplets.iri.TERM_KINDS` — `class`, `enum`, `reference`, `literal` (`VALUE_KINDS` plus the `value_types` literal kind); the scalar `triplets.iri.absolute_value(key, value, …, kind=)` takes one in place of the KEY's schema entry.
 - **`string_to_number=` on `export_to_excel` and `export_to_csv`** (default `False`: every
@@ -258,6 +259,24 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the rest under `-m performance`).
 
 ### Changed
+- **`cgmes_tools.get_loaded_model_parts` lists one row per header of each instance**, with
+  a new `INSTANCE_ID` column on every result flavor (pandas and duckdb input: header IDs
+  stay the index, which is not unique when two files share a header ID; arrow input: an
+  `INSTANCE_ID` column next to `ID`; polars: `ID` and `INSTANCE_ID` columns). Two files
+  that share a header ID were one row with the first file's values.
+- **`cgmes_tools.get_loaded_models` keys each model by its root's `INSTANCE_ID`**, was the
+  root header ID; roots are in load order. The dependency walk runs over instances: two files that share a header
+  ID are two parts (two roots when nothing depends on them), and a part that depends on
+  that ID depends on both. They were merged into one model. A header that names its own
+  ID as a dependency (a twin depending on the shared ID) depends on no twin: each twin
+  stays a root.
+- **`INSTANCE_ID` is part of the triplet frame contract**: functions may raise on a frame
+  without the column. A null `INSTANCE_ID` is one instance, matched null-safe, the same on
+  pandas and polars (`get_metadata_from_FullModel`, `get_loaded_model_parts`,
+  `get_loaded_profiles`, `get_loaded_models`): `get_loaded_models` keys its model `None`,
+  and a part that depends on its header depends on it.
+- **The `polars` and `dev` extras require `polars>=1.24`** (was `>=1.0`): the null-safe
+  joins use `join(nulls_equal=True)`, which older polars names `join_nulls`.
 - **`validate_shacl` defaults to `inheritance=False`** — `sh:targetClass` and `sh:class`
   match the exact `rdf:type`, as plain SHACL does on a data graph without
   `rdfs:subClassOf` (CIM files carry none, and the ENTSO-E shapes list concrete classes).
@@ -578,6 +597,39 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INF` / `NaN` now fail the datatype check (they passed as `xsd:float`).
 
 ### Fixed
+- **Schema findings name the instance they were found in.** `validate_schema`,
+  `validate_schema_references` and `validate_by_header` add an `INSTANCE_ID` column, and
+  `enrich` keeps it: `INSTANCE_LABEL` and the duplicate values of a maximum-count finding
+  are that instance's. Two files that share an object ID (a header ID reused across
+  files) were both attributed to the first file. A row without an `INSTANCE_ID` (SHACL
+  over the merged graph) goes to the first instance holding its triple (ID, KEY, VALUE) —
+  the file that states the violating value — else to the first holding its ID.
+  `OBJECT_TYPE` / `OBJECT_NAME` are the Type and name in the row's instance, else in the
+  first instance stating them (they were the first instance's for every row).
+- **`locate` puts a finding in its instance's file.** A row whose `INSTANCE_LABEL` names
+  one of the sources (also a member of a zip) is located at its KEY's element or its
+  object's definition in that file; a KEY only another file holds is still located
+  there. Two files that share an object ID (a header ID reused across files) were both
+  located in the first file read. `locate()` takes `files=` (`{ID: source names}`) and
+  returns the positions within those files under `"files"`.
+- **`cgmes_tools.get_metadata_from_FullModel` reads the first FullModel within its own
+  instance.** On data with several instances, a second file sharing the header ID blended
+  its values in (the last value of each KEY won).
+- **`locate` puts a finding of an absent property at its object's definition** (`sh:minCount`,
+  `xsd:minOccurs`), also when another finding on the same ID searched that KEY: it took
+  that KEY's element, possibly in another file.
+- **`export_to_sarif` enriches an enriched frame too** when given `data` / `shapes` /
+  `rdf_map`: the empty cells are filled, the filled ones kept. A frame carrying every
+  enrichment column was used as-is, so one enriched without data named no file and a
+  shared-ID finding was located in the first file read.
+- **`enrich` keeps the cells a frame already fills** and fills only the empty ones:
+  enriching twice equals enriching once, and a call with the rdf_map after one with the
+  data reads the `OBJECT_TYPE` that call filled (`CLASS_DESCRIPTION`). A second call recomputed every column, and a
+  SHACL maximum-count finding on an ID two instances share then listed one instance's
+  values in TARGET instead of every instance's.
+- **`cgmes_tools.get_loaded_profiles` names each declaration's own header class**: HEADER
+  is the Type of the header in the declaration's instance. Two files sharing a header ID
+  (a FullModel and a dcat:Dataset) both showed the first file's class.
 - **SHACL `sh:in` / `sh:hasValue` compare IRIs, not local names** (pandas / polars / duckdb): a class, enumeration value or node of the same name in another namespace no longer passes (`( assoc rdf:type ) sh:in ( cim16:ACLineSegment cim17:ACLineSegment )` on data in a third CIM namespace), as pyshacl reports. A class the schema lacks (every class without an `rdf_map`) matches by its name, as `sh:targetClass` and `sh:class` do. A string literal member stays a literal, also when its text reads as an IRI (`sh:in ( "http://iec.ch/TC57/CIM100#Breaker" )` on `rdf:type` matches no class).
 - **`locate` (SARIF / SHACL report locations) points a finding on a KEY at the file holding that KEY's element** (an SSH property of an object the EQ file defines), not at the first file defining the ID; the definition stays the fallback. A finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition and its KEY is not searched. `locate()`'s `keyLines` entries are `(uri, line, snippet)`, were `(line, snippet)`.
 - **A row without a VALUE counts for no cardinality** (`sh:minCount` / `sh:maxCount`, `xsd:minOccurs` / `xsd:maxOccurs`, pandas / polars / duckdb): it states no triple, as pyshacl sees it.

@@ -428,7 +428,8 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
     severity : {"Violation", "Warning", "Info"}, default "Violation"
         The SEVERITY of every finding (``triplets:lexicalForm`` stays Warning).
 
-    The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``).
+    The PROFILE column lists the scoped section keys (``["EQ", "OP", "SC"]``); the
+    INSTANCE_ID column, the instance the finding was found in.
     """
     started = datetime.now(timezone.utc)
     schema = load_rdf_map(rdf_map)
@@ -439,9 +440,9 @@ def validate_schema(data, rdf_map, data_scope=None, rdf_map_scope=None, report_u
 
     instances = list(data_scope) if data_scope is not None else _instances(data, table_name)
     # one raw engine pass per instance — the presentation pass runs ONCE on the concat
-    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance], **kwargs) for instance in instances]
-    violations = (pandas.concat(frames, ignore_index=True) if frames
-                  else pandas.DataFrame(columns=VIOLATION_COLUMNS))
+    frames = [_run(data, compiled, engine_name, engine_mod, None, [instance], **kwargs)
+              .assign(INSTANCE_ID=str(instance)) for instance in instances]
+    violations = _concat_instances(frames)
     violations["PROFILE"] = _profile_column(violations, sections)
     violations = _present(violations, compiled.ir, "rdfs")
     violations.attrs["validation"] = _schema_metadata(compiled, rdf_map, engine_name, started, data, table_name,
@@ -479,6 +480,8 @@ def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=Non
         False accepts the range class itself only.
     severity : {"Violation", "Warning", "Info"}, default "Violation"
         The SEVERITY of every finding.
+
+    The INSTANCE_ID column names the source instance of each finding.
     """
     started = datetime.now(timezone.utc)
     schema = load_rdf_map(rdf_map)
@@ -499,15 +502,20 @@ def validate_schema_references(data, rdf_map, data_scope=None, rdf_map_scope=Non
                      [instance, *(target for target in targets if target != instance)], **kwargs)
         own = own_triples.get(str(instance), set())
         mask = [triple in own for triple in zip(found["ID"], found["KEY"], found["VALUE"])]
-        frames.append(found.loc[pandas.Series(mask, index=found.index, dtype=bool)])
-    violations = (pandas.concat(frames, ignore_index=True) if frames
-                  else pandas.DataFrame(columns=VIOLATION_COLUMNS))
+        frames.append(found.loc[pandas.Series(mask, index=found.index, dtype=bool)].assign(INSTANCE_ID=str(instance)))
+    violations = _concat_instances(frames)
     violations["PROFILE"] = _profile_column(violations, sections)
     violations = _present(violations, compiled.ir, "rdfs")
     violations.attrs["validation"] = _schema_metadata(compiled, rdf_map, engine_name, started, data, table_name,
                                                      sections)
     violations.attrs["validation"]["inheritance"] = inheritance
     return violations
+
+
+def _concat_instances(frames):
+    """The per-instance raw frames as one, each row carrying the INSTANCE_ID it was found in."""
+    return (pandas.concat(frames, ignore_index=True) if frames
+            else pandas.DataFrame(columns=[*VIOLATION_COLUMNS, "INSTANCE_ID"]))
 
 
 def _schema_metadata(compiled, rdf_map, engine_name, started, data, table_name, sections):
