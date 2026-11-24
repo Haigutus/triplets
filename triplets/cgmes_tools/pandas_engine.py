@@ -394,36 +394,51 @@ def _value_matches(values, root):
     return values.str.contains("|".join(re.escape(fragment) for fragment in fragments))
 
 
+def _instances(column):
+    """INSTANCE_IDs as set and dict keys: the null instance is None (NaN never equals itself)."""
+    column = column.astype(object)
+    return column.where(column.notna(), None)
+
+
 def _walk_models(relations, profiles, root):
     """{root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
     rows of each root's dependency closure over the resolved edges.
 
     The walk runs over instances, so two files that share a header ID stay two
     parts; a reference to a shared ID resolves to each of them, except from a
-    header of that ID (a twin naming the shared ID depends on no twin). Roots
-    are the loaded instances nothing loaded depends on (never a resolved
-    INSTANCE_ID_TO); *root* optionally restricts them by profile identity. BFS
-    with a visited set — dependency cycles terminate.
+    header of that ID (a twin naming the shared ID depends on no twin). An edge
+    is resolved when its ID_TO is a loaded header (one declaring a profile or a
+    dependency), whatever its INSTANCE_ID_TO — the null instance is loaded too.
+    Roots are the loaded instances nothing loaded depends on, in load order;
+    *root* optionally restricts them by profile identity. BFS with a visited
+    set — dependency cycles terminate.
     """
-    resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
+    source, target = _instances(relations["INSTANCE_ID_FROM"]), _instances(relations["INSTANCE_ID_TO"])
+    header_to = relations["ID_TO"].astype(str)
+    loaded = header_to.isin(set(relations["ID_FROM"].astype(str)) | set(profiles["HEADER_ID"].astype(str)))
     # a header naming its own ID (to itself and to its twins) and a part of its own instance are no edges
-    resolved = resolved[(resolved["ID_FROM"].astype(str) != resolved["ID_TO"].astype(str))
-                        & (resolved["INSTANCE_ID_FROM"].astype(str) != resolved["INSTANCE_ID_TO"].astype(str))]
-    roots = (set(profiles["INSTANCE_ID"]) | set(relations["INSTANCE_ID_FROM"])) - set(resolved["INSTANCE_ID_TO"])
+    edge = loaded & (relations["ID_FROM"].astype(str) != header_to) & (source.astype(str) != target.astype(str))
+    adjacency = {}
+    for instance_from, instance_to in zip(source[edge], target[edge]):
+        adjacency.setdefault(instance_from, []).append(instance_to)
+
+    instance = _instances(profiles["INSTANCE_ID"])
+    depended_on = set(target[edge])
+    roots = [node for node in dict.fromkeys([*instance, *source]) if node not in depended_on]
     if root is not None:
-        roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "INSTANCE_ID"])
-    adjacency = resolved.groupby("INSTANCE_ID_FROM", observed=True, dropna=False)["INSTANCE_ID_TO"].agg(list)
+        matching = set(instance[_value_matches(profiles["VALUE"], root)])
+        roots = [node for node in roots if node in matching]
     parts = profiles.rename(columns={"HEADER_ID": "ID", "VALUE": "PROFILE"})[["ID", "PROFILE", "INSTANCE_ID"]]
 
     models = {}
-    for instance in sorted(roots):
-        seen, queue = {instance}, [instance]
-        for node in queue:
-            for target in adjacency.get(node, ()):
-                if target not in seen:
-                    seen.add(target)
-                    queue.append(target)
-        models[instance] = parts[parts["INSTANCE_ID"].isin(seen)].drop_duplicates().reset_index(drop=True)
+    for node in roots:
+        seen, queue = {node}, [node]
+        for current in queue:
+            for dependency in adjacency.get(current, ()):
+                if dependency not in seen:
+                    seen.add(dependency)
+                    queue.append(dependency)
+        models[node] = parts[instance.isin(seen)].drop_duplicates().reset_index(drop=True)
     return models
 
 
@@ -453,7 +468,8 @@ def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_ke
     -------
     dict
         {root INSTANCE_ID: DataFrame(ID, PROFILE, INSTANCE_ID)} — the profile
-        declarations of every model part in the root's dependency closure.
+        declarations of every model part in the root's dependency closure, roots
+        in load order. A root with a null INSTANCE_ID is keyed None.
 
     Examples
     --------
@@ -606,7 +622,8 @@ def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFIL
     pandas.DataFrame
         One row per reference, columns
         ``ID_FROM | KEY | ID_TO | INSTANCE_ID_FROM | INSTANCE_ID_TO``.
-        INSTANCE_ID_TO is NA when the referenced part is not loaded.
+        INSTANCE_ID_TO is NA when the referenced part is not loaded (and for a
+        part loaded under a null INSTANCE_ID).
 
     Examples
     --------

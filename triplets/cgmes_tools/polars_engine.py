@@ -141,7 +141,8 @@ def get_loaded_profiles(data, profile_keys=PROFILE_KEYS):
 
 
 def get_model_relations(data, reference_keys=REFERENCE_KEYS, profile_keys=PROFILE_KEYS):
-    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded."""
+    """Header-to-header dependency edges. INSTANCE_ID_TO is NA when the referenced part is not loaded
+    (and for a part loaded under a null INSTANCE_ID)."""
     key = pl.col("KEY").cast(pl.Utf8)
     edges = (data.filter(key.is_in(list(reference_keys)))
              .select("ID", "KEY", "VALUE", "INSTANCE_ID")

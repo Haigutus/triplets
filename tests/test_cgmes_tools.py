@@ -503,3 +503,28 @@ def test_null_instance_id_is_one_instance(flavor):
     assert list(cgmes_tools.get_loaded_profiles(data)["HEADER"]) == ["FullModel", "FullModel"]
     [model] = cgmes_tools.get_loaded_models(data).values()
     assert sorted(model["ID"].to_list()) == ["g", "h"]
+
+
+def _null_instance_headers(flavor, dependency):
+    """h in the null instance, g in i2; g depends on *dependency* (None: on nothing)."""
+    rows = [("h", "Type", "FullModel", None), ("h", "Model.profile", "p1", None),
+            ("g", "Type", "FullModel", "i2"), ("g", "Model.profile", "p2", "i2")]
+    if dependency:
+        rows.append(("g", "Model.DependentOn", dependency, "i2"))
+    rows = pandas.DataFrame(rows, columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+    return rows if flavor == "pandas" else pytest.importorskip("polars").from_pandas(rows)
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+def test_null_instance_root_beside_another_root(flavor):
+    """The null instance and i2 are two roots, keyed None and "i2" in load order."""
+    models = cgmes_tools.get_loaded_models(_null_instance_headers(flavor, None))
+    assert {instance: parts["ID"].to_list() for instance, parts in models.items()} == {None: ["h"], "i2": ["g"]}
+    assert list(models) == [None, "i2"]
+
+
+@pytest.mark.parametrize("flavor", ["pandas", "polars"])
+def test_dependency_on_the_null_instance_is_loaded(flavor):
+    """g depends on h, loaded with a null INSTANCE_ID: one model rooted at i2 holding both."""
+    models = cgmes_tools.get_loaded_models(_null_instance_headers(flavor, "h"))
+    assert {instance: sorted(parts["ID"].to_list()) for instance, parts in models.items()} == {"i2": ["g", "h"]}

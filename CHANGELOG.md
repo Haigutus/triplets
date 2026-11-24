@@ -264,7 +264,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `INSTANCE_ID` column next to `ID`; polars: `ID` and `INSTANCE_ID` columns). Two files
   that share a header ID were one row with the first file's values.
 - **`cgmes_tools.get_loaded_models` keys each model by its root's `INSTANCE_ID`**, was the
-  root header ID. The dependency walk runs over instances: two files that share a header
+  root header ID; roots are in load order. The dependency walk runs over instances: two files that share a header
   ID are two parts (two roots when nothing depends on them), and a part that depends on
   that ID depends on both. They were merged into one model. A header that names its own
   ID as a dependency (a twin depending on the shared ID) depends on no twin: each twin
@@ -272,7 +272,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`INSTANCE_ID` is part of the triplet frame contract**: functions may raise on a frame
   without the column. A null `INSTANCE_ID` is one instance, matched null-safe, the same on
   pandas and polars (`get_metadata_from_FullModel`, `get_loaded_model_parts`,
-  `get_loaded_profiles`, `get_loaded_models`).
+  `get_loaded_profiles`, `get_loaded_models`): `get_loaded_models` keys its model `None`,
+  and a part that depends on its header depends on it.
 - **The `polars` and `dev` extras require `polars>=1.24`** (was `>=1.0`): the null-safe
   joins use `join(nulls_equal=True)`, which older polars names `join_nulls`.
 - **`validate_shacl` defaults to `inheritance=False`** — `sh:targetClass` and `sh:class`
