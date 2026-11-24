@@ -399,14 +399,16 @@ def _walk_models(relations, profiles, root):
     rows of each root's dependency closure over the resolved edges.
 
     The walk runs over instances, so two files that share a header ID stay two
-    parts; a reference to a shared ID resolves to each of them. Roots are the
-    loaded instances nothing loaded depends on (never a resolved
+    parts; a reference to a shared ID resolves to each of them, except from a
+    header of that ID (a twin naming the shared ID depends on no twin). Roots
+    are the loaded instances nothing loaded depends on (never a resolved
     INSTANCE_ID_TO); *root* optionally restricts them by profile identity. BFS
     with a visited set — dependency cycles terminate.
     """
     resolved = relations.dropna(subset=["INSTANCE_ID_TO"])
-    # an instance whose header names its own ID (a twin depending on the shared ID) is no edge
-    resolved = resolved[resolved["INSTANCE_ID_FROM"].astype(str) != resolved["INSTANCE_ID_TO"].astype(str)]
+    # a header naming its own ID (to itself and to its twins) and a part of its own instance are no edges
+    resolved = resolved[(resolved["ID_FROM"].astype(str) != resolved["ID_TO"].astype(str))
+                        & (resolved["INSTANCE_ID_FROM"].astype(str) != resolved["INSTANCE_ID_TO"].astype(str))]
     roots = (set(profiles["INSTANCE_ID"]) | set(relations["INSTANCE_ID_FROM"])) - set(resolved["INSTANCE_ID_TO"])
     if root is not None:
         roots &= set(profiles.loc[_value_matches(profiles["VALUE"], root), "INSTANCE_ID"])
@@ -433,7 +435,7 @@ def get_loaded_models(data, root=None, reference_keys=REFERENCE_KEYS, profile_ke
     power-flow set, the process instance of a network-code set. Works across
     header generations; a mixed frame yields one entry per root. Two files that
     share a header ID are two parts; a part that depends on that ID depends on
-    both.
+    both, a twin that names the shared ID depends on neither.
 
     Parameters
     ----------

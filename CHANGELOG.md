@@ -266,8 +266,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`cgmes_tools.get_loaded_models` keys each model by its root's `INSTANCE_ID`**, was the
   root header ID. The dependency walk runs over instances: two files that share a header
   ID are two parts (two roots when nothing depends on them), and a part that depends on
-  that ID depends on both. They were merged into one model. A twin that depends on the
-  shared ID (its own header's) is no dependency of itself: it stays a root.
+  that ID depends on both. They were merged into one model. A header that names its own
+  ID as a dependency (a twin depending on the shared ID) depends on no twin: each twin
+  stays a root.
 - **`INSTANCE_ID` is part of the triplet frame contract**: functions may raise on a frame
   without the column. A null `INSTANCE_ID` is one instance, matched null-safe, the same on
   pandas and polars (`get_metadata_from_FullModel`, `get_loaded_model_parts`,
