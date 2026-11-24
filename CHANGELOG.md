@@ -272,6 +272,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   without the column. A null `INSTANCE_ID` is one instance, matched null-safe, the same on
   pandas and polars (`get_metadata_from_FullModel`, `get_loaded_model_parts`,
   `get_loaded_profiles`, `get_loaded_models`).
+- **The `polars` and `dev` extras require `polars>=1.24`** (was `>=1.0`): the null-safe
+  joins use `join(nulls_equal=True)`, which older polars names `join_nulls`.
 - **`validate_shacl` defaults to `inheritance=False`** — `sh:targetClass` and `sh:class`
   match the exact `rdf:type`, as plain SHACL does on a data graph without
   `rdfs:subClassOf` (CIM files carry none, and the ENTSO-E shapes list concrete classes).
