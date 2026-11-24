@@ -356,6 +356,34 @@ def test_enrich_without_data_keeps_the_instance(path_pair):
     assert list(enriched.loc[enriched["ID"] == HEADER, "INSTANCE_ID"]) == [instances["beta"]]
 
 
+OTHER = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <cim:Substation rdf:ID="_cccc"><cim:IdentifiedObject.name>Other</cim:IdentifiedObject.name></cim:Substation>
+</rdf:RDF>
+"""
+
+
+@pytest.mark.parametrize("order", ORDERS)
+def test_enrich_object_type_and_name_are_the_instance_values(order):
+    """beta's object takes alpha's ID as a Bay named Beta: a finding on it is described
+    by its own instance's Type and name. A finding from an instance not stating them
+    or without an INSTANCE_ID reads the first-loaded twin's."""
+    beta = cimxml("beta").replace(b"_bbbb", b"_aaaa").replace(b"cim:Substation", b"cim:Bay")
+    files = {"alpha": named("alpha.xml", cimxml("alpha")), "beta": named("beta.xml", beta)}
+    data = triplets.parse([files[twin] for twin in ORDERS[order]] + [named("other.xml", OTHER)],
+                          engine="python_lxml_pandas")
+    labels = distribution_labels(data)
+    instance = dict(zip(labels["VALUE"], labels["INSTANCE_ID"]))
+    rows = pandas.DataFrame({"ID": "aaaa", "KEY": "IdentifiedObject.description", "VALUE": None,
+                             "VIOLATION_TYPE": "sh:minCount", "MESSAGE": None, "SEVERITY": "Violation",
+                             "SOURCE_SHAPE": None,
+                             "INSTANCE_ID": [instance["alpha.xml"], instance["beta.xml"], instance["other.xml"], None]})
+    enriched = validation.enrich(rows, data=data)
+    first = {"alpha": ("Substation", "Alpha"), "beta": ("Bay", "Beta")}[ORDERS[order][0]]
+    assert list(zip(enriched["OBJECT_TYPE"], enriched["OBJECT_NAME"])) == [
+        ("Substation", "Alpha"), ("Bay", "Beta"), first, first]
+
+
 MAX_DESCRIPTION = """
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix md: <http://iec.ch/TC57/61970-552/ModelDescription/1#> .

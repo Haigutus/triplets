@@ -603,6 +603,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   files) were both attributed to the first file. A row without an `INSTANCE_ID` (SHACL
   over the merged graph) goes to the first instance holding its triple (ID, KEY, VALUE) —
   the file that states the violating value — else to the first holding its ID.
+  `OBJECT_TYPE` / `OBJECT_NAME` are the Type and name in the row's instance, else in the
+  first instance stating them (they were the first instance's for every row).
 - **`locate` puts a finding in its instance's file.** A row whose `INSTANCE_LABEL` names
   one of the sources (also a member of a zip) is located at its KEY's element or its
   object's definition in that file; a KEY only another file holds is still located

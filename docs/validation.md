@@ -1021,7 +1021,7 @@ saw:
 | `TARGET_ID` | data (+ shapes, rdf_map) | the id (the `VALUE`) of a reference finding's referenced object when it is in the data; null for a dangling reference and every other row |
 | `TARGET_TYPE` | data (+ shapes, rdf_map) | the Type of that referenced object; null where `TARGET_ID` is |
 | `INSTANCE_ID`, `INSTANCE_LABEL` | data | instance — the row's own (schema findings), else the first instance holding its triple (`ID`, `KEY`, `VALUE`) — the file stating the violating value — else the first holding the `ID` (SHACL findings: the merged graph names no instance) — and its parsed file name (the `Distribution`/`label` meta rows; a file read from a zip is `<zip file name>/<label>`, from its `belongsToContainer` row) |
-| `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` |
+| `OBJECT_TYPE`, `OBJECT_NAME` | data | the focus object's `Type` and `IdentifiedObject.name` in the row's instance (else the first instance stating them) |
 | `SHAPE_NAME`, `SHAPE_DESCRIPTION` | shapes | `sh:name` / `sh:description` (a property shape inherits the parent NodeShape's) |
 | `SCHEMA_DESCRIPTION`, `SCHEMA_MULTIPLICITY` | rdf_map | the violated attribute's schema definition in the profiles the violation was checked against — the `PROFILE` column, else `rdf_map_scope` (one scope, or `{INSTANCE_ID: scope}`), else the run's `attrs["validation"]["profiles"]` — merged like the run (the multiplicity that was checked). Rows without profiles read the root entries; a name the profiles lack stays empty |
 | `CLASS_DESCRIPTION` | rdf_map | the object's class description |

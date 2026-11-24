@@ -55,7 +55,8 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
         found in) is kept, and its duplicate values are that instance's; a row
         without one (``validate_shacl`` runs over the merged graph) is attributed
         to the first instance holding its triple (ID, KEY, VALUE), else its ID, and
-        its duplicate values are those of every instance. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
+        its duplicate values are those of every instance. OBJECT_TYPE / OBJECT_NAME
+        are the row's instance's, else the first instance's stating them. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
         for the duckdb engine.
     shapes : CompiledShapes or shape source, optional
         Fills SHAPE_NAME / SHAPE_DESCRIPTION (sh:name / sh:description of
@@ -353,7 +354,8 @@ def _type_map(data, table_name="triplets"):
 
 def _add_instance_context(violations, own, data):
     """INSTANCE_ID: the row's *own*, else the first instance holding its triple (ID, KEY,
-    VALUE), else the first holding its ID; its INSTANCE_LABEL, OBJECT_TYPE and OBJECT_NAME."""
+    VALUE), else the first holding its ID; its INSTANCE_LABEL; OBJECT_TYPE and OBJECT_NAME
+    as that instance states them, else as the first instance stating them."""
     identifier = data["ID"].astype(str)
     instances = data["INSTANCE_ID"].astype(str)
 
@@ -373,11 +375,15 @@ def _add_instance_context(violations, own, data):
     # The parsed file name lives on the per-instance Distribution meta object
     violations["INSTANCE_LABEL"] = violations["INSTANCE_ID"].map(file_names(data))
 
+    # the row's own instance's value, else the first instance's
+    pairs = pandas.MultiIndex.from_arrays([violations["ID"].astype(str), violations["INSTANCE_ID"].astype(str)])
     for column, key in (("OBJECT_TYPE", TYPE_KEY), ("OBJECT_NAME", "IdentifiedObject.name")):
-        rows = data[data["KEY"] == key]
-        rows = rows[~rows["ID"].astype(str).duplicated()]
-        violations[column] = violations["ID"].map(
-            pandas.Series(rows["VALUE"].values, index=rows["ID"].astype(str)))
+        rows = data.loc[data["KEY"] == key, ["ID", "VALUE", "INSTANCE_ID"]].astype({"ID": str, "INSTANCE_ID": str})
+        first = rows.drop_duplicates("ID")
+        own_value = (rows.drop_duplicates(["ID", "INSTANCE_ID"]).set_index(["ID", "INSTANCE_ID"])["VALUE"]
+                     .reindex(pairs).set_axis(violations.index))
+        violations[column] = own_value.where(own_value.notna(),
+                                             violations["ID"].astype(str).map(first.set_index("ID")["VALUE"]))
 
 
 def _add_shape_context(violations, ir):
