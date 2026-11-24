@@ -95,8 +95,25 @@ A random ID is unique and costs nothing. The file name stays in the
 ### Persistent IDs for a use case
 
 After parsing, replace the `INSTANCE_ID` column. Nothing in triplets depends on
-the parse-time ID. Pick the rule that gives the same ID exactly when your use case
-means "the same instance":
+the parse-time ID. The short form maps each random ID to the file's header ID:
+
+```python
+import pandas
+import triplets
+
+paths = ["EQ.xml", "SSH.xml"]
+data = pandas.read_RDF(paths)
+
+headers = data.query("KEY == 'Type' and VALUE in ['FullModel', 'Dataset']")
+new_id = dict(zip(headers["INSTANCE_ID"], headers["ID"]))   # random ID -> header ID
+assert len(set(new_id.values())) == len(new_id), "header IDs are reused"
+data["INSTANCE_ID"] = data["INSTANCE_ID"].map(new_id)
+```
+
+A file without a header gets no ID here; add `.fillna(data["INSTANCE_ID"])` to keep
+its random one. Any other rule works the same way: a dict from the random ID to the
+new one, then `.map`. Pick the rule that gives the same ID exactly when your use
+case means "the same instance":
 
 | Use case | Rule | Same ID when | Watch out |
 |---|---|---|---|

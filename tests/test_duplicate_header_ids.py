@@ -709,20 +709,33 @@ def test_get_metadata_from_FullModel_per_instance(pair, flavor):
         assert set(metadata.items()) == header_rows(twin) - {("Type", "FullModel")}
 
 
-def _persistent_id_recipe():
-    """The python block of docs/parsers.md "Persistent IDs for a use case", without its paths line."""
+def _persistent_id_recipe(index):
+    """Python block *index* of docs/parsers.md "Persistent IDs for a use case" (0: the short
+    header-ID form, 1: the recipe per rule), without its paths line."""
     from pathlib import Path
     text = (Path(__file__).parent.parent / "docs" / "parsers.md").read_text()
-    block = text.split("### Persistent IDs for a use case", 1)[1].split("```python\n", 1)[1].split("```", 1)[0]
+    section = text.split("### Persistent IDs for a use case", 1)[1].split("\n## ", 1)[0]
+    block = section.split("```python\n")[index + 1].split("```", 1)[0]
     lines = block.splitlines()
     assert any(line.startswith("paths = ") for line in lines)
     return "\n".join(line for line in lines if not line.startswith("paths = "))
 
 
-def _run_recipe(sources):
+def _run_recipe(sources, index=1):
     namespace = {"paths": sources}
-    exec(_persistent_id_recipe(), namespace)
+    exec(_persistent_id_recipe(index), namespace)
     return namespace
+
+
+def test_persistent_id_short_form():
+    """The short docs form: files with their own header IDs take them as INSTANCE_ID;
+    the twins, sharing one, stop at the check."""
+    other = "0d4f7a52-93b1-4e2c-8a6f-5c1e2b3d4f60"
+    unique = _run_recipe([named("alpha.xml", cimxml("alpha")),
+                          named("beta.xml", cimxml("beta").replace(HEADER.encode(), other.encode()))], index=0)
+    assert set(unique["data"]["INSTANCE_ID"]) == {HEADER, other}
+    with pytest.raises(AssertionError, match="header IDs are reused"):
+        _run_recipe([named("alpha.xml", cimxml("alpha")), named("beta.xml", cimxml("beta"))], index=0)
 
 
 def test_persistent_id_recipe_per_rule():
