@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0rc1] - 2026-11-13
+
 ### Added
 - **Docs: persistent instance IDs** (`docs/parsers.md`): why a parse gives each file a random `INSTANCE_ID`, and a tested recipe that gives persistent IDs after parsing by header ID, header hash, content hash or file label, per use case, with a check that no two instances share an ID.
 - **`sparql.query(terms=True)`**: SELECT values as N-Triples terms (`<iri>`, `"text"^^<datatype>`, `_:label`), the same on rdflib, oxigraph and qlever (read from their SPARQL JSON results) — the term kind a lexical string loses.
@@ -1651,6 +1653,7 @@ See [docs/migration_0.0_to_0.1.md](docs/migration_0.0_to_0.1.md) for full upgrad
   modules. Several `tools` and `cgmes_tools` functions were renamed; the old names keep
   working with a warning. All of these will be removed in 0.2.
 
+[0.3.0rc1]: https://github.com/Haigutus/triplets/releases/tag/0.3.0rc1
 [0.2.0]: https://github.com/Haigutus/triplets/releases/tag/0.2.0
 [0.2.0rc6]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc6
 [0.2.0rc5]: https://github.com/Haigutus/triplets/releases/tag/0.2.0rc5
