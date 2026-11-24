@@ -65,6 +65,95 @@ CIM100 for the SPARQL engines), e.g. `http://triplets#belongsToContainer`.
 (the member name) and `.container` (the zip's file name, without directories);
 the engines read both.
 
+## Persistent instance IDs
+
+`INSTANCE_ID` names one parsed file. It groups the file's rows, it is the graph
+name in N-Quads and in the SPARQL stores, and schema findings name it as the
+instance they were found in.
+
+### Why a parse gives random IDs
+
+Every parse gives each file a new `uuid4()`, so the same file read twice gets two
+IDs. Each alternative fails in some common case:
+
+- **Header ID** (`md:FullModel` / `dcat:Dataset` `rdf:about`): it must be unique
+  by IEC 61970-552, but real data often reuses it, e.g. a network-code file and a
+  grid-situation file with one header ID. Two files would become one instance.
+- **Content hash**: unique, but it reads every row of every file on every parse.
+  Most callers don't need that.
+- **File name**: two folders or zips often hold the same name.
+
+A random ID is unique and costs nothing. The file name stays in the
+`Distribution` `label` row, and `enrich` and the SARIF export use it.
+
+### Keep an ID you already have
+
+- `export_to_nquads` writes `INSTANCE_ID` as the graph name, and `read_nquads`
+  reads it back.
+- `tableview_to_triplets` and `update_triplets_from_tableview` take `instance_id=`.
+
+### Persistent IDs for a use case
+
+After parsing, replace the `INSTANCE_ID` column. Nothing in triplets depends on
+the parse-time ID. Pick the rule that gives the same ID exactly when your use case
+means "the same instance":
+
+| Use case | Rule | Same ID when | Watch out |
+|---|---|---|---|
+| Graph per model in a store, so a reload replaces the graph | header ID | the header ID is the same | files that reuse a header ID collide |
+| Graph per model version, robust to reused header IDs | hash of the header object | the header rows are the same (profile, version, scenario time, created) | any header value change gives a new ID |
+| Baselines and run-to-run diffs of validation results | hash of the content (no header, no parser metadata) | the content is the same | any content change gives a new ID; two identical files collide |
+| Track one file across edits | file label | the path as given is the same | a moved file gets a new ID |
+
+Whatever the rule, check that no two instances get one ID: a shared ID merges two
+files into one instance.
+
+```python
+import hashlib
+import uuid
+
+import pandas
+import triplets
+
+paths = ["EQ.xml", "SSH.xml"]
+data = pandas.read_RDF(paths)
+data["INSTANCE_ID"] = data["INSTANCE_ID"].astype(str)
+types = data.loc[data["KEY"] == "Type", ["INSTANCE_ID", "ID", "VALUE"]]
+headers = types.loc[types["VALUE"].isin(["FullModel", "Dataset"]), ["INSTANCE_ID", "ID"]]
+metadata = types.loc[types["VALUE"].isin(["FullModel", "Dataset", "Distribution", "NamespaceMap"]),
+                     ["INSTANCE_ID", "ID"]]
+distributions = types.loc[types["VALUE"] == "Distribution", ["INSTANCE_ID", "ID"]]
+
+
+def rows_of(objects, inside=True):
+    """Rows of each instance's own *objects*, or (inside=False) all its other rows."""
+    hit = data.merge(objects.assign(hit=True), on=["INSTANCE_ID", "ID"], how="left")["hit"].notna()
+    return data[hit.to_numpy() == inside]
+
+
+def digest(rows):
+    """Name-based UUID of the rows, independent of row order and library version."""
+    lines = sorted(rows["ID"].astype(str) + "\t" + rows["KEY"].astype(str) + "\t" + rows["VALUE"].astype(str))
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, hashlib.sha256("\n".join(lines).encode()).hexdigest()))
+
+
+labels = rows_of(distributions).query("KEY == 'label'")
+by_header_id = dict(zip(headers["INSTANCE_ID"], headers["ID"]))
+by_header = {instance: digest(rows) for instance, rows in rows_of(headers).groupby("INSTANCE_ID")}
+by_content = {instance: digest(rows) for instance, rows in rows_of(metadata, inside=False).groupby("INSTANCE_ID")}
+by_label = {instance: str(uuid.uuid5(uuid.NAMESPACE_URL, label))
+            for instance, label in zip(labels["INSTANCE_ID"], labels["VALUE"])}
+
+persistent = by_content
+if len(set(persistent.values())) < len(persistent):
+    raise ValueError("two instances would get one INSTANCE_ID")
+data["INSTANCE_ID"] = data["INSTANCE_ID"].map(persistent).fillna(data["INSTANCE_ID"])
+```
+
+An instance the rule gives no ID (no header, no label) keeps its parse-time ID.
+`content_hash()` is faster than `digest`, but its value changes with the engine
+and the library version, so it doesn't suit IDs that must outlive one run.
+
 ## String layout — `parse(..., string_type=...)`
 
 The Arrow layout of the ID and VALUE columns is selectable: `"utf8"` (32-bit
@@ -179,7 +268,7 @@ in `tests/test_iri.py`).
 | `VALUE` (Type) | `Breaker` | tag local name (N-Quads / SPARQL: `local_value(…, "class")`) |
 | `VALUE` (reference) | bare UUID or `EnumKind.value` | `local_value`: ID rule, then an `http(s)` IRI with `#` → its `split_iri` local name (`…#c/d` → `d`); without `#`, or a namespace IRI ending in `#` / `/`, it stays whole |
 | `VALUE` (literal) | text verbatim | — |
-| `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file |
+| `INSTANCE_ID` | bare UUID | fresh `uuid4()` per parsed file ([Persistent instance IDs](#persistent-instance-ids)) |
 
 The absolute form (N-Quads, SPARQL stores, SHACL reports) is the inverse,
 driven by the export schema: `absolute_id`, `absolute_key`, `absolute_value` with the

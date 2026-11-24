@@ -707,3 +707,38 @@ def test_get_metadata_from_FullModel_per_instance(pair, flavor):
         one = build_engine(flavor, data[data["INSTANCE_ID"] == instance].reset_index(drop=True))
         metadata = cgmes_tools.get_metadata_from_FullModel(one)
         assert set(metadata.items()) == header_rows(twin) - {("Type", "FullModel")}
+
+
+def _persistent_id_recipe():
+    """The python block of docs/parsers.md "Persistent IDs for a use case", without its paths line."""
+    from pathlib import Path
+    text = (Path(__file__).parent.parent / "docs" / "parsers.md").read_text()
+    block = text.split("### Persistent IDs for a use case", 1)[1].split("```python\n", 1)[1].split("```", 1)[0]
+    lines = block.splitlines()
+    assert any(line.startswith("paths = ") for line in lines)
+    return "\n".join(line for line in lines if not line.startswith("paths = "))
+
+
+def _run_recipe(sources):
+    namespace = {"paths": sources}
+    exec(_persistent_id_recipe(), namespace)
+    return namespace
+
+
+def test_persistent_id_recipe_per_rule():
+    """The docs recipe on the twins: the header ID collides; the header hash, the content
+    hash and the label give each twin its own ID, the same on every parse."""
+    def sources():
+        return [named("alpha.xml", cimxml("alpha")), named("beta.xml", cimxml("beta"))]
+    first, second = _run_recipe(sources()), _run_recipe(sources())
+    assert list(first["by_header_id"].values()) == [HEADER, HEADER]
+    for rule in ("by_header", "by_content", "by_label"):
+        assert len(set(first[rule].values())) == 2, rule
+        assert sorted(first[rule].values()) == sorted(second[rule].values()), rule
+    assert set(first["data"]["INSTANCE_ID"]) == set(first["by_content"].values())
+
+
+def test_persistent_id_recipe_refuses_a_shared_id():
+    """Two files with one content get one content hash: the recipe's check stops."""
+    with pytest.raises(ValueError, match="one INSTANCE_ID"):
+        _run_recipe([named("a.xml", cimxml("alpha")), named("copy/a.xml", cimxml("alpha"))])

@@ -7,6 +7,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Docs: persistent instance IDs** (`docs/parsers.md`): why a parse gives each file a random `INSTANCE_ID`, and a tested recipe that gives persistent IDs after parsing by header ID, header hash, content hash or file label, per use case, with a check that no two instances share an ID.
 - **`sparql.query(terms=True)`**: SELECT values as N-Triples terms (`<iri>`, `"text"^^<datatype>`, `_:label`), the same on rdflib, oxigraph and qlever (read from their SPARQL JSON results) — the term kind a lexical string loses.
 - **`VALUE_KIND` and `ID_KIND` columns on violations frames** where no schema entry gives the term kind: `VALUE_KIND` on `sh:sparql` findings (the `?value` binding's kind), `ID_KIND` when a focus node is a literal. Values are `triplets.iri.TERM_KINDS` — `class`, `enum`, `reference`, `literal` (`VALUE_KINDS` plus the `value_types` literal kind); the scalar `triplets.iri.absolute_value(key, value, …, kind=)` takes one in place of the KEY's schema entry.
 - **`string_to_number=` on `export_to_excel` and `export_to_csv`** (default `False`: every
