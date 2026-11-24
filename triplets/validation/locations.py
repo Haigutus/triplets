@@ -79,9 +79,14 @@ def locate(wanted, sources, files=None):
 
     Returns
     -------
-    dict {ID: {"uri": str, "startLine": int, "snippet": str,
-               "keyLines": {KEY: (uri, line, snippet)},
-               "files": {uri: {"startLine": int, "snippet": str, "keyLines": {KEY: (uri, line, snippet)}}}}}
+    dict
+        One entry per found ID::
+
+            {ID: {"uri": str, "startLine": int, "snippet": str,
+                  "keyLines": {KEY: (uri, line, snippet)},
+                  "files": {uri: {"startLine": int, "snippet": str,
+                                  "keyLines": {KEY: (uri, line, snippet)}}}}}
+
         "uri" is the source name as given (the path, a file-like's
         ``.name``); a zip member is ``<zip file name>/<member name>``, the
         zip's name without directories. The position is that of the first
