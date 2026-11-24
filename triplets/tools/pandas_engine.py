@@ -99,7 +99,9 @@ def _tableview(rows, data, string_to_number, multivalue, label, index=("ID",)):
         return None
 
     index = list(index)
-    object_data = pandas.merge(rows[index].drop_duplicates(), data, on=index)
+    selected = rows[index].drop_duplicates()
+    # the selected IDs' rows first: the merge then runs on them, not on the whole frame
+    object_data = pandas.merge(selected, data[data["ID"].isin(selected["ID"])], on=index)
 
     if multivalue:
         def _aggregate(x):
