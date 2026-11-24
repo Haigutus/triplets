@@ -459,6 +459,21 @@ def test_locate_without_enrich_falls_back_to_the_first_definition(kind, order, t
 
 
 @pytest.mark.parametrize("order", ORDERS)
+def test_label_naming_no_source_falls_back_to_the_first_definition(order, tmp_path):
+    """An INSTANCE_LABEL that names none of the sources: locate and the SARIF log place
+    the finding at the first definition in read order, the first-loaded twin's header."""
+    pair_ = Pair("paths", order, tmp_path)
+    _, _, enriched = enriched_header_finding(pair_, "pandas")
+    enriched = enriched.assign(INSTANCE_LABEL="not-a-source.xml")
+    located = validation.locate_violations(enriched, pair_.inputs())
+    assert list(located["SOURCE_URI"]) == [pair_.uri[pair_.order[0]]]
+    log = json.loads(validation.export_to_sarif(enriched, sources=pair_.inputs(), group=False,
+                                                export_to_memory=True).getvalue())
+    [result] = log["runs"][0]["results"]
+    assert result["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == pair_.uri[pair_.order[0]]
+
+
+@pytest.mark.parametrize("order", ORDERS)
 def test_sarif_names_the_file_of_the_finding(order, tmp_path):
     """Over both twins, without sources the SARIF result of the header finding names
     beta's file (the instance file of the enrichment)."""
