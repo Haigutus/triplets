@@ -617,6 +617,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`locate` puts a finding of an absent property at its object's definition** (`sh:minCount`,
   `xsd:minOccurs`), also when another finding on the same ID searched that KEY: it took
   that KEY's element, possibly in another file.
+- **`export_to_sarif` enriches an enriched frame too** when given `data` / `shapes` /
+  `rdf_map`: the empty cells are filled, the filled ones kept. A frame carrying every
+  enrichment column was used as-is, so one enriched without data named no file and a
+  shared-ID finding was located in the first file read.
 - **`enrich` keeps the cells a frame already fills** and fills only the empty ones:
   enriching twice equals enriching once. A second call recomputed every column, and a
   SHACL maximum-count finding on an ID two instances share then listed one instance's

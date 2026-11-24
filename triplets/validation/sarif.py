@@ -52,7 +52,8 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     Parameters
     ----------
     violations : DataFrame in VIOLATION_COLUMNS (any engine's output), or a list of them.
-        A frame already carrying the enrichment columns is used as-is.
+        An enriched frame keeps the cells it fills; *data*, *shapes* and
+        *rdf_map* fill the empty ones (see context.enrich).
         A list writes one log with one run per frame, in order, each with the
         tool name, rules and run metadata of its own frame — a schema run and a
         SHACL run in one file (``[schema_violations, shacl_violations]``); every
@@ -101,8 +102,8 @@ def export_to_sarif(violations, data=None, shapes=None, rdf_map=None, group=True
     """
     check_source_root(source_root)
     if any(source is not None for source in (data, shapes, rdf_map)):
-        violations = [frame if set(ENRICHMENT_COLUMNS) <= set(frame.columns)
-                      else enrich(frame, data=data, shapes=shapes, rdf_map=rdf_map, data_scope=data_scope)
+        # enrich fills only empty cells: an enriched frame gets what its enrichment lacked
+        violations = [enrich(frame, data=data, shapes=shapes, rdf_map=rdf_map, data_scope=data_scope)
                       for frame in _frames(violations)]
 
     payload = json.dumps(build_sarif(violations, group=group, sources=sources, source_root=source_root),

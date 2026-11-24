@@ -1035,7 +1035,8 @@ parse, so a re-parsed graph cannot be matched.
 `triplets.validation.export_to_sarif(violations, ...)` /
 `violations.shacl.to_sarif(...)` — a spec-valid SARIF 2.1.0 log for GitHub,
 SonarQube or any SARIF viewer. Passing `data=`/`shapes=`/`rdf_map=` runs the
-enrichment pass first (an already-enriched frame is used as-is).
+enrichment pass first (an enriched frame keeps its filled cells and gets the
+empty ones filled).
 
 - **Grouped by default** (`group=True`): a model can carry 100k identical
   findings that are really *one* issue — each rule becomes one result with

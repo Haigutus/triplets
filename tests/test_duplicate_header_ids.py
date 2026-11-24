@@ -469,6 +469,23 @@ def test_sarif_puts_the_finding_in_its_file(order, tmp_path):
 
 
 @pytest.mark.parametrize("order", ORDERS)
+def test_sarif_completes_a_frame_enriched_without_data(order, tmp_path):
+    """A finding enriched with only the rdf_map names no file; export_to_sarif with data
+    and sources fills it in and points at beta's scenarioTime line."""
+    pair_ = Pair("paths", order, tmp_path)
+    data, _ = flavored(pair_, "pandas")
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    enriched = validation.enrich(violations[violations["ID"] == HEADER], rdf_map=SCHEMA)
+    assert enriched["INSTANCE_LABEL"].isna().all()
+    log = json.loads(validation.export_to_sarif(enriched, data=data, sources=pair_.inputs(), group=False,
+                                                export_to_memory=True).getvalue())
+    [result] = log["runs"][0]["results"]
+    location = result["locations"][0]["physicalLocation"]
+    assert location["artifactLocation"]["uri"] == pair_.uri["beta"]
+    assert "not-a-time" in location["region"]["snippet"]["text"]
+
+
+@pytest.mark.parametrize("order", ORDERS)
 def test_grouped_sarif_locates_both_invalid_twins(order, tmp_path):
     """Both twins' scenarioTime invalid: the grouped SARIF result counts two occurrences
     and has one location per twin, each on its own file's line."""
