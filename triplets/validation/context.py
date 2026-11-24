@@ -385,8 +385,10 @@ def _add_instance_context(violations, own, data):
     pairs = pandas.MultiIndex.from_arrays([violations["ID"].astype(str), violations["INSTANCE_ID"].astype(str)])
     for column, key in (("OBJECT_TYPE", TYPE_KEY), ("OBJECT_NAME", "IdentifiedObject.name")):
         rows = data.loc[data["KEY"] == key, ["ID", "VALUE", "INSTANCE_ID"]].astype({"ID": str, "INSTANCE_ID": str})
-        first = rows.drop_duplicates("ID")
-        own_value = (rows.drop_duplicates(["ID", "INSTANCE_ID"]).set_index(["ID", "INSTANCE_ID"])["VALUE"]
+        # an rdf:Description node (Type "Description") names no class: another instance's Type is the object's
+        stated = rows[rows["VALUE"].astype(str) != "Description"] if key == TYPE_KEY else rows
+        first = pandas.concat([stated, rows]).drop_duplicates("ID")
+        own_value = (stated.drop_duplicates(["ID", "INSTANCE_ID"]).set_index(["ID", "INSTANCE_ID"])["VALUE"]
                      .reindex(pairs).set_axis(violations.index))
         violations[column] = own_value.where(own_value.notna(),
                                              violations["ID"].astype(str).map(first.set_index("ID")["VALUE"]))

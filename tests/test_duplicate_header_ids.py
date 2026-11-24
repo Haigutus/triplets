@@ -362,23 +362,32 @@ OTHER = b"""<?xml version="1.0" encoding="UTF-8"?>
 </rdf:RDF>
 """
 
+DESCRIPTION = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <rdf:Description rdf:about="#_aaaa"><cim:IdentifiedObject.description>d</cim:IdentifiedObject.description></rdf:Description>
+</rdf:RDF>
+"""
+
 
 @pytest.mark.parametrize("order", ORDERS)
 @pytest.mark.parametrize("flavor", [*ENGINES, "pandas-category"])
 def test_enrich_object_type_and_name_are_the_instance_values(order, flavor):
     """beta's object takes alpha's ID as a Bay named Beta: a finding on it is described
-    by its own instance's Type and name. A finding from an instance not stating them
-    or without an INSTANCE_ID reads the first-loaded twin's."""
+    by its own instance's Type and name. A finding from an instance not stating them,
+    stating the object as rdf:Description, or without an INSTANCE_ID reads the
+    first-loaded twin's."""
     beta = cimxml("beta").replace(b"_bbbb", b"_aaaa").replace(b"cim:Substation", b"cim:Bay")
     files = {"alpha": named("alpha.xml", cimxml("alpha")), "beta": named("beta.xml", beta)}
-    data = triplets.parse([files[twin] for twin in ORDERS[order]] + [named("other.xml", OTHER)],
+    data = triplets.parse([files[twin] for twin in ORDERS[order]]
+                          + [named("other.xml", OTHER), named("description.xml", DESCRIPTION)],
                           engine="python_lxml_pandas")
     labels = distribution_labels(data)
     instance = dict(zip(labels["VALUE"], labels["INSTANCE_ID"]))
     rows = pandas.DataFrame({"ID": "aaaa", "KEY": "IdentifiedObject.description", "VALUE": None,
                              "VIOLATION_TYPE": "sh:minCount", "MESSAGE": None, "SEVERITY": "Violation",
                              "SOURCE_SHAPE": None,
-                             "INSTANCE_ID": [instance["alpha.xml"], instance["beta.xml"], instance["other.xml"], None]})
+                             "INSTANCE_ID": [instance["alpha.xml"], instance["beta.xml"], instance["other.xml"],
+                                             instance["description.xml"], None]})
     if flavor == "pandas-category":
         data = data.astype("category")
     elif flavor != "pandas":
@@ -387,7 +396,7 @@ def test_enrich_object_type_and_name_are_the_instance_values(order, flavor):
     enriched = validation.enrich(rows, data=data)
     first = {"alpha": ("Substation", "Alpha"), "beta": ("Bay", "Beta")}[ORDERS[order][0]]
     assert list(zip(enriched["OBJECT_TYPE"], enriched["OBJECT_NAME"])) == [
-        ("Substation", "Alpha"), ("Bay", "Beta"), first, first]
+        ("Substation", "Alpha"), ("Bay", "Beta"), first, first, first]
 
 
 def test_enrich_second_call_adds_what_the_first_could_not(path_pair):
