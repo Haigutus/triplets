@@ -364,7 +364,8 @@ OTHER = b"""<?xml version="1.0" encoding="UTF-8"?>
 
 
 @pytest.mark.parametrize("order", ORDERS)
-def test_enrich_object_type_and_name_are_the_instance_values(order):
+@pytest.mark.parametrize("flavor", [*ENGINES, "pandas-category"])
+def test_enrich_object_type_and_name_are_the_instance_values(order, flavor):
     """beta's object takes alpha's ID as a Bay named Beta: a finding on it is described
     by its own instance's Type and name. A finding from an instance not stating them
     or without an INSTANCE_ID reads the first-loaded twin's."""
@@ -378,6 +379,11 @@ def test_enrich_object_type_and_name_are_the_instance_values(order):
                              "VIOLATION_TYPE": "sh:minCount", "MESSAGE": None, "SEVERITY": "Violation",
                              "SOURCE_SHAPE": None,
                              "INSTANCE_ID": [instance["alpha.xml"], instance["beta.xml"], instance["other.xml"], None]})
+    if flavor == "pandas-category":
+        data = data.astype("category")
+    elif flavor != "pandas":
+        pytest.importorskip(flavor)
+        data = build_engine(flavor, data)
     enriched = validation.enrich(rows, data=data)
     first = {"alpha": ("Substation", "Alpha"), "beta": ("Bay", "Beta")}[ORDERS[order][0]]
     assert list(zip(enriched["OBJECT_TYPE"], enriched["OBJECT_NAME"])) == [
@@ -502,12 +508,12 @@ def test_sarif_puts_the_finding_in_its_file(order, tmp_path):
 
 
 @pytest.mark.parametrize("order", ORDERS)
-def test_sarif_completes_a_frame_enriched_without_data(order, tmp_path):
+def test_sarif_completes_a_frame_enriched_without_data(order, tmp_path, engine):
     """A finding enriched with only the rdf_map names no file; export_to_sarif with data
     and sources fills it in and points at beta's scenarioTime line."""
     pair_ = Pair("paths", order, tmp_path)
-    data, _ = flavored(pair_, "pandas")
-    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    data, _ = flavored(pair_, engine)
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ", engine=engine)
     enriched = validation.enrich(violations[violations["ID"] == HEADER], rdf_map=SCHEMA)
     assert enriched["INSTANCE_LABEL"].isna().all()
     log = json.loads(validation.export_to_sarif(enriched, data=data, sources=pair_.inputs(), group=False,
