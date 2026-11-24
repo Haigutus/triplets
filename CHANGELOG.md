@@ -622,7 +622,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   enrichment column was used as-is, so one enriched without data named no file and a
   shared-ID finding was located in the first file read.
 - **`enrich` keeps the cells a frame already fills** and fills only the empty ones:
-  enriching twice equals enriching once. A second call recomputed every column, and a
+  enriching twice equals enriching once, and a call with the rdf_map after one with the
+  data reads the `OBJECT_TYPE` that call filled (`CLASS_DESCRIPTION`). A second call recomputed every column, and a
   SHACL maximum-count finding on an ID two instances share then listed one instance's
   values in TARGET instead of every instance's.
 - **`cgmes_tools.get_loaded_profiles` names each declaration's own header class**: HEADER

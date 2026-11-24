@@ -384,6 +384,24 @@ def test_enrich_object_type_and_name_are_the_instance_values(order):
         ("Substation", "Alpha"), ("Bay", "Beta"), first, first]
 
 
+def test_enrich_second_call_adds_what_the_first_could_not(path_pair):
+    """enrich with the data, then with the rdf_map, equals one call with both — the
+    class description of the second call reads the OBJECT_TYPE of the first. With the
+    rdf_map first, the data call adds every column but that one."""
+    data, _ = flavored(path_pair, "pandas")
+    violations = validation.validate_schema(data, SCHEMA, rdf_map_scope="EQ")
+    both = validation.enrich(violations, data=data, rdf_map=SCHEMA)
+    assert both["INSTANCE_LABEL"].notna().all() and both["CLASS_DESCRIPTION"].notna().all()
+    def cells(frame):                    # one null: the calls leave NA or NaN in empty cells
+        return frame.astype(object).where(frame.notna(), None)
+
+    pandas.testing.assert_frame_equal(cells(validation.enrich(validation.enrich(violations, data=data), rdf_map=SCHEMA)),
+                                      cells(both))
+    reversed_ = validation.enrich(validation.enrich(violations, rdf_map=SCHEMA), data=data)
+    pandas.testing.assert_frame_equal(cells(reversed_.drop(columns="CLASS_DESCRIPTION")),
+                                      cells(both.drop(columns="CLASS_DESCRIPTION")))
+
+
 MAX_DESCRIPTION = """
 @prefix sh: <http://www.w3.org/ns/shacl#> .
 @prefix md: <http://iec.ch/TC57/61970-552/ModelDescription/1#> .

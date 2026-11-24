@@ -41,7 +41,9 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
 
     A cell the frame already fills is kept, only empty ones are filled: enriching
     an enriched frame again changes nothing, and a second call with other
-    sources adds what the first could not.
+    sources adds what the first could not. CLASS_DESCRIPTION needs the rdf_map
+    and an OBJECT_TYPE (the frame's own or the data's): data before the rdf_map,
+    or both in one call.
 
     Parameters
     ----------
@@ -99,10 +101,14 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
         _add_instance_context(enriched, own, _to_pandas(data))
     if compiled is not None:
         _add_shape_context(enriched, compiled.ir)
+    def keep():                                  # a filled cell is kept: enriching again changes nothing
+        for column, values in filled.items():
+            enriched[column] = values.where(values.notna(), enriched[column])
+
     if rdf_map is not None:
+        keep()                                   # CLASS_DESCRIPTION reads the kept OBJECT_TYPE
         _add_schema_context(enriched, rdf_map, _row_scopes(enriched, rdf_map_scope))
-    for column, values in filled.items():      # a filled cell is kept: enriching again changes nothing
-        enriched[column] = values.where(values.notna(), enriched[column])
+    keep()
     return enriched
 
 
