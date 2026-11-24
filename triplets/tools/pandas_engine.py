@@ -108,7 +108,9 @@ def _tableview(rows, data, string_to_number, multivalue, label, index=("ID",)):
                 return x_list[0]
             return x_list
 
-        data_view = object_data.pivot_table(index=index, columns="KEY", values="VALUE", aggfunc=_aggregate)
+        # groupby + unstack keeps a null INSTANCE_ID group (pivot_table drops it)
+        data_view = (object_data.groupby([*index, "KEY"], dropna=False, observed=True)["VALUE"]
+                     .agg(_aggregate).unstack("KEY"))
     else:
         data_view = object_data.drop_duplicates([*index, "KEY"]).pivot(index=index, columns="KEY")["VALUE"]
 

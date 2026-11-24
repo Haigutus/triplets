@@ -500,6 +500,7 @@ def test_null_instance_id_is_one_instance(flavor):
     data = rows if flavor == "pandas" else pytest.importorskip("polars").from_pandas(rows)
     assert cgmes_tools.get_metadata_from_FullModel(data) == {"Model.profile": "p1", "Model.DependentOn": "g"}
     assert len(cgmes_tools.get_loaded_model_parts(data)) == 2
+    assert len(cgmes_tools.get_loaded_model_parts(data, multivalue=True)) == 2
     assert list(cgmes_tools.get_loaded_profiles(data)["HEADER"]) == ["FullModel", "FullModel"]
     [model] = cgmes_tools.get_loaded_models(data).values()
     assert sorted(model["ID"].to_list()) == ["g", "h"]
