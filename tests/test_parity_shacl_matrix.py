@@ -492,8 +492,8 @@ CASES = {
     # class) is two value nodes: each type not allowed is a finding of its own
     "path_via_type_two_types": (prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; sh:in ( cim:VoltageLevel )"),
                                 TRIO + [("bay1", "Type", "EquipmentContainer", "eq")]),
-    # sh:in members are IRIs: a class of the same name in another namespace is not the data's
-    # class (the NC lists name cim16: / cim17: classes, the data a third CIM namespace)
+    # a class member in another namespace than the schema's for that name (the NC lists name
+    # cim16: / cim17: classes, the data a third CIM namespace): the engines match it by name
     "path_via_type_in_other_namespace": (
         prop("sh:path ( cim:Equipment.EquipmentContainer rdf:type ) ; "
              "sh:in ( <http://iec.ch/TC57/2013/CIM-schema-cim16#Bay> cim:Substation )"), TRIO),
@@ -732,6 +732,8 @@ XFAIL = {
     **known("#179 sh:closed on a property shape reported on the value node", "closed_on_property_shape"),
     **known("#180 sh:nodeKind sh:BlankNode not evaluated", "nodeKind_blank_node"),
     **known("#181 accepted: sh:in compares lexical forms, not typed literals", "in_numeric"),
+    **known("accepted: a class member matches by its local name, also in another namespace than the schema's "
+            "(pyshacl compares the IRIs)", "path_via_type_in_other_namespace", "has_value_class_other_namespace"),
     **known("#182 sh:minLength on an IRI measures the local id", "minLength_on_iri"),
     **known("#183 sh:sparql $PATH left unbound on a blank-node path", "sparql_inverse_path"),
     **known("#186 pyshacl compares non-numeric values as text (accepted literal divergence)", "range_non_numeric"),
@@ -894,20 +896,25 @@ def test_parser_metadata_is_not_validated(engine, scope):
     assert violations.attrs["validation"]["source"] == ["grid/eq.xml"]
 
 
+@pytest.mark.parametrize("schema", [NO_SCHEMA, DEFAULTS], ids=["no_schema", "schema"])
 @pytest.mark.parametrize("engine", ENGINES)
-def test_class_members_without_schema_match_by_name(engine):
-    """No schema: the cim16 class members match the data's classes by name, as the
-    cim16 sh:targetClass does — every breaker is a focus node (the sh:minCount finds
-    the two without a description), none breaks sh:in / sh:hasValue. Engines only:
-    pyshacl reads the data in the undefined namespace and finds no focus node of these
+def test_class_members_match_by_name(engine, schema):
+    """The cim16 classes of every class constraint match the data's classes by name, also
+    where the schema declares those names in the CIM100 namespace: every breaker is a focus
+    node of the cim16 sh:targetClass (the sh:minCount finds the two without a description),
+    none breaks sh:in / sh:hasValue, and sh:class cim16:Bay finds only the breaker in a
+    substation. Engines only: pyshacl compares the IRIs and finds no focus node of these
     shapes (docs/validation.md, known limitations)."""
     if engine != "pandas":
         pytest.importorskip(engine)
     import rdflib
-    shape = CIM16_CLASS_MEMBERS[:-1] + f"; sh:property [ sh:path <{CIM16}IdentifiedObject.description> ; sh:minCount 1 ] ."
+    shape = CIM16_CLASS_MEMBERS[:-1] + (f"; sh:property [ sh:path <{CIM16}IdentifiedObject.description> ; sh:minCount 1 ] "
+                                        f"; sh:property [ sh:path <{CIM16}Equipment.EquipmentContainer> ; "
+                                        f"sh:class <{CIM16}Bay> ] .")
     violations = triplets.validation.validate_shacl(frame(TRIO), rdflib.Graph().parse(data=PREFIX + shape, format="turtle"),
-                                                    engine=engine)
-    assert sorted(zip(violations["ID"], violations["VIOLATION_TYPE"])) == [("b1", "sh:minCount"), ("b3", "sh:minCount")]
+                                                    engine=engine, **schema)
+    assert sorted(zip(violations["ID"], violations["VIOLATION_TYPE"])) == [
+        ("b1", "sh:minCount"), ("b2", "sh:class"), ("b3", "sh:minCount")]
 
 
 @pytest.mark.parametrize("sparql_engine", ["rdflib", "oxigraph", "qlever"])

@@ -238,6 +238,16 @@ class TestSourceTypes:
         assert any(self.DATE_TIME_STAMP in record.getMessage() for record in caplog.records)
 
 
+def test_langstring_attribute_tagged_en():
+    """An Attribute of the ``rdf:LangString`` datatype gets ``"language": "en"``; no other entry has one."""
+    from triplets.rdfs_tools import cim_rdfs_to_json
+    profile = cim_rdfs_to_json.convert_profile(TestOrphanedAttributes()._data())
+    tagged = {name for name, entry in profile.items() if isinstance(entry, dict) and "language" in entry}
+    assert tagged == {"description", "versionNotes"}
+    assert profile["description"]["dataType"] == "LangString" and profile["description"]["language"] == "en"
+    assert profile["description"]["xsd:type"] == ""          # a tagged literal carries no datatype
+
+
 ENTRY_TYPES = {"Class", "Attribute", "Association", "Enumeration", "EnumerationValue",
                "Primitive", "CIMDatatype", "Compound", "ConstrainedPrimitive"}
 

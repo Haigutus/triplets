@@ -869,9 +869,9 @@ def test_member_values():
     members = [rdflib.URIRef(CIM + "Breaker"), rdflib.URIRef(other + "Breaker"), rdflib.URIRef(cim16 + "Bay"),
                rdflib.Literal(CIM + "Breaker"), rdflib.Literal("5", datatype=rdflib.XSD.integer)]
     values = lambda kind: member_values(members, kind, namespaces, CIM)  # noqa: E731
-    # class: a schema class by its name, another namespace whole; a class the schema lacks by its name;
+    # class: every class IRI by its name, in the schema namespace or not;
     # a literal is its text, also when it reads as an IRI
-    assert values("class") == ["Breaker", other + "Breaker", "Bay", CIM + "Breaker", "5"]
+    assert values("class") == ["Breaker", "Breaker", "Bay", CIM + "Breaker", "5"]
     # literal path: every member is its text
     assert values("literal") == [CIM + "Breaker", other + "Breaker", cim16 + "Bay", CIM + "Breaker", "5"]
     # a KEY the schema lacks: the guessed local VALUE of an IRI

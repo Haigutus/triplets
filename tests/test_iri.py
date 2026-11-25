@@ -121,7 +121,8 @@ def test_bundled_schema_datatypes_are_xsd(path):
     """Every bundle writes xsd:* only and resolves without declaring ``xsd`` (NC 2.5.0 does not)."""
     built = iri.datatypes(path)
     assert built and all(datatype.startswith(XSD_NS) for datatype in built.values() if datatype)
-    assert iri.languages(path) == {}                     # no bundled entry is tagged: exports unchanged
+    # only the rdf:LangString Attributes are tagged: the NC DatasetMetadata header ones
+    assert iri.languages(path) == ({"description": "en", "versionNotes": "en"} if "_NC_" in path.stem else {})
 
 
 def test_value_types_by_entry_type_only():
@@ -312,21 +313,48 @@ def test_cimxml_writes_language(engine, datatypes):
     assert f'<triplets:{DESCRIPTION} xml:lang="en">english<' in undefined.getvalue().decode()
 
 
+NC_HEADER_SCHEMAS = [schemas.ENTSOE_NC_2_5_0_552_ED1, schemas.ENTSOE_NC_2_5_0_552_ED2,
+                     schemas.ENTSOE_NC_2_4_1_552_ED2]
+DATASET = "b2d1215a-a124-4b6e-9df5-85ecdce9793b"
+
+
+def nc_header_frame():
+    return pandas.DataFrame([(DATASET, "Type", "Dataset", DATASET), (DATASET, "keyword", "CO", DATASET),
+                             (DATASET, "description", "Contingencies of Belgovia.", DATASET),
+                             (DATASET, "versionNotes", "Initial version.", DATASET)],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
+@pytest.mark.parametrize("schema", NC_HEADER_SCHEMAS, ids=lambda path: Path(path).stem)
 @pytest.mark.parametrize("engine", ["python_lxml", "cython_pugixml"])
-def test_cimxml_nc_header_language(engine):
-    """A loaded NC bundle tagged at runtime writes the header description as the NC files carry it
+def test_cimxml_nc_header_language(engine, schema):
+    """A shipped NC bundle writes the LangString header attributes as the NC files carry them
     (``<dcterms:description xml:lang="en">`` in relicapgrid's Belgovia_SIS.xml)."""
     if engine == "cython_pugixml":
         pytest.importorskip("triplets.export.cimxml_cython_pugixml")
-    schema = iri.load_rdf_map(schemas.ENTSOE_NC_2_5_0_552_ED2)
-    schema["CO"]["description"]["language"] = "en"
-    dataset = "b2d1215a-a124-4b6e-9df5-85ecdce9793b"
-    frame = pandas.DataFrame([(dataset, "Type", "Dataset", dataset), (dataset, "keyword", "CO", dataset),
-                              (dataset, "description", "Contingencies of Belgovia.", dataset)],
-                             columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
-    out = frame.export_to_cimxml(rdf_map=schema, engine=engine, export_type="xml_per_instance",
-                                 export_to_memory=True)[0].getvalue().decode()
+    out = nc_header_frame().export_to_cimxml(rdf_map=schema, engine=engine, export_type="xml_per_instance",
+                                             export_to_memory=True)[0].getvalue().decode()
     assert '<dcterms:description xml:lang="en">Contingencies of Belgovia.</dcterms:description>' in out
+    assert '<adms:versionNotes xml:lang="en">Initial version.</adms:versionNotes>' in out
+
+
+@pytest.mark.parametrize("schema", NC_HEADER_SCHEMAS, ids=lambda path: Path(path).stem)
+@pytest.mark.parametrize("engine", ["pandas", "polars", "streaming"])
+def test_nquads_nc_header_language(engine, schema):
+    """The same header attributes as ``"text"@en`` in N-Quads, the stream of batches included."""
+    frame = nc_header_frame()
+    if engine == "streaming":
+        pyarrow = pytest.importorskip("pyarrow")
+        pytest.importorskip("polars")
+        table = pyarrow.Table.from_pandas(frame, preserve_index=False)
+        frame = pyarrow.RecordBatchReader.from_batches(table.schema, table.to_batches())
+        engine = "polars"
+    pytest.importorskip(engine)
+    lines = triplets.export.export_to_nquads(frame, rdf_map=schema, engine=engine,
+                                             export_to_memory=True).read().decode().splitlines()
+    graph = f"<urn:uuid:{DATASET}>"
+    assert f'{graph} <http://purl.org/dc/terms/description> "Contingencies of Belgovia."@en {graph} .' in lines
+    assert f'{graph} <http://www.w3.org/ns/adms#versionNotes> "Initial version."@en {graph} .' in lines
 
 # ── local (schema-free), one row per rule ──────────────────────────────────────
 

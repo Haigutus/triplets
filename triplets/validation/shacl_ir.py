@@ -879,14 +879,15 @@ def path_kind(rule, value_types):
 
 def member_values(members, kind, namespaces, undefined_namespace):
     """sh:in / sh:hasValue members → the VALUE texts they are on a path of *kind*
-    (``path_kind``): an IRI member is the local VALUE of that kind
+    (``path_kind``): an IRI member on a class path is its name, whatever its namespace,
+    as ``sh:targetClass`` / ``sh:class`` match classes (a deliberate divergence from
+    pyshacl, which compares the IRIs);
+    an enumeration value or node is the local VALUE of that kind
     (:func:`~triplets.iri.local_value`) when that VALUE stands for exactly this IRI
-    (:func:`~triplets.iri.absolute_value` — a class in its schema namespace, a
-    ``urn:uuid:`` node), else the whole IRI, which only a VALUE holding the IRI
-    matches; a literal member (:func:`is_literal`, also when its text reads as an IRI),
-    and every member on a literal path, is its text.
-    A class the schema lacks (its name not in *namespaces*, every class without a
-    schema) is its name, as ``sh:targetClass`` / ``sh:class`` match classes.
+    (:func:`~triplets.iri.absolute_value` — an enumeration value in its schema
+    namespace, a ``urn:uuid:`` node), else the whole IRI, which only a VALUE holding
+    the IRI matches; a literal member (:func:`is_literal`, also when its text reads as
+    an IRI), and every member on a literal path, is its text.
     Without a kind (an undefined KEY) an IRI member is its guessed local VALUE
     and the engines compare the values' local forms."""
     def value(member):
@@ -895,9 +896,9 @@ def member_values(members, kind, namespaces, undefined_namespace):
             return iri
         if kind is None:
             return local_value(iri)
+        if kind == CLASS:
+            return local_value(iri, CLASS)
         text = local_value(iri, kind)
-        if kind == CLASS and text not in namespaces:
-            return text
         same = absolute_value(None, text, namespaces, kind=kind, undefined_namespace=undefined_namespace)[1] == iri
         return text if same else iri
     return [value(member) for member in members]

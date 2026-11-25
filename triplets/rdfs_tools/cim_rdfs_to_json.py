@@ -5,7 +5,7 @@ import pandas
 from triplets.tools import get_namespace_map
 from triplets.rdfs_tools import rdfs_tools
 from triplets.rdfs_tools.rdfs_tools import load_all_to_dataframe
-from triplets.iri import XSD_NS, is_iri, prefixes, split_iri
+from triplets.iri import RDF_NS, XSD_NS, is_iri, prefixes, split_iri
 import logging
 
 logger = logging.getLogger(__name__)
@@ -221,6 +221,8 @@ def convert_profile(profile_data, serialization_version="552_ED2"):
                 }
                 parameter_def["dataType"] = data_type_name
                 parameter_def.update(xsd)
+                if data_type == RDF_NS + "LangString":    # NC instances write xml:lang="en"
+                    parameter_def["language"] = "en"
 
             elif xsd := _as_xsd(range_uri):
                 parameter_def["type"] = "Attribute"

@@ -139,16 +139,22 @@ BCP 47 tag (`en`, `en-GB`), raises `ValueError` naming the KEY — in the export
 `validate_schema`, which checks no datatype on a tagged KEY. The parsers drop the tag
 ([parsers.md](parsers.md)).
 
-The shipped bundles carry no `language` (the RDFS fixes none; `ProfileMetadata.language`
-is the vocabulary's own). Set it in a downstream schema JSON, or on the loaded bundle:
+The generator gives every Attribute whose datatype is `rdf:LangString` (or
+`rdf:langString`) `"language": "en"`; the RDFS fixes no tag. In the shipped bundles these
+are the NC DatasetMetadata `description` and `versionNotes` (NC 2.4.1 and 2.5.0); the
+CGMES bundles have no such Attribute. `ProfileMetadata.language` is the vocabulary's own
+and tags nothing. Change or remove the tag in a downstream schema JSON, or on the loaded
+bundle:
 
 ```python
 from triplets.export_schema import schemas
 from triplets.iri import load_rdf_map
 
 rdf_map = load_rdf_map(schemas.ENTSOE_NC_2_5_0_552_ED2)      # a fresh dict per call
-rdf_map["CO"]["description"]["language"] = "en"
-files = data.export_to_cimxml(rdf_map=rdf_map)   # <dcterms:description xml:lang="en">…
+for section in rdf_map.values():                             # every profile tags it
+    if "description" in section:
+        section["description"]["language"] = "fr"
+files = data.export_to_cimxml(rdf_map=rdf_map)   # <dcterms:description xml:lang="fr">…
 ```
 
 ## How Exporters Pick a Section
