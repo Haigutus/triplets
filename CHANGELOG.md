@@ -114,9 +114,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   well-formed BCP 47, raises `ValueError` naming the KEY, in the exports and in
   `validate_schema` (which checks no datatype on a tagged KEY). New flat map
   `iri.languages(rdf_map)`, scalar `iri.language_tag(key, tag, declared, prefixes)` and
-  constant `iri.XML_NS`. The shipped bundles carry no tag: set
-  it on a downstream schema or the loaded dict
-  (`rdf_map["CO"]["description"]["language"] = "en"`, see `docs/export_schemas.md`)
+  constant `iri.XML_NS`. The schema generator gives every `rdf:LangString` Attribute
+  `"language": "en"`: the NC 2.4.1 and 2.5.0 bundles export DatasetMetadata `description` and
+  `versionNotes` as `"text"@en` / `xml:lang="en"`, so pyshacl on an N-Quads export reports no
+  `sh:datatype rdf:langString` violation for them (the parsers drop `xml:lang`). Change the tag
+  on a downstream schema or the loaded dict (see `docs/export_schemas.md`)
   ([#146](https://github.com/Haigutus/triplets/issues/146)).
 - **`cython_pugixml` CIM XML export writes `rdf:datatype`** with `datatypes=True`: the
   same attributes as `python_lxml`, from the same `iri.datatypes(rdf_map)` map, undefined
@@ -630,7 +632,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`cgmes_tools.get_loaded_profiles` names each declaration's own header class**: HEADER
   is the Type of the header in the declaration's instance. Two files sharing a header ID
   (a FullModel and a dcat:Dataset) both showed the first file's class.
-- **SHACL `sh:in` / `sh:hasValue` compare IRIs, not local names** (pandas / polars / duckdb): a class, enumeration value or node of the same name in another namespace no longer passes (`( assoc rdf:type ) sh:in ( cim16:ACLineSegment cim17:ACLineSegment )` on data in a third CIM namespace), as pyshacl reports. A class the schema lacks (every class without an `rdf_map`) matches by its name, as `sh:targetClass` and `sh:class` do. A string literal member stays a literal, also when its text reads as an IRI (`sh:in ( "http://iec.ch/TC57/CIM100#Breaker" )` on `rdf:type` matches no class).
+- **SHACL `sh:in` / `sh:hasValue` compare enumeration values and nodes as IRIs, not local names** (pandas / polars / duckdb): an enumeration value or node of the same name in another namespace no longer passes, as pyshacl reports. A class member matches by its local name whatever its namespace, the one rule of `sh:targetClass` and `sh:class`: `( assoc rdf:type ) sh:in ( cim16:ACLineSegment cim17:ACLineSegment )` passes on data in a third CIM namespace, also where the scoped schema declares `ACLineSegment` there — a deliberate divergence from pyshacl, which compares the IRIs. A string literal member stays a literal, also when its text reads as an IRI (`sh:in ( "http://iec.ch/TC57/CIM100#Breaker" )` on `rdf:type` matches no class).
 - **`locate` (SARIF / SHACL report locations) points a finding on a KEY at the file holding that KEY's element** (an SSH property of an object the EQ file defines), not at the first file defining the ID; the definition stays the fallback. A finding of an absent property (`sh:minCount`, `xsd:minOccurs`) is located at the definition and its KEY is not searched. `locate()`'s `keyLines` entries are `(uri, line, snippet)`, were `(line, snippet)`.
 - **A row without a VALUE counts for no cardinality** (`sh:minCount` / `sh:maxCount`, `xsd:minOccurs` / `xsd:maxOccurs`, pandas / polars / duckdb): it states no triple, as pyshacl sees it.
 - **SHACL count constraints count a triple stated in several instances once** (`sh:minCount` / `sh:maxCount`, every path form, pandas / polars / duckdb): value nodes are a set, as in the RDF merge pyshacl validates, and `enrich` lists each of them once in TARGET ("found 2 values: 'A', 'B'"). `validate_schema` counts every element, as XSD does: a property written twice with the same value breaks `xsd:maxOccurs` 1.
