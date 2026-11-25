@@ -52,9 +52,9 @@ from .._header import without_metadata
 from ..export.nquads_utils import make_subject
 from ..parser.nquads import is_node, term_text
 from ..iri import (CIM_NS, LITERAL, REFERENCE, REFERENCE_LIKE, TYPE_KEY, iri_pandas, name_kind, namespaces, node_kind,
-                   prefixes, rdf_map_entries, split_iri, value_types)
+                   prefixes, rdf_map_entries, split_iri, value_prefixes, value_types)
 from .schema_scope import ancestor_pairs
-from .shacl_ir import MESSAGE_VARIABLE, holds_names, member_values, path_kind
+from .shacl_ir import MESSAGE_VARIABLE, holds_names, member_values, path_kind, path_prefix
 from .shacl_report import VIOLATION_COLUMNS, has_violation
 from . import value_space
 from .value_space import datatype_patterns
@@ -87,6 +87,7 @@ class _Context:
         self.ancestors = ancestors   # (Type, ancestor) pairs — see schema_scope.ancestor_pairs
         self.undefined_namespace = undefined_namespace
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
+        self.value_prefixes = value_prefixes(rdf_map)   # an enumeration's own value namespace
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
         self.namespaces = namespaces(rdf_map)     # sh:targetNode on a class / enum value: its local name
@@ -153,6 +154,8 @@ class _Context:
         values = values.astype(str)
         if not holds_names(key, self.value_types):
             return values
+        if prefix := self.value_prefixes.get(key):   # iri.value_prefixes: namespace + value
+            return iri_pandas.absolute_name(values, undefined_namespace=prefix)
         return iri_pandas.absolute_name(values, self.namespaces, self.undefined_namespace)
 
     def focus(self, rule):
@@ -341,7 +344,8 @@ def _range(comparison, description):
 def _members(context, rule, members):
     """The members as the VALUE texts they are on the rule's path (``shacl_ir.member_values``)."""
     kind = path_kind(rule, context.value_types)
-    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace,
+                               path_prefix(rule, context.value_prefixes))
 
 
 def _in(context, rule):

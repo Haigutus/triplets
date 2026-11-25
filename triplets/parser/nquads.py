@@ -20,7 +20,7 @@ from pathlib import Path
 import pandas
 
 from .._engine_detect import to_return_type
-from ..iri import CLASS, LITERAL, TYPE_KEY, iri_pandas, load_rdf_map, value_types
+from ..iri import CLASS, TYPE_KEY, iri_pandas
 
 
 # N-Triples string escapes: \uXXXX / \UXXXXXXXX and single-char (\n \t \" \\ ...)
@@ -28,7 +28,7 @@ _ESCAPE = re.compile(r'\\u([0-9A-Fa-f]{4})|\\U([0-9A-Fa-f]{8})|\\(.)')
 _CONTROL_ESCAPES = {"n": "\n", "r": "\r", "t": "\t", "b": "\b", "f": "\f"}
 
 
-def read_nquads(source, return_type="pandas", rdf_map=None, type_key=TYPE_KEY):
+def read_nquads(source, return_type="pandas", type_key=TYPE_KEY):
     """Parse N-Quads (or N-Triples) into a triplet DataFrame.
 
     Parameters
@@ -38,9 +38,6 @@ def read_nquads(source, return_type="pandas", rdf_map=None, type_key=TYPE_KEY):
         open file object (text or binary).
     return_type : str, default "pandas"
         "pandas", "polars", or "arrow".
-    rdf_map : dict or str, optional
-        Export schema. With it every VALUE IRI is shortened by its KEY's schema entry
-        (Association → node rule, Enumeration → name rule) instead of the schema-free guess.
     type_key : str, default "Type"
         KEY for ``rdf:type`` triples. N-Quads has no typed-node shorthand, so every type is
         an ``rdf:type`` triple: ``"Type"`` for CIM data (one type per object), another key
@@ -57,8 +54,7 @@ def read_nquads(source, return_type="pandas", rdf_map=None, type_key=TYPE_KEY):
     import pyarrow.compute as pc
     lines = pc.utf8_trim_whitespace(pyarrow.array(_read_text(source).splitlines(), type=pyarrow.string()))
     lines = lines.filter(pc.and_(pc.not_equal(lines, ""), pc.invert(pc.starts_with(lines, "#"))))
-    kinds = value_types(load_rdf_map(rdf_map)) if rdf_map is not None else None
-    return to_return_type(terms_to_triplets(_split_terms(lines), kinds, type_key), return_type)
+    return to_return_type(terms_to_triplets(_split_terms(lines), type_key), return_type)
 
 
 def _split_terms(lines):
@@ -110,7 +106,7 @@ def _split_terms(lines):
     })
 
 
-def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
+def terms_to_triplets(frame, type_key=TYPE_KEY):
     """N-Triples-form term columns → triplet values, converted in place.
 
     frame carries columns [ID, KEY, VALUE] and optionally INSTANCE_ID (the
@@ -121,9 +117,9 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     numbers/booleans. IRI escapes the exporter wrote (``%20``) are decoded once,
     then the triplets.iri column rules apply: ``local_id`` for ID / INSTANCE_ID,
     ``local_key`` for KEY (``rdf:type`` → *type_key*), ``local_value`` for VALUE —
-    kind ``class`` on type rows, else by *kinds* (``iri.value_types`` of a schema).
-    A guessed VALUE (no schema, or a KEY the schema does not declare) that is a
-    subject of the same frame shortens like its ID, so the reference still joins it.
+    kind ``class`` on type rows, else guessed. No schema: the export applies it. A
+    guessed http#… VALUE that is a subject of the same frame shortens like its ID, so
+    the reference still joins it.
     """
     subjects = iri_pandas.decode_iri(_term(frame["ID"]))
     frame["ID"] = iri_pandas.local_id(subjects)
@@ -133,8 +129,7 @@ def terms_to_triplets(frame, kinds=None, type_key=TYPE_KEY):
     quoted = value.str.startswith('"', na=False).astype(bool)
     unquoted = _lexical(value)
     objects = iri_pandas.decode_iri(_term(value).where(~quoted))
-    kind = frame["KEY"].map({key: kind for key, kind in (kinds or {}).items() if kind != LITERAL})
-    kind = kind.astype(object).where(frame["KEY"] != type_key, CLASS)
+    kind = pandas.Series(None, index=frame.index, dtype=object).where(frame["KEY"] != type_key, CLASS)
     local = iri_pandas.local_value(objects, kind)
     # the guess cannot tell an enum from a reference to an http#… object
     local = local.mask(_subject_references(objects, subjects, kind), iri_pandas.local_id(objects))

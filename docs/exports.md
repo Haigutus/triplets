@@ -69,6 +69,13 @@ but has a namespace (an enumeration value as `rdf:type`) is written in that name
 an undefined class (`export_undefined=True`) under `undefined_namespace`, both with
 `rdf:about="urn:uuid:<ID>"`.
 
+`export_to_nquads` and the SPARQL / pyshacl graphs give a VALUE the IRI CIM XML writes when
+the `value_prefix` names it: an absolute namespace (`"value_prefix": "http://…#"`, e.g. on an
+enumeration whose values the schema does not list) prefixes every VALUE, and `""` on a
+reference key makes its VALUE a schema name, as on an enumeration. The ID forms (`urn:uuid:`,
+`#_`, `_`) belong to CIM XML only: N-Quads writes every reference as `urn:uuid:<VALUE>` in
+either 552 edition.
+
 A schema `language` ([export_schemas.md](export_schemas.md#fixed-language-tag-language))
 writes `xml:lang="<tag>"` on the literal element in both engines, with or without
 `datatypes=` — the tag is part of the value; that element carries no `rdf:datatype`.

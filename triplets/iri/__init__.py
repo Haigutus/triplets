@@ -25,8 +25,8 @@ working on imported data; where local names collide (``type`` is both
 
 Local rules are schema-free (a parse has no schema). Absolute rules take the
 flat maps built from the export schema — :func:`namespaces`, :func:`value_types`,
-:func:`datatypes`, :func:`languages`, :func:`prefixes`, one dict each, only the ones a call
-site needs. The schema entry type decides the serialisation form (Attribute → literal,
+:func:`value_prefixes`, :func:`datatypes`, :func:`languages`, :func:`prefixes`, one dict each,
+only the ones a call site needs. The schema entry type decides the serialisation form (Attribute → literal,
 Association → reference, Enumeration → enum IRI); ``xsd:type`` only annotates literals —
 any prefixed name or IRI, expanded by the schema's ``ProfileNamespaceMap`` — and
 ``language`` tags them instead (a tagged literal has no datatype annotation). A name
@@ -369,6 +369,26 @@ def value_types(rdf_map):
             if (kind := entry.get("type")) in _VALUE_TYPES}
 
 
+def value_prefixes(rdf_map):
+    """KEY → the ``attrib.value_prefix`` of an Association or Enumeration that decides its value
+    IRIs, as the CIM XML export reads it: an absolute namespace (``http://…#``: namespace +
+    value), or ``""`` on an Association (the value is a schema name, resolved like an
+    enumeration value). Left out: the CIM XML ID forms (``urn:uuid:``, ``#_``, ``_``) — a
+    reference is :func:`absolute_id` in every serialization — and an Enumeration's ``""``,
+    which is the enumeration rule already; an entry without ``value_prefix`` as well."""
+    return {name: prefix for name, entry in rdf_map_entries(rdf_map)
+            if (kind := entry.get("type")) in ("Association", "Enumeration")
+            and isinstance(attrib := entry.get("attrib"), dict)
+            and (prefix := attrib.get("value_prefix")) is not None
+            and ((is_iri(prefix) and prefix != UUID_PREFIX) or (prefix == "" and kind == "Association"))}
+
+
+def value_kind(kind, prefix):
+    """The term rule of a KEY of *kind* with *prefix* from :func:`value_prefixes`: an Association
+    whose prefix is ``""`` holds names, resolved as enumeration values; else *kind*."""
+    return ENUM if prefix == "" and kind == REFERENCE else kind
+
+
 # ── absolute (schema-driven) ───────────────────────────────────────────────────
 
 def absolute_id(text):
@@ -392,17 +412,20 @@ def absolute_key(key, namespaces=None, undefined_namespace=TRIPLETS_NS):
     return RDF_TYPE if key == TYPE_KEY else absolute_name(key, namespaces, undefined_namespace)
 
 
-def defined(key, value, namespaces=None, value_types=None):
+def defined(key, value, namespaces=None, value_types=None, value_prefixes=None):
     """Does the schema account for this row? ``Type`` → the class is declared; else the KEY is
-    declared and, for an enum KEY, so is the value. Without a schema nothing is defined."""
+    declared and, for an enum KEY (:func:`value_kind`), so is the value — unless the KEY gives
+    its values a namespace (:func:`value_prefixes`). Without a schema nothing is defined."""
     namespaces, value_types = namespaces or {}, value_types or {}
     if key == TYPE_KEY:
         return value in namespaces
-    return key in value_types and (value_types[key] != ENUM or is_iri(value) or value in namespaces)
+    prefix = (value_prefixes or {}).get(key)
+    return key in value_types and (value_kind(value_types[key], prefix) != ENUM or bool(prefix)
+                                   or is_iri(value) or value in namespaces)
 
 
 def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS,
-                   kind=None):
+                   kind=None, value_prefixes=None):
     """VALUE → ``("iri", iri)`` or ``("literal", datatype_iri_or_None)``.
 
     The term kind (:data:`TERM_KINDS`) is *kind* when given, else the KEY's: Type →
@@ -410,6 +433,8 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     class / enum → the name's IRI, reference → :func:`absolute_id` of the value
     (absolute passes through, else ``urn:uuid:``), literal → datatype annotation
     (an Attribute stays a literal even when its text looks like an IRI or a UUID).
+    A KEY in *value_prefixes* writes its values in that namespace, or — prefix ``""``
+    on an Association — as names (:func:`value_kind`).
     An undefined KEY falls to the shape heuristic: absolute IRI or canonical UUID →
     reference, else plain literal. Quoting and escaping belong to the serializer,
     not here.
@@ -417,6 +442,10 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     if value is None:                    # no term — same answer as the flavors' null rows
         return LITERAL, None
     kind = kind or (CLASS if key == TYPE_KEY else (value_types or {}).get(key))
+    prefix = (value_prefixes or {}).get(key)
+    kind = value_kind(kind, prefix)
+    if prefix and kind in (ENUM, REFERENCE):
+        return "iri", absolute_name(value, undefined_namespace=prefix)
     if kind in (CLASS, ENUM):
         return "iri", absolute_name(value, namespaces, undefined_namespace)
     if kind == REFERENCE:

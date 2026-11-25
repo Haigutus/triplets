@@ -65,7 +65,7 @@ def load_dataset(data, rdf_map=None, data_unchanged=False, store="memory", undef
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
         data = to_pandas(data)
     backend = _resolve_store(store)
-    key = backend + ":" + content_key(data, rdf_map, b"triplets-rdflib-1" + undefined_namespace.encode(), data_unchanged)
+    key = backend + ":" + content_key(data, rdf_map, b"triplets-rdflib-2" + undefined_namespace.encode(), data_unchanged)
     if key in _DATASETS:
         return _DATASETS[key]
 
