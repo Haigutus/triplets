@@ -1518,6 +1518,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -1810,6 +1811,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -3638,6 +3640,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -3918,6 +3921,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -5032,6 +5036,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -5324,6 +5329,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -21095,6 +21101,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -21387,6 +21394,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -24137,6 +24145,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -24417,6 +24426,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -25805,6 +25815,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -26097,6 +26108,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -27173,6 +27185,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -27465,6 +27478,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -28676,6 +28690,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -28968,6 +28983,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -32767,6 +32783,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -33047,6 +33064,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -34505,6 +34523,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -34785,6 +34804,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -39709,6 +39729,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -40001,6 +40022,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -45090,6 +45112,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -45370,6 +45393,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -46645,6 +46669,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -46925,6 +46950,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -48098,6 +48124,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -48390,6 +48417,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -56572,6 +56600,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -56852,6 +56881,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -64180,6 +64210,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -64460,6 +64491,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
@@ -74314,6 +74346,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "dcterms"
@@ -74606,6 +74639,7 @@
             "type": "Attribute",
             "dataType": "LangString",
             "xsd:type": "",
+            "language": "en",
             "stereotype": [
                 "attribute",
                 "adms"
