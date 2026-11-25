@@ -605,7 +605,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   are that instance's. Two files that share an object ID (a header ID reused across
   files) were both attributed to the first file. A row without an `INSTANCE_ID` (SHACL
   over the merged graph) goes to the first instance holding its triple (ID, KEY, VALUE) —
-  the file that states the violating value — else to the first holding its ID.
+  the file that states the violating value — a finding of an absent property
+  (`sh:minCount`, `sh:qualifiedMinCount`) to the first instance holding its ID but not its
+  KEY in either direction (a validation of the SSH file finds an mRID absent that the EQ
+  file holds, or an inverse `OperationalLimitValue` the EQ file's limits state) — else to
+  the first holding its ID.
   `OBJECT_TYPE` / `OBJECT_NAME` are the Type and name in the row's instance, else in the
   first instance stating them (they were the first instance's for every row).
 - **`locate` puts a finding in its instance's file.** A row whose `INSTANCE_LABEL` names

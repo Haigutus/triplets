@@ -18,7 +18,7 @@ from .._engine_detect import flavor
 from ..iri import REFERENCE, TYPE_KEY, load_rdf_map, value_types
 from .schema_scope import _merged_entries
 from .shacl_ir import CompiledShapes, IR_COLUMNS, compile_shapes
-from .locations import member_name
+from .locations import ABSENT_KEY_TYPES, member_name
 from .shacl_report import VIOLATION_COLUMNS, run_language
 
 logger = logging.getLogger(__name__)
@@ -56,8 +56,9 @@ def enrich(violations, data=None, shapes=None, rdf_map=None, rdf_map_scope=None,
         own INSTANCE_ID (the schema validations name the instance a finding was
         found in) is kept, and its duplicate values are that instance's; a row
         without one (``validate_shacl`` runs over the merged graph) is attributed
-        to the first instance holding its triple (ID, KEY, VALUE), else its ID, and
-        its duplicate values are those of every instance. OBJECT_TYPE / OBJECT_NAME
+        to the first instance holding its triple (ID, KEY, VALUE) — a finding of an
+        absent property (``sh:minCount``) to the first holding its ID but not its KEY, in
+        either direction — else its ID, and its duplicate values are those of every instance. OBJECT_TYPE / OBJECT_NAME
         are the row's instance's, else the first instance's stating them. DuckDB: ``table`` / ``schema`` / ``table_name`` kwargs as
         for the duckdb engine.
     shapes : CompiledShapes or shape source, optional
@@ -360,8 +361,11 @@ def _type_map(data, table_name="triplets"):
 
 def _add_instance_context(violations, own, data):
     """INSTANCE_ID: the row's *own*, else the first instance holding its triple (ID, KEY,
-    VALUE), else the first holding its ID; its INSTANCE_LABEL; OBJECT_TYPE and OBJECT_NAME
-    as that instance states them, else as the first instance stating them."""
+    VALUE); for a finding of an absent property (``ABSENT_KEY_TYPES``) the first instance
+    holding its ID but not its KEY, in either direction (``(ID, KEY, ·)``, or ``(·, KEY, ID)``
+    for an inverse path); else the first holding its ID. Its INSTANCE_LABEL;
+    OBJECT_TYPE and OBJECT_NAME as that instance states them, else as the first instance
+    stating them."""
     identifier = data["ID"].astype(str)
     instances = data["INSTANCE_ID"].astype(str)
 
@@ -376,6 +380,18 @@ def _add_instance_context(violations, own, data):
         triples = violations.loc[stated, ["ID", "KEY", "VALUE"]].astype(str)
         found = holder.reindex(pandas.MultiIndex.from_frame(triples)).set_axis(triples.index)
         attributed[stated] = found.where(found.notna(), attributed[stated])
+    absent = own.isna() & violations["KEY"].notna() & violations["VIOLATION_TYPE"].isin(ABSENT_KEY_TYPES)
+    if absent.any():                      # a validation of part of the data finds a KEY absent that another file holds
+        ids = set(violations.loc[absent, "ID"].astype(str))
+        rows = data.loc[identifier.isin(ids), ["ID", "KEY", "INSTANCE_ID"]].astype(str)
+        holders = rows.drop_duplicates(["ID", "INSTANCE_ID"])[["ID", "INSTANCE_ID"]]
+        inverse = (data.loc[data["VALUE"].astype(str).isin(ids), ["VALUE", "KEY", "INSTANCE_ID"]].astype(str)
+                   .rename(columns={"VALUE": "ID"}))
+        keyed = pandas.concat([rows, inverse]).drop_duplicates().assign(KEYED=True)
+        lacking = (violations.loc[absent, ["ID", "KEY"]].astype(str).rename_axis("ROW").reset_index()
+                   .merge(holders, on="ID").merge(keyed, on=["ID", "KEY", "INSTANCE_ID"], how="left"))
+        lacking = lacking[lacking["KEYED"].isna()].drop_duplicates("ROW").set_index("ROW")["INSTANCE_ID"]
+        attributed.update(lacking)
     violations["INSTANCE_ID"] = own.where(own.notna(), attributed)
 
     # The parsed file name lives on the per-instance Distribution meta object
