@@ -6,7 +6,7 @@ from io import BytesIO
 import polars as pl
 
 from ..iri import (DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_polars, languages, load_rdf_map, namespaces,
-                   value_types)
+                   value_prefixes, value_types)
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def _quads(data, maps, tags, export_undefined=True, undefined_namespace=TRIPLETS
             # Type "Description" is an rdf:Description element — not a class, so no rdf:type
             .filter(~((pl.col("KEY") == TYPE_KEY) & (pl.col("VALUE") == DESCRIPTION_TYPE)))
             .filter(pl.lit(True) if export_undefined
-                    else iri_polars.defined("KEY", "VALUE", maps["namespaces"], maps["value_types"]))
+                    else iri_polars.defined("KEY", "VALUE", maps["namespaces"], maps["value_types"], maps["value_prefixes"]))
             .with_columns(kind.alias("_kind"), payload.alias("_payload"))
             .select(subject.alias("s"), predicate.alias("p"), objects.alias("o"),
                     graph.alias("g"))
@@ -61,10 +61,11 @@ def _quads(data, maps, tags, export_undefined=True, undefined_namespace=TRIPLETS
 
 
 def _maps(rdf_map):
-    """The three flat schema maps the term rules take, and the language tags the literal
+    """The flat schema maps the term rules take, and the language tags the literal
     quoting takes, built once per export."""
     rdf_map = load_rdf_map(rdf_map)
-    return (dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map)),
+    return (dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map),
+                 value_prefixes=value_prefixes(rdf_map)),
             languages(rdf_map))
 
 

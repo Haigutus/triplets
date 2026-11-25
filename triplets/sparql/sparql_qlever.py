@@ -52,7 +52,7 @@ from . import _qlever  # ImportError here → the registry falls back to rdflib
 from .._caches import register_cache
 from .._content_key import content_key
 from .._engine_detect import flavor, to_pandas, to_return_type
-from ..iri import CIM_NS, absolute_id, datatypes, load_rdf_map, namespaces, value_types
+from ..iri import CIM_NS, absolute_id, datatypes, load_rdf_map, namespaces, value_prefixes, value_types
 from ..parser.nquads import terms_to_triplets
 from . import json_terms
 
@@ -134,7 +134,7 @@ def _index_for(data, rdf_map, data_unchanged=False, undefined_namespace=CIM_NS):
     """
     if not hasattr(data, "content_hash"):  # pyarrow — no registered methods
         data = to_pandas(data)
-    key = content_key(data, rdf_map, b"triplets-qlever-4" + undefined_namespace.encode(), data_unchanged)
+    key = content_key(data, rdf_map, b"triplets-qlever-5" + undefined_namespace.encode(), data_unchanged)
 
     if key in _INDEXES:
         cached = _INDEXES[key]
@@ -181,7 +181,8 @@ def _build_index(table, rdf_map, basename, undefined_namespace=CIM_NS):
     rdf_map = load_rdf_map(rdf_map)
     logger.debug("building qlever index from %d arrow rows", table.num_rows)
     _qlever.build_index_from_arrow(table.to_batches(), basename, value_types(rdf_map),
-                                   namespaces(rdf_map), datatypes(rdf_map), undefined_namespace)
+                                   namespaces(rdf_map), datatypes(rdf_map), value_prefixes(rdf_map),
+                                   undefined_namespace)
 
 
 def _query_form(query_string):

@@ -31,8 +31,9 @@ import polars
 from .._header import without_metadata
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from .shacl_ir import holds_names, member_values, path_kind, split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
-from ..iri import CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, namespaces, node_kind, prefixes, rdf_map_entries, value_types
+from .shacl_ir import holds_names, member_values, path_kind, path_prefix, split_rules, FALLBACK_COMPONENTS  # noqa: F401 — re-exported
+from ..iri import (CIM_NS, REFERENCE_LIKE, TYPE_KEY, iri_polars, namespaces, node_kind, prefixes, rdf_map_entries,
+                   value_prefixes, value_types)
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -51,6 +52,7 @@ class _Context:
         self.lexical = lexical       # sh:datatype also reports triplets:lexicalForm
         self.count_elements = count_elements   # cardinality: every element (XSD), else distinct value nodes
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
+        self.value_prefixes = value_prefixes(rdf_map)   # an enumeration's own value namespace
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
         self.namespaces = namespaces(rdf_map)     # sh:targetNode on a class / enum value: its local name
@@ -109,6 +111,8 @@ class _Context:
         is the IRI it stands for (``shacl_ir.holds_names``), any other VALUE its text."""
         if not holds_names(key, self.value_types):
             return polars.col("VALUE")
+        if prefix := self.value_prefixes.get(key):   # iri.value_prefixes: namespace + value
+            return iri_polars.absolute_name("VALUE", undefined_namespace=prefix)
         return iri_polars.absolute_name("VALUE", self.namespaces, self.undefined_namespace)
 
     def _focus(self, rule):
@@ -280,7 +284,8 @@ def _in_form(column):
 def _members(context, rule, members):
     """(path kind, the members as the VALUE texts they are on the path) — ``shacl_ir.member_values``."""
     kind = path_kind(rule, context.value_types)
-    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace,
+                               path_prefix(rule, context.value_prefixes))
 
 
 def _in(context, rule):

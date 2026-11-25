@@ -352,8 +352,15 @@ Deviations between the importers and exporters that are known and not planned:
   `rdf:resource="#_a%20b"` reads as `a%20b`; `read_nquads` returns `a b`.
 - **`http(s)` IRIs as CIM XML IDs do not join.** `rdf:about="http://x#L1"` keeps the
   whole IRI as `ID`, `rdf:resource="http://x#L1"` shortens to `L1` (the parser sees
-  one file at a time, not every subject). `read_nquads` and CONSTRUCT keep such
-  references whole. CIM IDs are `urn:uuid:` / `#_` / `#` / `_` forms.
+  one file at a time, not every subject). `read_nquads` and CONSTRUCT keep such a
+  reference whole only when its subject is in the same data; otherwise it reads as
+  the name `L1` and exports as `urn:uuid:L1`. Read the files as one source to keep
+  them joined. CIM IDs are `urn:uuid:` / `#_` / `#` / `_` forms.
+- **The parsers read without a schema.** A `http(s)` IRI with `#` reads as a name
+  (`http://iec.ch/TC57/CIM100#RotatingMachine.p` → `RotatingMachine.p`); the export
+  restores the namespace from the schema (`value_prefix: ""` on an Association looks
+  the name up). If the same N-Quads data also holds that IRI as a subject, the
+  reference stays whole.
 - **Blank nodes are not supported.** `_:b0` reads as the ID `b0` and exports again
   as `<urn:uuid:b0>`, a named node. With `local_resources=False`, `rdf:nodeID`
   labels stay as written.

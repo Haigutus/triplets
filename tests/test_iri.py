@@ -483,7 +483,7 @@ def test_scalar_local_value_kind(text, kind, expected):
 
 @pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
 def test_flavor_local_value_kind_matches_scalar(flavor):
-    """Per-row kinds (the read_nquads(rdf_map=) path) — same answers as the scalar rule."""
+    """Per-row kinds — same answers as the scalar rule."""
     texts = [t for t, _, _ in VALUE_KIND_CASES]
     kinds = [k for _, k, _ in VALUE_KIND_CASES]
     expected = [e for _, _, e in VALUE_KIND_CASES]
@@ -741,6 +741,150 @@ def test_flavor_defined_matches_scalar(flavor):
         dtype = object if flavor == "pandas-object" else pandas.ArrowDtype(pytest.importorskip("pyarrow").string())
         got = iri_pandas.defined(pandas.Series(keys, dtype=dtype), pandas.Series(values, dtype=dtype), NAMESPACES, VALUE_TYPES)
         assert got.tolist() == expected
+
+
+# ── value_prefix: the namespace an Association / Enumeration gives its values ──
+
+EMT = "http://opensource.ieee.org/emtiop01v01#"
+CIM100 = "http://iec.ch/TC57/CIM100#"
+RESOURCE = "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource"
+PREFIX_MAP = {
+    # an enumeration whose values the schema does not list: the prefix is their namespace
+    "Limit.direction": {"type": "Enumeration", "namespace": EMT, "values": [],
+                        "attrib": {"attribute": RESOURCE, "value_prefix": EMT}},
+    # a reference to a property by name (NC PropertyReference): "" resolves the name in the schema
+    "Alteration.PropertyReference": {"type": "Association", "namespace": NC,
+                                     "attrib": {"attribute": RESOURCE, "value_prefix": ""}},
+    "Switch.open": {"type": "Attribute", "namespace": CIM100},
+    # CIM XML ID forms: N-Quads writes every reference as urn:uuid:
+    "Terminal.ConnectivityNode": {"type": "Association", "namespace": CIM100,
+                                  "attrib": {"attribute": RESOURCE, "value_prefix": "#_"}},
+    "Terminal.ConductingEquipment": {"type": "Association", "namespace": CIM100,
+                                     "attrib": {"attribute": RESOURCE, "value_prefix": "urn:uuid:"}},
+    "Terminal.TopologicalNode": {"type": "Association", "namespace": CIM100,             # no value_prefix: as before
+                                 "attrib": {"attribute": RESOURCE}},
+    "Diagram.orientation": {"type": "Enumeration", "namespace": CIM16,                    # "": the enumeration rule
+                            "attrib": {"attribute": RESOURCE, "value_prefix": ""}},
+    "OrientationKind.negative": {"type": "EnumerationValue", "namespace": CIM16},
+    "Breaker": {"type": "Class", "namespace": CIM16, "attrib": {"attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}about", "value_prefix": "urn:uuid:"}},
+}
+PREFIX_MAPS = dict(namespaces=iri.namespaces(PREFIX_MAP), value_types=iri.value_types(PREFIX_MAP),
+                   value_prefixes=iri.value_prefixes(PREFIX_MAP))
+
+# (key, value, kind, payload)
+PREFIX_VALUE_CASES = [
+    ("Limit.direction", "LimitKind.high", "iri", EMT + "LimitKind.high"),
+    ("Limit.direction", "LimitKind.a b", "iri", EMT + "LimitKind.a%20b"),
+    ("Limit.direction", "http://x#K.v", "iri", "http://x#K.v"),                       # absolute: as is
+    ("Alteration.PropertyReference", "Switch.open", "iri", CIM100 + "Switch.open"),
+    ("Alteration.PropertyReference", "Nope.x", "iri", TRIPLETS_NS + "Nope.x"),        # name not in the schema
+    ("Alteration.PropertyReference", CIM100 + "Switch.locked", "iri", CIM100 + "Switch.locked"),
+    ("Terminal.ConnectivityNode", UUID, "iri", "urn:uuid:" + UUID),
+    ("Terminal.ConductingEquipment", UUID, "iri", "urn:uuid:" + UUID),
+    ("Terminal.TopologicalNode", UUID, "iri", "urn:uuid:" + UUID),
+    ("Diagram.orientation", "OrientationKind.negative", "iri", CIM16 + "OrientationKind.negative"),
+    ("Type", "Breaker", "iri", CIM16 + "Breaker"),
+    ("Limit.direction", None, "literal", None),
+]
+
+# (key, value, defined?)
+PREFIX_DEFINED_CASES = [
+    ("Limit.direction", "LimitKind.high", True),                  # the prefix accounts for any value
+    ("Alteration.PropertyReference", "Switch.open", True),
+    ("Alteration.PropertyReference", "Nope.x", False),            # as an undeclared enumeration value
+    ("Alteration.PropertyReference", CIM100 + "Switch.locked", True),
+    ("Terminal.ConnectivityNode", "anything", True),
+    ("Diagram.orientation", "Nope.value", False),
+]
+
+
+def test_value_prefixes_namespace_or_named_association_only():
+    """An absolute prefix, or "" on an Association; ID forms, an Enumeration's "" and a missing
+    value_prefix are left out."""
+    assert iri.value_prefixes(PREFIX_MAP) == {"Limit.direction": EMT, "Alteration.PropertyReference": ""}
+    assert iri.value_prefixes(None) == {}
+
+
+@pytest.mark.parametrize("path", sorted((Path(triplets.__file__).parent / "export_schema").glob("*.json")),
+                         ids=lambda path: path.stem)
+def test_bundled_schemas_need_no_value_prefix(path):
+    """The bundles list every enumeration value and give references an ID form: the N-Quads
+    terms do not change."""
+    assert iri.value_prefixes(iri.load_rdf_map(str(path))) == {}
+
+
+@pytest.mark.parametrize("key,value,kind,payload", PREFIX_VALUE_CASES)
+def test_scalar_absolute_value_value_prefix(key, value, kind, payload):
+    assert iri.absolute_value(key, value, **PREFIX_MAPS) == (kind, payload)
+
+
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+def test_flavor_absolute_value_value_prefix_matches_scalar(flavor):
+    _, apply_value = FLAVORS[flavor]()
+    got = apply_value([k for k, *_ in PREFIX_VALUE_CASES], [v for _, v, *_ in PREFIX_VALUE_CASES], **PREFIX_MAPS)
+    assert got == [(kind, payload) for _, _, kind, payload in PREFIX_VALUE_CASES]
+
+
+@pytest.mark.parametrize("key,value,expected", PREFIX_DEFINED_CASES)
+def test_scalar_defined_value_prefix(key, value, expected):
+    maps = PREFIX_MAPS
+    assert iri.defined(key, value, maps["namespaces"], maps["value_types"], maps["value_prefixes"]) is expected
+
+
+@pytest.mark.parametrize("flavor", ["pandas-object", "pandas-arrow", "polars"])
+def test_flavor_defined_value_prefix_matches_scalar(flavor):
+    keys, values = [k for k, _, _ in PREFIX_DEFINED_CASES], [v for _, v, _ in PREFIX_DEFINED_CASES]
+    maps = (PREFIX_MAPS["namespaces"], PREFIX_MAPS["value_types"], PREFIX_MAPS["value_prefixes"])
+    expected = [e for _, _, e in PREFIX_DEFINED_CASES]
+    if flavor == "polars":
+        polars = pytest.importorskip("polars")
+        from triplets.iri import iri_polars
+        frame = polars.DataFrame({"KEY": keys, "VALUE": values})
+        assert frame.select(iri_polars.defined("KEY", "VALUE", *maps).alias("d"))["d"].to_list() == expected
+    else:
+        dtype = object if flavor == "pandas-object" else pandas.ArrowDtype(pytest.importorskip("pyarrow").string())
+        got = iri_pandas.defined(pandas.Series(keys, dtype=dtype), pandas.Series(values, dtype=dtype), *maps)
+        assert got.tolist() == expected
+
+
+def prefix_frame():
+    return pandas.DataFrame([(UUID, "Type", "Breaker", "i"), (UUID, "Limit.direction", "LimitKind.high", "i"),
+                             (UUID, "Alteration.PropertyReference", "Switch.open", "i"),
+                             (UUID, "Alteration.PropertyReference", "Nope.x", "i"),
+                             (UUID, "Terminal.ConductingEquipment", UUID, "i")],
+                            columns=["ID", "KEY", "VALUE", "INSTANCE_ID"])
+
+
+@pytest.mark.parametrize("export_undefined", [True, False], ids=["undefined", "defined-only"])
+@pytest.mark.parametrize("engine", ["pandas", "polars"])
+def test_nquads_value_prefix_matches_cimxml(engine, export_undefined):
+    """N-Quads writes the value IRIs the CIM XML export writes, and keeps the same rows."""
+    rdflib = pytest.importorskip("rdflib")
+    pytest.importorskip(engine)
+    frame = prefix_frame()
+    xml = frame.export_to_cimxml(rdf_map=PREFIX_MAP, export_type="xml_per_instance", export_to_memory=True,
+                                 export_undefined=export_undefined)[0]
+    from_xml = {(str(p), str(o)) for _, p, o in rdflib.Graph().parse(data=xml.getvalue(), format="xml")}
+    buffer = triplets.export.export_to_nquads(frame, rdf_map=PREFIX_MAP, engine=engine, export_to_memory=True,
+                                              export_undefined=export_undefined)
+    dataset = rdflib.Dataset()
+    dataset.parse(data=buffer.getvalue(), format="nquads")
+    from_nquads = {(str(p), str(o)) for _, p, o, _ in dataset.quads()}
+    assert from_nquads == from_xml
+    assert (EMT + "Limit.direction", EMT + "LimitKind.high") in from_nquads
+    assert (NC + "Alteration.PropertyReference", CIM100 + "Switch.open") in from_nquads
+    assert ((NC + "Alteration.PropertyReference", TRIPLETS_NS + "Nope.x") in from_nquads) is export_undefined
+
+
+@pytest.mark.parametrize("export_undefined", [True, False])
+def test_nquads_value_prefix_read_back(export_undefined):
+    """read_nquads (no schema) gives back the frame the export wrote: the schema goes
+    on at export, the names come back on import."""
+    frame = prefix_frame()
+    buffer = frame.export_to_nquads(rdf_map=PREFIX_MAP, export_to_memory=True, export_undefined=export_undefined)
+    rows = lambda data: sorted(map(tuple, data[["ID", "KEY", "VALUE"]].astype(str).values.tolist()))
+    written = frame if export_undefined else frame[frame["VALUE"] != "Nope.x"]
+    assert rows(pandas.read_nquads(buffer)) == rows(written)
 
 
 # ── RDF/XML reference resolution (local_resources=False) ─────────────────────

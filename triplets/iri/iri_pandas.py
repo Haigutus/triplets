@@ -113,21 +113,31 @@ def _schema(key, value_types):
     return key.map(value_types) if value_types else pandas.Series(None, index=key.index, dtype=object)
 
 
-def defined(key, value, namespaces=None, value_types=None):
+def _kinds(key, value_types, value_prefixes):
+    """(term rule, value prefix) per row: the KEY's kind after :func:`triplets.iri.value_kind`."""
+    schema = _schema(key, value_types)
+    prefix = _schema(key, value_prefixes)
+    return schema.mask(_eq(schema, REFERENCE) & _eq(prefix, ""), ENUM), prefix
+
+
+def defined(key, value, namespaces=None, value_types=None, value_prefixes=None):
     """Boolean mask of rows the schema accounts for — see the scalar rule."""
-    schema, known = _schema(key, value_types), value.isin(namespaces or ())
-    return (_eq(key, TYPE_KEY) & known) | (schema.notna() & (~_eq(schema, ENUM) | is_iri(value) | known))
+    (schema, prefix), known = _kinds(key, value_types, value_prefixes), value.isin(namespaces or ())
+    prefixed = prefix.notna() & ~_eq(prefix, "")
+    return (_eq(key, TYPE_KEY) & known) | (schema.notna() & (~_eq(schema, ENUM) | prefixed | is_iri(value) | known))
 
 
-def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
+def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS,
+                   value_prefixes=None):
     """→ ``(kind, payload)`` Series: kind ∈ {"iri", "literal"}; payload is the
     IRI, or the xsd datatype IRI / null for literals. Same precedence as the
     scalar rule, applied as masks from lowest to highest — stays in the
     string dtype (no object arrays)."""
-    schema = _schema(key, value_types)
+    schema, prefix = _kinds(key, value_types, value_prefixes)
     present = value.notna().astype(bool)                 # a null VALUE is no term: ("literal", null)
     is_type = _eq(key, TYPE_KEY) & present
-    enum, reference = _eq(schema, ENUM) & present, _eq(schema, REFERENCE) & present
+    prefixed = (_eq(schema, ENUM) | _eq(schema, REFERENCE)) & prefix.notna() & ~_eq(prefix, "") & present
+    enum, reference = _eq(schema, ENUM) & present & ~prefixed, _eq(schema, REFERENCE) & present & ~prefixed
     typed = _eq(schema, LITERAL) & present
     undefined_ref = schema.isna() & (is_iri(value) | value.str.match(UUID_RE.pattern, na=False).astype(bool))
 
@@ -138,5 +148,8 @@ def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None
     payload = payload.mask(references, absolute_id(value.where(references)))
     payload = payload.mask(names, by_distinct(value.where(names), lambda distinct: absolute_name(
         distinct, namespaces, undefined_namespace)))
-    kind = numpy.where(references | names, "iri", LITERAL)
+    if prefixed.any():                                   # namespace + value, an absolute value as is
+        encoded = encode_iri(value.where(prefixed))
+        payload = payload.mask(prefixed, encoded.where(is_iri(value), prefix.astype(value.dtype) + encoded))
+    kind = numpy.where(references | names | prefixed, "iri", LITERAL)
     return pandas.Series(kind, index=key.index, dtype=value.dtype), payload

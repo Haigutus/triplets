@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **N-Quads uses the schema `value_prefix`, as CIM XML does.** An Association or Enumeration
+  whose `attrib.value_prefix` is an absolute namespace writes its values in that namespace
+  (`"value_prefix": "http://opensource.ieee.org/emtiop01v01#"` on an enumeration that lists no
+  values gave `http://triplets#…` before); `""` on an Association makes its values schema names.
+  The same IRIs reach the pyshacl, rdflib, oxigraph and qlever graphs, and the pandas, polars and
+  duckdb SHACL engines match `sh:in` / `sh:hasValue` members by them (a member of a `""` KEY
+  by its local name, whatever its namespace). `read_nquads` reads without a schema. New flat map
+  `triplets.iri.value_prefixes`. The bundled schemas use neither form, so their output is unchanged.
 - **Docs: persistent instance IDs** (`docs/parsers.md`): why a parse gives each file a random `INSTANCE_ID`, and a tested recipe that gives persistent IDs after parsing by header ID, header hash, content hash or file label, per use case, with a check that no two instances share an ID.
 - **`sparql.query(terms=True)`**: SELECT values as N-Triples terms (`<iri>`, `"text"^^<datatype>`, `_:label`), the same on rdflib, oxigraph and qlever (read from their SPARQL JSON results) — the term kind a lexical string loses.
 - **`VALUE_KIND` and `ID_KIND` columns on violations frames** where no schema entry gives the term kind: `VALUE_KIND` on `sh:sparql` findings (the `?value` binding's kind), `ID_KIND` when a focus node is a literal. Values are `triplets.iri.TERM_KINDS` — `class`, `enum`, `reference`, `literal` (`VALUE_KINDS` plus the `value_types` literal kind); the scalar `triplets.iri.absolute_value(key, value, …, kind=)` takes one in place of the KEY's schema entry.
@@ -556,8 +564,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `rdf_parser.load_RDF_to_list` run one row loop (`parser.utils.iter_rdf_rows`);
   the RDF-term readers (`read_nquads`, CONSTRUCT on every engine, `sh:sparql`
   results, the pyshacl report) decode once, then use `local_id` / `local_key` /
-  `local_value`. `read_nquads` takes `rdf_map=` (reference vs enum VALUE exact from
-  the schema instead of guessed) and `type_key=` (the KEY for `rdf:type`, default
+  `local_value`. `read_nquads` takes `type_key=` (the KEY for `rdf:type`, default
   `"Type"`). SHACL terms compile with the rule of the column they land on:
   `sh:path rdf:type` targets the `Type` KEY (was a KEY `type` that never matched),
   and an `sh:in` / `sh:hasValue` member with a `/`-only IRI stays whole like the
@@ -1016,8 +1023,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   file and the schema's profiles, also without a header (it exported an empty file silently).
 - **A flat schema (entries at the root, no profile sections) fills the IRI maps**
   ([#128](https://github.com/Haigutus/triplets/issues/128)). `export_to_nquads` wrote
-  every name under `http://triplets#` without datatypes, and `sparql.query`,
-  `read_nquads(rdf_map=)` and the SHACL report got no namespaces. A root dict with a
+  every name under `http://triplets#` without datatypes, and `sparql.query`
+  and the SHACL report got no namespaces. A root dict with a
   `type` string is an entry, one without is a section; a name both define takes the root entry.
 - **Node-level `sh:or` / `sh:and` / `sh:not` on a NodeShape are compiled** (they
   were silently skipped, not even listed in `skipped_shapes`); a logical member

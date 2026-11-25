@@ -84,26 +84,38 @@ def absolute_key(column, namespaces=None, undefined_namespace=TRIPLETS_NS):
             .otherwise(absolute_name(expr, namespaces, undefined_namespace)))
 
 
-def defined(key, value, namespaces=None, value_types=None):
+def _kinds(key, value_types, value_prefixes):
+    """(term rule, value prefix) Exprs: the KEY's kind after :func:`triplets.iri.value_kind`."""
+    schema, prefix = _lookup(key, value_types), _lookup(key, value_prefixes)
+    named = (schema == REFERENCE) & (prefix == "")
+    return polars.when(named.fill_null(False)).then(polars.lit(ENUM)).otherwise(schema), prefix
+
+
+def defined(key, value, namespaces=None, value_types=None, value_prefixes=None):
     """Boolean Expr of rows the schema accounts for — see the scalar rule."""
     key, value = _col(key), _col(value)
-    schema, known = _lookup(key, value_types), value.is_in(list(namespaces or ()))
-    return ((key == TYPE_KEY) & known) | (schema.is_not_null() & ((schema != ENUM) | is_iri(value) | known))
+    (schema, prefix), known = _kinds(key, value_types, value_prefixes), value.is_in(list(namespaces or ()))
+    prefixed = (prefix.str.len_chars() > 0).fill_null(False)
+    return ((key == TYPE_KEY) & known) | (schema.is_not_null() & ((schema != ENUM) | prefixed | is_iri(value) | known))
 
 
-def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS):
+def absolute_value(key, value, namespaces=None, value_types=None, datatypes=None, undefined_namespace=TRIPLETS_NS,
+                   value_prefixes=None):
     """→ ``(kind, payload)`` Exprs; same branch order as the scalar rule."""
     key, value = _col(key), _col(value)
-    schema = _lookup(key, value_types)
+    schema, prefix = _kinds(key, value_types, value_prefixes)
     present = value.is_not_null()                        # a null VALUE is no term: ("literal", null)
     is_type = (key == TYPE_KEY) & present
-    enum, reference, typed = (schema == ENUM) & present, (schema == REFERENCE) & present, (schema == LITERAL) & present
+    prefixed = ((schema == ENUM) | (schema == REFERENCE)) & (prefix.str.len_chars() > 0).fill_null(False) & present
+    enum, reference = (schema == ENUM) & present & ~prefixed, (schema == REFERENCE) & present & ~prefixed
+    typed = (schema == LITERAL) & present
     undefined_ref = schema.is_null() & (is_iri(value) | value.str.contains(UUID_RE.pattern))
     datatype = _lookup(key, {name: datatype for name, datatype in (datatypes or {}).items() if datatype})
 
-    kind = (polars.when(is_type | enum | reference | undefined_ref).then(polars.lit("iri"))
+    kind = (polars.when(is_type | enum | reference | prefixed | undefined_ref).then(polars.lit("iri"))
             .otherwise(polars.lit(LITERAL)))
-    payload = (polars.when(is_type | enum).then(absolute_name(value, namespaces, undefined_namespace))
+    payload = (polars.when(prefixed).then(encode_iri(polars.when(is_iri(value)).then(value).otherwise(prefix + value)))
+               .when(is_type | enum).then(absolute_name(value, namespaces, undefined_namespace))
                .when(reference | undefined_ref).then(absolute_id(value))
                .when(typed).then(datatype)
                .otherwise(polars.lit(None, dtype=polars.Utf8)))

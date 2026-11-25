@@ -918,6 +918,50 @@ def test_in_member_with_slash_iri_matches_the_whole_value(engine):
     assert violating(v, "sh:in") == {("b2", "http://example.org/kinds/b")}
 
 
+PREFIXED_SCHEMA = {"EQ": {
+    "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#"},
+    # an enumeration whose values the schema does not list: value_prefix is their namespace
+    "Switch.kind": {"type": "Enumeration", "namespace": "http://iec.ch/TC57/CIM100#", "values": [],
+                    "attrib": {"attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource",
+                               "value_prefix": "http://example.org/kind#"}},
+}}
+
+
+@pytest.mark.parametrize("engine_name", [*ENGINES, "pyshacl"])
+@pytest.mark.parametrize("body, component", [
+    ("sh:in ( <http://example.org/kind#Kind.a> )", "sh:in"),
+    ("sh:hasValue <http://example.org/kind#Kind.a>", "sh:hasValue"),
+])
+def test_member_in_the_value_prefix_namespace(engine_name, body, component):
+    """A member in the KEY's value_prefix namespace is the value it prefixes, as in the
+    N-Quads graph pyshacl validates."""
+    pytest.importorskip(engine_name)
+    rows = breaker("b1", ("Switch.kind", "Kind.a")) + breaker("b2", ("Switch.kind", "Kind.b"))
+    v = run(rows, SHAPE.format(body=f"sh:path cim:Switch.kind ; {body}"), engine_name, rdf_map=PREFIXED_SCHEMA)
+    assert {row[0] for row in violating(v, component)} == {"b2"}
+
+
+NAMED_SCHEMA = {"EQ": {
+    "Breaker": {"type": "Class", "namespace": "http://iec.ch/TC57/CIM100#"},
+    # value_prefix "": the values are schema names (NC PropertyReference)
+    "Switch.property": {"type": "Association", "namespace": "http://iec.ch/TC57/CIM100#",
+                        "attrib": {"attribute": "{http://www.w3.org/1999/02/22-rdf-syntax-ns#}resource",
+                                   "value_prefix": ""}},
+}}
+
+
+@pytest.mark.parametrize("body, component", [
+    ("sh:in ( <http://iec.ch/TC57/2013/CIM-schema-cim16#Switch.open> <https://cim4.eu/ns/nc#Switch.open> )", "sh:in"),
+    ("sh:hasValue <http://iec.ch/TC57/2013/CIM-schema-cim16#Switch.open>", "sh:hasValue"),
+])
+def test_named_value_member_matches_by_name(engine, body, component):
+    """value_prefix "": a member matches the value by its local name, whatever its
+    namespace, as the parsers store the value."""
+    rows = breaker("b1", ("Switch.property", "Switch.open")) + breaker("b2", ("Switch.property", "Switch.close"))
+    v = run(rows, SHAPE.format(body=f"sh:path cim:Switch.property ; {body}"), engine, rdf_map=NAMED_SCHEMA)
+    assert {row[0] for row in violating(v, component)} == {"b2"}
+
+
 CIM = "http://iec.ch/TC57/CIM100#"
 TOY_SCHEMA = {"EQ": {
     **{name: {"type": "Class", "namespace": CIM, "inheritance": [CIM + name, CIM + "Switch", CIM + "Equipment"]}

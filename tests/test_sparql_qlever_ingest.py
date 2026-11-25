@@ -39,6 +39,10 @@ RDF_MAP = {"Profile": {
     "Test.assoc":    {"type": "Association"},       # reference by schema, whatever the value looks like
     "Test.other":    {"namespace": "http://example.com/ns#"},           # no type: an undefined KEY with a namespace
     "Test.custom":   {"type": "Attribute", "xsd:type": "ex:Custom"},    # any datatype IRI, prefix from the map
+    # value_prefix: the values' own namespace; "" on an Association makes its values names; an ID form changes nothing
+    "Test.prefixed": {"type": "Enumeration", "attrib": {"attribute": "resource", "value_prefix": "http://example.com/enum#"}},
+    "Test.named":    {"type": "Association", "attrib": {"attribute": "resource", "value_prefix": ""}},
+    "Test.idForm":   {"type": "Association", "attrib": {"attribute": "resource", "value_prefix": "#_"}},
     "ProfileNamespaceMap": {"ex": "http://example.com/ns#"},
 }}
 
@@ -65,6 +69,12 @@ def torture_frame():
         (UUID_A, "Test.assoc", "_notuuid", INSTANCE_1),
         (UUID_A, "Test.assoc", UUID_B.upper(), INSTANCE_1),
         (UUID_A, "Test.assoc", 'has space <and> "quotes"', INSTANCE_1),   # still an IRI: percent-encoded
+        # O4c: value_prefix
+        (UUID_A, "Test.prefixed", "Kind.a", INSTANCE_1),
+        (UUID_A, "Test.prefixed", "http://example.com/other#Kind.b", INSTANCE_1),
+        (UUID_A, "Test.named", "Test.other", INSTANCE_1),                   # the name's schema namespace
+        (UUID_A, "Test.named", "Unknown.name", INSTANCE_1),                 # undeclared: CIM_NS here
+        (UUID_A, "Test.idForm", "_x1", INSTANCE_1),                         # urn:uuid:, as any reference
         # O5: typed literals (incl. one that LOOKS like a UUID — schema beats heuristic)
         (UUID_A, "Test.float", "1.5", INSTANCE_1),
         (UUID_A, "Test.integer", "42", INSTANCE_1),
@@ -135,6 +145,18 @@ def test_custom_datatype_reaches_the_index():
         for build in (build_via_nquads, build_via_arrow):
             result = build(torture_frame(), RDF_MAP, directory).select_arrow(query).to_pandas()
             assert result["datatype"].tolist() == ["http://example.com/ns#Custom"]
+
+
+def test_value_prefix_iris():
+    """value_prefix decides the value IRIs, on both paths (the dump only shows they agree)."""
+    query = (f"SELECT ?o WHERE {{ ?s ?p ?o FILTER(?p IN (<{CIM_NS}Test.prefixed>, <{CIM_NS}Test.named>, "
+             f"<{CIM_NS}Test.idForm>)) }}")
+    expected = sorted(["http://example.com/enum#Kind.a", "http://example.com/other#Kind.b",
+                       "http://example.com/ns#Test.other", f"{CIM_NS}Unknown.name", "urn:uuid:_x1"])
+    with tempfile.TemporaryDirectory() as directory:
+        for build in (build_via_nquads, build_via_arrow):
+            result = build(torture_frame(), RDF_MAP, directory).select_arrow(query).to_pandas()
+            assert sorted(result["o"].tolist()) == expected
 
 
 def test_characters_beyond_the_escape_set():

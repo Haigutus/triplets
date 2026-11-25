@@ -46,6 +46,7 @@ cdef extern from "_qlever_wrapper.h" nogil:
         unordered_map[string, string] valueTypes
         unordered_map[string, string] keyNamespaces
         unordered_map[string, string] keyDatatypes
+        unordered_map[string, string] keyValuePrefixes
         string defaultNamespace
 
     cdef cppclass QleverWrapper:
@@ -102,7 +103,7 @@ def build_index(str input_file, str index_basename, str filetype="nq", int memor
 
 
 def build_index_from_arrow(batches, str index_basename, value_types, key_namespaces,
-                           key_datatypes, str default_namespace, int memory_gb=4):
+                           key_datatypes, key_value_prefixes, str default_namespace, int memory_gb=4):
     """Build an on-disk qlever index directly from triplet Arrow batches
     (columns ID, KEY, VALUE, INSTANCE_ID; zero-copy; term mapping identical
     to the N-Quads export rules — see _qlever_arrow_parser.cpp)."""
@@ -116,6 +117,8 @@ def build_index_from_arrow(batches, str index_basename, value_types, key_namespa
         mapping.keyNamespaces[<string>key.encode()] = <string>namespace.encode()
     for key, datatype in key_datatypes.items():
         mapping.keyDatatypes[<string>key.encode()] = <string>(datatype or "").encode()
+    for key, prefix in key_value_prefixes.items():
+        mapping.keyValuePrefixes[<string>key.encode()] = <string>prefix.encode()
     mapping.defaultNamespace = <string>default_namespace.encode()
     cdef string c_basename = index_basename.encode()
     with nogil:

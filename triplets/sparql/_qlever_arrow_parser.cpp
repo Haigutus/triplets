@@ -90,12 +90,13 @@ class RangeConverter {
       : mapping_{mapping}, encodedIriManager_{encodedIriManager} {}
 
   // How the object term of a row is built, resolved once per KEY.
-  enum class ObjectRule { Type, Enum, Reference, Typed, PlainString, Default };
+  enum class ObjectRule { Type, Enum, Reference, Prefixed, Typed, PlainString, Default };
   struct KeyInfo {
     TripleComponent predicate;
     ObjectRule rule;
     std::optional<TripleComponent::Iri> datatype;  // only for Typed
     std::string name;                              // for ingest error context
+    std::string prefix;                            // only for Prefixed
   };
 
   // Mirror of triplets.iri.absolute_name: the schema namespace for a local
@@ -121,7 +122,7 @@ class RangeConverter {
     if (found != keyInfos_.end()) return found->second;
 
     KeyInfo info{TripleComponent{}, ObjectRule::Default, std::nullopt,
-                 std::string{key}};
+                 std::string{key}, std::string{}};
     if (key == "Type") {
       info.predicate = iriComponent(RDF_TYPE);
       info.rule = ObjectRule::Type;
@@ -153,6 +154,18 @@ class RangeConverter {
               datatype->second);
         }
       }
+      // Mirror of triplets.iri.value_kind / value_prefixes: "" on a reference
+      // KEY makes its values names; a namespace prefixes every value.
+      auto prefix = mapping_.keyValuePrefixes.find(std::string{key});
+      if (prefix != mapping_.keyValuePrefixes.end() &&
+          (info.rule == ObjectRule::Enum || info.rule == ObjectRule::Reference)) {
+        if (prefix->second.empty()) {
+          info.rule = ObjectRule::Enum;
+        } else {
+          info.rule = ObjectRule::Prefixed;
+          info.prefix = prefix->second;
+        }
+      }
     }
     return keyInfos_.emplace(std::string{key}, std::move(info)).first->second;
   }
@@ -178,6 +191,9 @@ class RangeConverter {
       case ObjectRule::Reference:   // absolute_id: absolute passes, else urn:uuid:
         if (isUri(value)) return iriComponent(value);
         return iriComponent(absl::StrCat("urn:uuid:", value));
+      case ObjectRule::Prefixed:    // the KEY's value namespace: absolute passes
+        if (isUri(value)) return iriComponent(value);
+        return iriComponent(absl::StrCat(key.prefix, value));
       case ObjectRule::Typed:
         // qlever's own typed-literal path (identical to the N-Quads parse).
         // Strict by design: an ill-typed value is a data-vs-schema error to be

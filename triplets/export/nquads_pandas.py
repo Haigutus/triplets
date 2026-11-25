@@ -3,7 +3,7 @@
 from io import BytesIO
 
 from ..iri import (DESCRIPTION_TYPE, TRIPLETS_NS, TYPE_KEY, datatypes, iri_pandas, languages, load_rdf_map, namespaces,
-                   value_types)
+                   value_prefixes, value_types)
 
 
 def _escape(series):
@@ -36,7 +36,8 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
         Namespace those names are written in.
     """
     rdf_map = load_rdf_map(rdf_map)
-    maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map))
+    maps = dict(namespaces=namespaces(rdf_map), value_types=value_types(rdf_map), datatypes=datatypes(rdf_map),
+                value_prefixes=value_prefixes(rdf_map))
     tags = languages(rdf_map)
 
     data = data[data["VALUE"].notna()]  # no object to state (parity with the polars engine)
@@ -44,7 +45,7 @@ def export_to_nquads(data, path=None, rdf_map=None, export_to_memory=False, expo
     data = data[~((data["KEY"] == TYPE_KEY) & (data["VALUE"] == DESCRIPTION_TYPE)).fillna(False).astype(bool)]
     if not export_undefined:
         data = data[iri_pandas.defined(data["KEY"].astype(str), data["VALUE"].astype(str),
-                                       maps["namespaces"], maps["value_types"])]
+                                       maps["namespaces"], maps["value_types"], maps["value_prefixes"])]
 
     ids = data["ID"].astype(str)
     keys = data["KEY"].astype(str)

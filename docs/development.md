@@ -74,8 +74,7 @@ policies on top: a **name** (KEY, class, enum value) always drops its namespace 
 the schema restores it; a **node** (ID, reference) drops only what a convention
 restores (`local_id`: `urn:uuid:`, `#_`, `#`, `_`) and otherwise stays whole. Without
 a schema `local_value` guesses: an `http(s)` IRI with `#` is a name, anything else
-a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
-`iri.value_types`. SHACL terms use the rule of the column they land on: paths →
+a node or an external URL; the export puts the schema on. SHACL terms use the rule of the column they land on: paths →
 `local_key`, `sh:class` / targets → `local_value(…, "class")`, `sh:in` /
 `sh:hasValue` → `local_value`; labels (severity, `xsd:` names, components) →
 `split_iri(…)[1]`.
@@ -85,7 +84,10 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   of a flat schema, then every profile section; first occurrence wins): `namespaces` (name → namespace IRI),
   `key_types` (name → `{"type": …}` plus the entry's `stereotype` / `rdf:type`
   lists where present), `value_types` (KEY → `literal` /
-  `reference` / `enum`, by entry type only), `datatypes` (Attribute KEY →
+  `reference` / `enum`, by entry type only), `value_prefixes` (Association /
+  Enumeration KEY → its `attrib.value_prefix` when that is an absolute namespace,
+  or `""` on an Association; `value_kind` turns such a reference into names; the
+  CIM XML ID forms are left out), `datatypes` (Attribute KEY →
   datatype IRI, `None` = `xsd:string` / `rdf:langString` / a tagged KEY; anyURI
   included), `languages` (Attribute KEY → fixed language tag, written `"text"@tag` /
   `xml:lang`), and `prefixes` (prefix → namespace; the one map read from the
@@ -111,7 +113,8 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   and never the shape of the text: an Attribute value is a literal even when
   it reads `https://…` or looks like a UUID (`xsd:type` only annotates it), an
   Association value is `absolute_id(value)` (absolute passes through, else
-  `urn:uuid:`), an Enumeration value an enum IRI. The absolute-IRI / canonical-
+  `urn:uuid:`), an Enumeration value an enum IRI. A `value_prefixes` namespace
+  prefixes the value instead; `""` on an Association resolves it as a name. The absolute-IRI / canonical-
   UUID heuristic applies only to a KEY the schema does not declare.
   `node_kind` gives the SHACL engines the same decision for `sh:nodeKind`.
 - An IRI stays an IRI: `absolute_id` / `absolute_name` percent-encode what an
@@ -121,7 +124,7 @@ a node or an external URL. `read_nquads(rdf_map=…)` gives the exact kind from
   `Equipment` included), a KEY not in it, an enum value not in it, and every
   name when there is no `rdf_map` — take `undefined_namespace`.
   `absolute_name` has no schema branch: the map answers or the parameter does.
-  `iri.defined(key, value, namespaces, value_types)` names the row-level test.
+  `iri.defined(key, value, namespaces, value_types, value_prefixes)` names the row-level test.
   Every exporter has the same two knobs: `export_undefined` (write such rows
   or drop them — N-Quads keeps them by default, CIM XML drops them unless
   it has no `rdf_map`, where it writes them all) and

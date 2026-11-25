@@ -18,10 +18,10 @@ def make_subject(id_val):
     return f"<{absolute_id(id_val)}>"
 
 
-def make_object(key, value, namespaces=None, value_types=None, datatypes=None, languages=None):
+def make_object(key, value, namespaces=None, value_types=None, datatypes=None, languages=None, value_prefixes=None):
     """VALUE → ``<iri>`` or ``"literal"[^^<datatype> | @tag]`` per :func:`triplets.iri.absolute_value`
     and :func:`triplets.iri.languages`."""
-    kind, payload = absolute_value(key, value, namespaces, value_types, datatypes)
+    kind, payload = absolute_value(key, value, namespaces, value_types, datatypes, value_prefixes=value_prefixes)
     if kind == "iri":
         return f"<{payload}>"
     escaped = escape_literal(value)

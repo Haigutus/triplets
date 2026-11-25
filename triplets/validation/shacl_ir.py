@@ -33,8 +33,8 @@ from dataclasses import dataclass, field
 import pandas
 
 from .._caches import register_cache
-from ..iri import (CLASS, ENUM, LITERAL, REFERENCE, SH_NS, TYPE_KEY, XSD_NS, absolute_value, is_iri, local_id, local_key,
-                   local_value, split_iri)
+from ..iri import (CLASS, ENUM, LITERAL, REFERENCE, SH_NS, TYPE_KEY, XSD_NS, absolute_name, absolute_value, is_iri, local_id,
+                   local_key, local_value, split_iri, value_kind)
 from .value_space import bound_space, pair_params
 
 logger = logging.getLogger(__name__)
@@ -877,7 +877,15 @@ def path_kind(rule, value_types):
     return value_types.get(rule.path)
 
 
-def member_values(members, kind, namespaces, undefined_namespace):
+def path_prefix(rule, value_prefixes):
+    """The ``iri.value_prefixes`` entry of *rule*'s KEY when its value nodes are that KEY's
+    values (not on an inverse or ``rdf:type`` path); None otherwise."""
+    if getattr(rule, "via_type", False) or rule.inverse or rule.path == TYPE_KEY:
+        return None
+    return value_prefixes.get(rule.path)
+
+
+def member_values(members, kind, namespaces, undefined_namespace, value_prefix=None):
     """sh:in / sh:hasValue members → the VALUE texts they are on a path of *kind*
     (``path_kind``): an IRI member on a class path is its name, whatever its namespace,
     as ``sh:targetClass`` / ``sh:class`` match classes (a deliberate divergence from
@@ -889,16 +897,24 @@ def member_values(members, kind, namespaces, undefined_namespace):
     the IRI matches; a literal member (:func:`is_literal`, also when its text reads as
     an IRI), and every member on a literal path, is its text.
     Without a kind (an undefined KEY) an IRI member is its guessed local VALUE
-    and the engines compare the values' local forms."""
+    and the engines compare the values' local forms. *value_prefix* is the path KEY's
+    (:func:`path_prefix`): a namespace stands for its values; ``""`` means the values
+    are schema names, so an IRI member is its local name, whatever its namespace (the
+    NC ``PropertyReference`` lists spell one property in several CIM namespaces)."""
+    kind = value_kind(kind, value_prefix)
+
     def value(member):
         iri = str(member)
         if is_literal(member) or not is_iri(iri) or kind == LITERAL:
             return iri
         if kind is None:
             return local_value(iri)
-        if kind == CLASS:
-            return local_value(iri, CLASS)
+        if kind == CLASS or value_prefix == "":    # a name, whatever its namespace
+            return local_value(iri, kind)
         text = local_value(iri, kind)
-        same = absolute_value(None, text, namespaces, kind=kind, undefined_namespace=undefined_namespace)[1] == iri
+        if value_prefix and kind in (ENUM, REFERENCE):
+            same = absolute_name(text, undefined_namespace=value_prefix) == iri
+        else:
+            same = absolute_value(None, text, namespaces, kind=kind, undefined_namespace=undefined_namespace)[1] == iri
         return text if same else iri
     return [value(member) for member in members]

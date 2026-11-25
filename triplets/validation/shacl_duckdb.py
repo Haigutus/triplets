@@ -25,10 +25,11 @@ import logging
 import pandas
 
 from .._engine_detect import flavor
-from .shacl_ir import holds_names, member_values, path_kind, split_rules, FALLBACK_COMPONENTS
+from .shacl_ir import holds_names, member_values, path_kind, path_prefix, split_rules, FALLBACK_COMPONENTS
 from .schema_scope import ancestor_pairs
 from .shacl_report import VIOLATION_COLUMNS, has_violation
-from ..iri import CIM_NS, DISTRIBUTION_KEYS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, iri_pandas, namespaces, node_kind, prefixes, rdf_map_entries, value_types
+from ..iri import (CIM_NS, DISTRIBUTION_KEYS, METADATA_TYPES, REFERENCE_LIKE, TYPE_KEY, iri_duckdb, iri_pandas, namespaces,
+                   node_kind, prefixes, rdf_map_entries, value_prefixes, value_types)
 from . import shacl_pandas, value_space
 from .value_space import datatype_patterns
 
@@ -192,7 +193,8 @@ def _range(operator, description):
 def _members(rule, context, members):
     """(path kind, the members as the VALUE texts they are on the path) — ``shacl_ir.member_values``."""
     kind = path_kind(rule, context.value_types)
-    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace)
+    return kind, member_values(members, kind, context.namespaces, context.undefined_namespace,
+                               path_prefix(rule, context.value_prefixes))
 
 
 def _in(rule, table, context):
@@ -364,6 +366,7 @@ class _Context:
         # cardinality: every element (XSD), else distinct value nodes; a null VALUE is none
         self.count = "COUNT(PV)" if count_elements else "COUNT(DISTINCT PV)"
         self.value_types = value_types(rdf_map)   # sh:nodeKind: schema-driven IRI/literal decision
+        self.value_prefixes = value_prefixes(rdf_map)   # an enumeration's own value namespace
         self.entries = dict(rdf_map_entries(rdf_map))   # sh:lessThan*: the operands' schema types
         self.prefixes = prefixes(rdf_map)
         self.namespaces = namespaces(rdf_map)     # sh:targetNode on a class / enum value: its local name
@@ -407,7 +410,11 @@ def _create_names_table(connection, table, rules, context):
         return
     names = connection.execute(f"SELECT DISTINCT KEY, VALUE FROM {table} WHERE VALUE IS NOT NULL "
                                f"AND KEY IN ({', '.join('?' for _ in keys)})", keys).df().astype(object)
-    names["IRI"] = iri_pandas.absolute_name(names["VALUE"].astype(str), context.namespaces, context.undefined_namespace)
+    values = names["VALUE"].astype(str)
+    names["IRI"] = iri_pandas.absolute_name(values, context.namespaces, context.undefined_namespace)
+    for key in set(keys) & set(context.value_prefixes):   # iri.value_prefixes: namespace + value
+        own = names["KEY"] == key
+        names.loc[own, "IRI"] = iri_pandas.absolute_name(values[own], undefined_namespace=context.value_prefixes[key])
     connection.register("_shacl_name_rows", names)
     connection.execute("INSERT INTO _shacl_names SELECT KEY, VALUE, IRI FROM _shacl_name_rows")
     connection.unregister("_shacl_name_rows")
