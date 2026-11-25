@@ -352,3 +352,47 @@ def test_located_lines_stay_integers(xml_path):
         assert frame[column].tolist() == [line, None] and type(frame[column].iloc[0]) is int
     assert frame[["SOURCE_LINE", "TARGET_LINE"]].to_csv(index=False).splitlines() \
         == ["SOURCE_LINE,TARGET_LINE", "3,7", ","]
+
+
+SPLIT_EQ = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <cim:BusbarSection rdf:ID="_bb1">
+    <cim:IdentifiedObject.mRID>bb1</cim:IdentifiedObject.mRID>
+  </cim:BusbarSection>
+  <cim:Terminal rdf:ID="_t1">
+    <cim:Terminal.ConductingEquipment rdf:resource="#_bb1"/>
+  </cim:Terminal>
+</rdf:RDF>
+"""
+SPLIT_SSH = b"""<?xml version="1.0" encoding="UTF-8"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:cim="http://iec.ch/TC57/CIM100#">
+  <cim:BusbarSection rdf:about="#_bb1">
+    <cim:Equipment.inService>true</cim:Equipment.inService>
+  </cim:BusbarSection>
+</rdf:RDF>
+"""
+SPLIT_SHAPE = """@prefix sh: <http://www.w3.org/ns/shacl#> . @prefix cim: <http://iec.ch/TC57/CIM100#> .
+cim:S a sh:NodeShape ; sh:targetClass cim:BusbarSection ;
+    sh:property [ sh:path {path} ; sh:minCount 1 ] ."""
+
+
+@pytest.mark.parametrize("path, file, line", [
+    ("cim:IdentifiedObject.mRID", "SSH.xml", 3),                        # EQ holds it
+    ("[ sh:inversePath cim:Terminal.ConductingEquipment ]", "SSH.xml", 3),   # EQ's Terminal refers to it
+    ("cim:IdentifiedObject.name", "EQ.xml", 3)])                        # neither holds it
+def test_absent_key_finding_of_part_of_the_data_is_in_a_file_lacking_the_key(tmp_path, path, file, line):
+    """A sh:minCount finding of a validation of one file, enriched and located with every
+    file: in the first file defining the object without the KEY (on an inverse path, without
+    a reference to it by the KEY), not in one holding it."""
+    import rdflib
+    paths = []
+    for name, content in (("EQ.xml", SPLIT_EQ), ("SSH.xml", SPLIT_SSH)):
+        paths.append(str(tmp_path / name))
+        (tmp_path / name).write_bytes(content)
+    data = pandas.read_RDF(paths)
+    ssh = data.loc[(data["KEY"] == "label") & data["VALUE"].str.endswith("SSH.xml"), "INSTANCE_ID"].iloc[0]
+    shapes = rdflib.Graph().parse(data=SPLIT_SHAPE.format(path=path), format="turtle")
+    violations = triplets.validation.validate_shacl(data, shapes, data_scope=[ssh])
+    located = violations.shacl.enrich(data=data).shacl.locate(sources=paths)
+    assert [(os.path.basename(uri), row) for uri, row in zip(located["SOURCE_URI"], located["SOURCE_LINE"])] \
+        == [(file, line)]
